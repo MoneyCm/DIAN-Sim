@@ -9,6 +9,7 @@ from db.session import SessionLocal
 from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
 from ui_utils import load_css, render_header
 from core.auth import AuthManager
+from core.rank_system import get_rank_info
 
 st.set_page_config(
     page_title="DIAN Sim - Simulador Oficial",
