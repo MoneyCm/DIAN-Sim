@@ -206,18 +206,23 @@ if action == "Explorar / Bulk":
                                     api_key = get_api_key(provider)
                                     if api_key:
                                         gen = LLMGenerator(provider, api_key)
-                                        report = gen.audit_question({
-                                            "topic": q.topic, "stem": q.stem, 
-                                            "options_json": q.options_json, 
-                                            "correct_key": q.correct_key, 
-                                            "rationale": q.rationale
-                                        })
-                                        q.quality_report = report
-                                        if report.get("status") == "APPROVED":
-                                            q.is_verified = True
-                                        db.commit()
-                                        st.success(f"Auditoría completada: {report.get('score')}/10")
-                                        st.rerun()
+                                        
+                                        # Resilient Attribute Check Mikey v33
+                                        if hasattr(gen, 'audit_question'):
+                                            report = gen.audit_question({
+                                                "topic": q.topic, "stem": q.stem, 
+                                                "options_json": q.options_json, 
+                                                "correct_key": q.correct_key, 
+                                                "rationale": q.rationale
+                                            })
+                                            q.quality_report = report
+                                            if report.get("status") == "APPROVED":
+                                                q.is_verified = True
+                                            db.commit()
+                                            st.success(f"Auditoría completada: {report.get('score')}/10")
+                                            st.rerun()
+                                        else:
+                                            st.warning("⏳ El servidor está actualizando el motor de IA. Por favor, espera 30 segundos y vuelve a intentar. Mikey")
                                     else:
                                         st.error("Falta API Key")
                                 except Exception as e:
