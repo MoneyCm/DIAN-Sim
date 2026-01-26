@@ -1,7 +1,10 @@
 import streamlit as st
-import os
-import sys
-import json
+import os, sys, json
+
+# --- ESCUDO DE RUTAS MIKEY v25 ---
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 from sqlalchemy.orm import Session
 
 from db.session import SessionLocal

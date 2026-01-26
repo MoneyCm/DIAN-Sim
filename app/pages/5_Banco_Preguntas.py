@@ -1,13 +1,11 @@
 import streamlit as st
 import pandas as pd
-import os
-import sys
-import uuid
-import datetime
-import io
+import os, sys, uuid, datetime, io
 
-# Ensure project root is in PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+# --- ESCUDO DE RUTAS MIKEY v25 ---
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from db.session import SessionLocal
 from db.models import Question
