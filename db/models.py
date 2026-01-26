@@ -6,10 +6,9 @@ from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
-# --- EL BLINDAJE ATÓMICO v15.0 - SINGLETON DE REGISTRO - MIKEY ---
-print("⚛️ [DB_MODELS] Iniciando Blindaje v15.0 Mikey", file=sys.stderr)
+# --- EL BLINDAJE ATÓMICO v17.0 - SINGLETON + ANALÍTICA - MIKEY ---
+print("⚛️ [DB_MODELS] Iniciando Armonización v17.0 Mikey", file=sys.stderr)
 
-# Forzamos un registro único global para evitar el KeyError en la nube
 if not hasattr(sys, "_sqlalchemy_registry_mikey"):
     sys._sqlalchemy_registry_mikey = registry()
     print("🔨 [DB_MODELS] Nuevo Registro Global Creado. Mikey", file=sys.stderr)
@@ -98,7 +97,11 @@ class Skill(Base):
     track: Mapped[str] = mapped_column(String)
     competency: Mapped[str] = mapped_column(String)
     topic: Mapped[str] = mapped_column(String)
+    macro_dominio: Mapped[Optional[str]] = mapped_column(String)
+    micro_competencia: Mapped[Optional[str]] = mapped_column(String)
     mastery_score: Mapped[float] = mapped_column(Float, default=0.0)
+    priority_weight: Mapped[float] = mapped_column(Float, default=1.0)
+    last_seen: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="skills")
@@ -110,6 +113,8 @@ class QuestionPerformance(Base):
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.question_id"))
     hits: Mapped[int] = mapped_column(Integer, default=0)
     misses: Mapped[int] = mapped_column(Integer, default=0)
+    mastery_level: Mapped[float] = mapped_column(Float, default=0.0)
+    is_mastered: Mapped[bool] = mapped_column(Boolean, default=False)
     last_attempt: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="performance")
@@ -137,4 +142,4 @@ class User(Base):
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
 
-print("✅ [DB_MODELS] Modelos registrados exitosamente en v15. Mikey.", file=sys.stderr)
+print("✅ [DB_MODELS] Modelos armonizados exitosamente en v17. Mikey.", file=sys.stderr)
