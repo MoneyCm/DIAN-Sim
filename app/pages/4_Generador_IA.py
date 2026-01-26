@@ -121,7 +121,7 @@ with col1:
     default_topic = st.session_state.get("ai_default_topic", "Gestor II")
     custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
     
-    num_q = st.slider("Cantidad de preguntas a generar", 1, 20, 5) # Default safer
+    num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.") # Limit increased v28
     
     difficulty_p_val = st.session_state.get("ai_default_diff", 2)
     inv_difficulty_map = {1: "Básico", 2: "Intermedio", 3: "Avanzado"}
@@ -131,7 +131,7 @@ with col1:
     difficulty_value = difficulty_map[difficulty_label]
     
     st.info("💡 Todas las preguntas generadas serán **SITUACIONALES** (casos prácticos) para cumplir con el estándar de evaluación de la DIAN.")
-    st.caption("💎 **Tip Pro:** Si usas Gemini Free Tier, intenta generar lotes de **5 a 10 preguntas** a la vez.")
+    st.caption("💎 **Tip Pro:** Para archivos grandes como el Estatuto, solicita lotes de **20 a 30** preguntas para asegurar que la IA mantenga el máximo detalle y no se corte por tiempo.")
     
     generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 
