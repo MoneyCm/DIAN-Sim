@@ -174,12 +174,21 @@ if generate_btn:
                 # Since LLMGenerator.generate_from_text is synchronous and slow, 
                 # we can't easily update the bar from inside without a callback.
                 
-                results = generator.generate_from_text(
-                    source_text, 
-                    num_q, 
-                    difficulty=difficulty_value, 
-                    progress_callback=prog_bar.progress
-                )
+                # Resilient Call Mikey v30
+                try:
+                    results = generator.generate_from_text(
+                        source_text, 
+                        num_q, 
+                        difficulty=difficulty_value, 
+                        progress_callback=prog_bar.progress
+                    )
+                except TypeError as te:
+                    if "unexpected keyword argument 'progress_callback'" in str(te):
+                        print("⚠️ [v30] Fallback: El servidor aún tiene llm.py en caché. Mikey")
+                        results = generator.generate_from_text(source_text, num_q, difficulty=difficulty_value)
+                    else:
+                        raise te
+                
                 prog_bar.progress(100, text="¡Generación completada!")
                 
                 # Apply Custom Topic Override
