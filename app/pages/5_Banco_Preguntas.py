@@ -201,11 +201,20 @@ if action == "Explorar / Bulk":
     if not questions:
         st.warning("No hay preguntas que coincidan con la búsqueda.")
     else:
-        # SELECT ALL CHECKBOX
-        select_all = st.checkbox("Seleccionar todas las visibles")
-        if select_all:
-            for q in questions:
-                st.session_state["bulk_selection"].add(q.question_id)
+        # SELECT ALL / UNSELECT ALL BUTTONS v35 Mikey
+        col_m_sel, col_m_unsel = st.columns([1, 1])
+        with col_m_sel:
+            if st.button("✅ Seleccionar todas las visibles", use_container_width=True):
+                for q in questions:
+                    st.session_state["bulk_selection"].add(q.question_id)
+                st.rerun()
+        with col_m_unsel:
+            if st.button("❌ Deseleccionar visibles", use_container_width=True):
+                for q in questions:
+                    st.session_state["bulk_selection"].discard(q.question_id)
+                st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         
         for q in questions:
             diff_tags = {1: "🟢", 2: "🟡", 3: "🔴"}
