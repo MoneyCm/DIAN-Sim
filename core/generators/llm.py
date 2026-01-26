@@ -450,11 +450,35 @@ class LLMGenerator:
                 )
                 content = response.choices[0].message.content
             elif self.provider == "gemini":
-                model = genai.GenerativeModel(model_name="models/gemini-1.5-flash-latest")
-                response = model.generate_content(prompt)
-                content = response.text
+                candidates = [
+                    "models/gemini-1.5-flash-latest",
+                    "models/gemini-1.5-flash",
+                    "models/gemini-2.0-flash-001",
+                    "models/gemini-pro-latest",
+                    "models/gemini-1.5-pro-latest",
+                    "models/gemini-flash-latest"
+                ]
+                
+                content = ""
+                for model_name in candidates:
+                    try:
+                        print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey")
+                        model = genai.GenerativeModel(model_name=model_name)
+                        response = model.generate_content(prompt)
+                        if response and response.text:
+                            content = response.text
+                            break
+                    except Exception as e:
+                        print(f"DEBUG: Audit Model {model_name} failed: {e}")
+                        continue
+                
+                if not content:
+                    raise Exception("No se pudo conectar con ningún modelo de Gemini para la auditoría.")
+
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
+                elif "```" in content:
+                    content = content.replace("```", "").strip()
             
             return json.loads(content)
         except Exception as e:
