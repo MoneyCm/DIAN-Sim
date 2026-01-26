@@ -4,14 +4,15 @@ import uuid
 import sys
 from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship, configure_mappers
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, configure_mappers
 
-# Importamos la Base centralizada Mikey
-from db.base import Base
+# --- EL FINAL DE LOS ERRORES: BLINDAJE v12.0 MIKEY ---
+print("� [DB_MODELS] FUSIÓN NUCLEAR v12.0 INICIADA Mikey", file=sys.stderr)
 
-print("🛡️ [DB_MODELS] BLINDAJE v11.0 - CENTRALIZADO Mikey", file=sys.stderr)
+class Base(DeclarativeBase):
+    pass
 
-# --- CLASES DE SOPORTE ---
+# 1. DEFINICIÓN DE CLASES (Orden de dependencia)
 
 class Question(Base):
     __tablename__ = "questions"
@@ -30,6 +31,7 @@ class Question(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     hash_norm: Mapped[str] = mapped_column(String, unique=True)
 
+    # Relaciones - Usamos el objeto clase DIRECTO cuando existe arriba
     attempts: Mapped[List["Attempt"]] = relationship(back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship(back_populates="question")
 
@@ -58,7 +60,7 @@ class Attempt(Base):
     time_sec: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    question: Mapped["Question"] = relationship(back_populates="attempts")
+    question: Mapped[Question] = relationship(back_populates="attempts")
     user: Mapped[Optional["User"]] = relationship(back_populates="attempts")
 
 class UserStats(Base):
@@ -105,7 +107,7 @@ class QuestionPerformance(Base):
     last_attempt: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped[Optional["User"]] = relationship(back_populates="performance")
-    question: Mapped["Question"] = relationship(back_populates="perf_entries")
+    question: Mapped[Question] = relationship(back_populates="perf_entries")
 
 class Configuration(Base):
     __tablename__ = "configurations"
@@ -113,7 +115,7 @@ class Configuration(Base):
     key_name: Mapped[str] = mapped_column(String, unique=True)
     value: Mapped[str] = mapped_column(String)
 
-# --- CLASE PRINCIPAL ---
+# 2. EL REO FINAL: USER (Al final para que conozca a todos)
 
 class User(Base):
     __tablename__ = "users"
@@ -124,12 +126,21 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    opecs: Mapped[List["UserOPEC"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    performance: Mapped[List["QuestionPerformance"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    stats: Mapped[Optional["UserStats"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    attempts: Mapped[List["Attempt"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    achievements: Mapped[List["Achievement"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    skills: Mapped[List["Skill"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    # Aquí usamos las clases DIRECTAS, nada de strings Mikey
+    opecs: Mapped[List[UserOPEC]] = relationship(UserOPEC, back_populates="user", cascade="all, delete-orphan")
+    performance: Mapped[List[QuestionPerformance]] = relationship(QuestionPerformance, back_populates="user", cascade="all, delete-orphan")
+    stats: Mapped[Optional[UserStats]] = relationship(UserStats, back_populates="user", cascade="all, delete-orphan")
+    attempts: Mapped[List[Attempt]] = relationship(Attempt, back_populates="user", cascade="all, delete-orphan")
+    achievements: Mapped[List[Achievement]] = relationship(Achievement, back_populates="user", cascade="all, delete-orphan")
+    skills: Mapped[List[Skill]] = relationship(Skill, back_populates="user", cascade="all, delete-orphan")
 
-# Forzamos compilación
-configure_mappers()
+# --- AUTO-DIAGNÓSTICO MIKEY ---
+print("🔍 [DB_MODELS] Clases registradas en Base:", file=sys.stderr)
+for class_name in Base.registry._class_registry.keys():
+    print(f"   - {class_name}", file=sys.stderr)
+
+try:
+    configure_mappers()
+    print("✅ [DB_MODELS] Mappers listos y vinculados. Mikey.", file=sys.stderr)
+except Exception as e:
+    print(f"❌ [DB_MODELS] Fallo en mappers: {e}", file=sys.stderr)
