@@ -4,15 +4,14 @@ import uuid
 import sys
 from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, configure_mappers
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# --- EL FINAL DE LOS ERRORES: BLINDAJE v12.0 MIKEY ---
-print("� [DB_MODELS] FUSIÓN NUCLEAR v12.0 INICIADA Mikey", file=sys.stderr)
+# --- EL BLINDAJE DEFINITIVO v14.0 - MIKEY ---
+# Usamos strings para TODO. Cero dependencias de orden de clase.
+print("⚙️ [DB_MODELS] Iniciando registro v14.0 - Strings Puros Mikey", file=sys.stderr)
 
 class Base(DeclarativeBase):
     pass
-
-# 1. DEFINICIÓN DE CLASES (Orden de dependencia)
 
 class Question(Base):
     __tablename__ = "questions"
@@ -31,9 +30,9 @@ class Question(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     hash_norm: Mapped[str] = mapped_column(String, unique=True)
 
-    # Relaciones - Usamos el objeto clase DIRECTO cuando existe arriba
-    attempts: Mapped[List["Attempt"]] = relationship(back_populates="question")
-    perf_entries: Mapped[List["QuestionPerformance"]] = relationship(back_populates="question")
+    # Relaciones 100% Strings Mikey
+    attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
+    perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
@@ -48,7 +47,7 @@ class UserOPEC(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
-    user: Mapped[Optional["User"]] = relationship(back_populates="opecs")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
 
 class Attempt(Base):
     __tablename__ = "attempts"
@@ -60,8 +59,8 @@ class Attempt(Base):
     time_sec: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    question: Mapped[Question] = relationship(back_populates="attempts")
-    user: Mapped[Optional["User"]] = relationship(back_populates="attempts")
+    question: Mapped["Question"] = relationship("Question", back_populates="attempts")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="attempts")
 
 class UserStats(Base):
     __tablename__ = "user_stats"
@@ -72,7 +71,7 @@ class UserStats(Base):
     total_points: Mapped[int] = mapped_column(Integer, default=0)
     last_activity: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    user: Mapped["User"] = relationship(back_populates="stats")
+    user: Mapped["User"] = relationship("User", back_populates="stats")
 
 class Achievement(Base):
     __tablename__ = "achievements"
@@ -83,7 +82,7 @@ class Achievement(Base):
     icon: Mapped[Optional[str]] = mapped_column(String)
     unlocked_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    user: Mapped[Optional["User"]] = relationship(back_populates="achievements")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="achievements")
 
 class Skill(Base):
     __tablename__ = "skills"
@@ -95,7 +94,7 @@ class Skill(Base):
     mastery_score: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    user: Mapped[Optional["User"]] = relationship(back_populates="skills")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="skills")
 
 class QuestionPerformance(Base):
     __tablename__ = "question_performance"
@@ -106,16 +105,14 @@ class QuestionPerformance(Base):
     misses: Mapped[int] = mapped_column(Integer, default=0)
     last_attempt: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    user: Mapped[Optional["User"]] = relationship(back_populates="performance")
-    question: Mapped[Question] = relationship(back_populates="perf_entries")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="performance")
+    question: Mapped["Question"] = relationship("Question", back_populates="perf_entries")
 
 class Configuration(Base):
     __tablename__ = "configurations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key_name: Mapped[str] = mapped_column(String, unique=True)
     value: Mapped[str] = mapped_column(String)
-
-# 2. EL REO FINAL: USER (Al final para que conozca a todos)
 
 class User(Base):
     __tablename__ = "users"
@@ -126,21 +123,12 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    # Aquí usamos las clases DIRECTAS, nada de strings Mikey
-    opecs: Mapped[List[UserOPEC]] = relationship(UserOPEC, back_populates="user", cascade="all, delete-orphan")
-    performance: Mapped[List[QuestionPerformance]] = relationship(QuestionPerformance, back_populates="user", cascade="all, delete-orphan")
-    stats: Mapped[Optional[UserStats]] = relationship(UserStats, back_populates="user", cascade="all, delete-orphan")
-    attempts: Mapped[List[Attempt]] = relationship(Attempt, back_populates="user", cascade="all, delete-orphan")
-    achievements: Mapped[List[Achievement]] = relationship(Achievement, back_populates="user", cascade="all, delete-orphan")
-    skills: Mapped[List[Skill]] = relationship(Skill, back_populates="user", cascade="all, delete-orphan")
+    # Todo en strings para evitar el KeyError Mikey
+    opecs: Mapped[List["UserOPEC"]] = relationship("UserOPEC", back_populates="user", cascade="all, delete-orphan")
+    performance: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="user", cascade="all, delete-orphan")
+    stats: Mapped[Optional["UserStats"]] = relationship("UserStats", back_populates="user", cascade="all, delete-orphan")
+    attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="user", cascade="all, delete-orphan")
+    achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
+    skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
 
-# --- AUTO-DIAGNÓSTICO MIKEY ---
-print("🔍 [DB_MODELS] Clases registradas en Base:", file=sys.stderr)
-for class_name in Base.registry._class_registry.keys():
-    print(f"   - {class_name}", file=sys.stderr)
-
-try:
-    configure_mappers()
-    print("✅ [DB_MODELS] Mappers listos y vinculados. Mikey.", file=sys.stderr)
-except Exception as e:
-    print(f"❌ [DB_MODELS] Fallo en mappers: {e}", file=sys.stderr)
+print("✅ [DB_MODELS] Modelos registrados exitosamente en v14. Mikey.", file=sys.stderr)
