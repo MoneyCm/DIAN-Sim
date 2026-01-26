@@ -1,15 +1,15 @@
 import datetime
-import json
 import uuid
 import sys
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON
-from sqlalchemy.orm import DeclarativeBase, relationship, configure_mappers
+from sqlalchemy.orm import declarative_base, relationship, configure_mappers
 
-# --- Marcador de Versión para Logs ---
-print("🚀 [DB_MODELS] Cargando Versión 6.0 - Relaciones Explícitas Mikey", file=sys.stderr)
+# Registro de carga para los logs de Streamlit
+print("� [DB_MODELS] Iniciando Carga Ultra-Robusta v7.0 Mikey", file=sys.stderr)
 
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
+
+# --- MODELOS --- (Definidos primero, sin relaciones complejas internas)
 
 class Question(Base):
     __tablename__ = "questions"
@@ -28,9 +28,6 @@ class Question(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     hash_norm = Column(String, unique=True, nullable=False)
 
-    # Relación explícita
-    attempts = relationship("Attempt", back_populates="question")
-
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
@@ -39,68 +36,6 @@ class User(Base):
     password_hash = Column(String)
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    # Relaciones explícitas (usando strings para evitar circularidad interna si fuera el caso)
-    opecs = relationship("UserOPEC", back_populates="user")
-    performance = relationship("QuestionPerformance", back_populates="user")
-    stats = relationship("UserStats", back_populates="user")
-    attempts = relationship("Attempt", back_populates="user")
-    achievements = relationship("Achievement", back_populates="user")
-    skills = relationship("Skill", back_populates="user")
-
-class Attempt(Base):
-    __tablename__ = "attempts"
-    attempt_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    question_id = Column(String(36), ForeignKey("questions.question_id"))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    chosen_key = Column(String, nullable=False)
-    is_correct = Column(Boolean, nullable=False)
-    time_sec = Column(Integer, nullable=True)
-    confidence_1_5 = Column(Integer, nullable=True)
-    error_tag = Column(String, nullable=True)
-    notes = Column(Text, nullable=True)
-
-    question = relationship("Question", back_populates="attempts")
-    user = relationship("User", back_populates="attempts")
-
-class UserStats(Base):
-    __tablename__ = "user_stats"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    current_streak = Column(Integer, default=0)
-    max_streak = Column(Integer, default=0)
-    total_points = Column(Integer, default=0)
-    last_activity = Column(DateTime, default=datetime.datetime.utcnow)
-    
-    user = relationship("User", back_populates="stats")
-
-class Achievement(Base):
-    __tablename__ = "achievements"
-    achievement_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    name = Column(String, nullable=False)
-    description = Column(String)
-    icon = Column(String)
-    unlocked_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
-    user = relationship("User", back_populates="achievements")
-
-class Skill(Base):
-    __tablename__ = "skills"
-    skill_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    track = Column(String, nullable=False)
-    competency = Column(String, nullable=False)
-    topic = Column(String, nullable=False)
-    macro_dominio = Column(String, nullable=True)
-    micro_competencia = Column(String, nullable=True)
-    mastery_score = Column(Float, default=0.0)
-    priority_weight = Column(Float, default=1.0)
-    last_seen = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    user = relationship("User", back_populates="skills")
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
@@ -113,9 +48,47 @@ class UserOPEC(Base):
     functions = Column(JSON)
     requirements = Column(Text)
     is_active = Column(Boolean, default=True)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
-    user = relationship("User", back_populates="opecs")
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Attempt(Base):
+    __tablename__ = "attempts"
+    attempt_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    question_id = Column(String(36), ForeignKey("questions.question_id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    chosen_key = Column(String, nullable=False)
+    is_correct = Column(Boolean, nullable=False)
+    time_sec = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class UserStats(Base):
+    __tablename__ = "user_stats"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    current_streak = Column(Integer, default=0)
+    max_streak = Column(Integer, default=0)
+    total_points = Column(Integer, default=0)
+    last_activity = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Achievement(Base):
+    __tablename__ = "achievements"
+    achievement_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    name = Column(String, nullable=False)
+    description = Column(String)
+    icon = Column(String)
+    unlocked_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Skill(Base):
+    __tablename__ = "skills"
+    skill_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    track = Column(String, nullable=False)
+    competency = Column(String, nullable=False)
+    topic = Column(String, nullable=False)
+    macro_dominio = Column(String, nullable=True)
+    micro_competencia = Column(String, nullable=True)
+    mastery_score = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class QuestionPerformance(Base):
     __tablename__ = "question_performance"
@@ -125,22 +98,28 @@ class QuestionPerformance(Base):
     hits = Column(Integer, default=0)
     misses = Column(Integer, default=0)
     last_attempt = Column(DateTime, default=datetime.datetime.utcnow)
-    mastery_level = Column(Float, default=0.0)
-    is_mastered = Column(Boolean, default=False)
-    
-    question = relationship("Question")
-    user = relationship("User", back_populates="performance")
 
 class Configuration(Base):
     __tablename__ = "configurations"
     id = Column(Integer, primary_key=True)
     key_name = Column(String, unique=True, nullable=False)
     value = Column(String, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-# Forzar configuración manual al final
+# --- RELACIONES TARDÍAS ---
+# Usamos backref para simplificar al máximo y evitar KeyError
+User.opecs = relationship("UserOPEC", backref="user")
+User.stats = relationship("UserStats", backref="user")
+User.attempts = relationship("Attempt", backref="user")
+User.achievements = relationship("Achievement", backref="user")
+User.skills = relationship("Skill", backref="user")
+User.performance = relationship("QuestionPerformance", backref="user")
+
+Attempt.question = relationship("Question", backref="attempts")
+QuestionPerformance.question = relationship("Question", backref="performance")
+
+# Intentamos configurar mappers, si falla, al menos dejamos cargar el archivo
 try:
     configure_mappers()
-    print("✅ [DB_MODELS] Mappers configurados con éxito.", file=sys.stderr)
+    print("✅ [DB_MODELS] Mappers listos.", file=sys.stderr)
 except Exception as e:
-    print(f"⚠️ [DB_MODELS] Error en mappers: {e}", file=sys.stderr)
+    print(f"❌ [DB_MODELS] Fallo en mappers: {e}", file=sys.stderr)
