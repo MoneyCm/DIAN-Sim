@@ -6,21 +6,6 @@ from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    email = Column(String, unique=True)
-    password_hash = Column(String)
-    role = Column(String, default="user") # user, admin
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
-    opecs = relationship("UserOPEC", back_populates="user")
-    performance = relationship("QuestionPerformance", back_populates="user")
-    stats = relationship("UserStats", back_populates="user")
-    attempts = relationship("Attempt", back_populates="user")
-    achievements = relationship("Achievement", back_populates="user")
-    skills = relationship("Skill", back_populates="user")
 
 class Question(Base):
     __tablename__ = "questions"
@@ -138,3 +123,26 @@ class QuestionPerformance(Base):
     
     question = relationship("Question")
     user = relationship("User", back_populates="performance")
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True)
+    password_hash = Column(String)
+    role = Column(String, default="user") # user, admin
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    opecs = relationship("UserOPEC", back_populates="user")
+    performance = relationship("QuestionPerformance", back_populates="user")
+    stats = relationship("UserStats", back_populates="user")
+    attempts = relationship("Attempt", back_populates="user")
+    achievements = relationship("Achievement", back_populates="user")
+    skills = relationship("Skill", back_populates="user")
+
+# Forzar configuración de mappers para evitar errores en la nube
+from sqlalchemy.orm import configure_mappers
+try:
+    configure_mappers()
+except:
+    pass
