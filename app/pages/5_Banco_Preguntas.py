@@ -242,7 +242,7 @@ if action == "Explorar / Bulk":
             col_sel, col_exp = st.columns([0.05, 0.95])
             
             with col_sel:
-                if st.checkbox("", value=is_selected, key=f"sel_{q.question_id}"):
+                if st.checkbox("Seleccionar", value=is_selected, key=f"sel_{q.question_id}", label_visibility="collapsed"):
                     st.session_state["bulk_selection"].add(q.question_id)
                 else:
                     st.session_state["bulk_selection"].discard(q.question_id)
