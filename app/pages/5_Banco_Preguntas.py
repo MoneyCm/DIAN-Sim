@@ -69,22 +69,57 @@ if action == "Explorar / Bulk":
     with col_filters[3]:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state["bulk_selection"]:
-            col_del, col_down_ex, col_down_txt = st.columns([1, 1, 1])
-            
             with col_del:
-                if st.button(f"🗑️ Borrar Seleccionados ({len(st.session_state['bulk_selection'])})", type="primary", use_container_width=True):
+                # v34 Bulk Audit Button Mikey
+                if st.button(f"🛡️ Auditar Selección ({len(st.session_state['bulk_selection'])})", type="primary", use_container_width=True):
+                    try:
+                        provider = st.session_state.get("current_provider", "Gemini")
+                        api_key = get_api_key(provider)
+                        if api_key:
+                            gen = LLMGenerator(provider, api_key)
+                            if not hasattr(gen, 'audit_question'):
+                                st.warning("⏳ Esperando actualización del servidor. Reintenta en 30s.")
+                            else:
+                                prog_audit = st.progress(0, text="Iniciando Auditoría Masiva...")
+                                selection = list(st.session_state["bulk_selection"])
+                                for i, qid in enumerate(selection):
+                                    prog_audit.progress((i + 1) / len(selection), text=f"Auditando {i+1} de {len(selection)}...")
+                                    q_aud = db.query(Question).get(qid)
+                                    if q_aud and not q_aud.is_verified:
+                                        report = gen.audit_question({
+                                            "topic": q_aud.topic, "stem": q_aud.stem, 
+                                            "options_json": q_aud.options_json, 
+                                            "correct_key": q_aud.correct_key, 
+                                            "rationale": q_aud.rationale
+                                        })
+                                        q_aud.quality_report = report
+                                        if report.get("status") == "APPROVED":
+                                            q_aud.is_verified = True
+                                db.commit()
+                                st.success("¡Auditoría masiva completada!")
+                                st.rerun()
+                        else:
+                            st.error("Falta API Key")
+                    except Exception as e:
+                        db.rollback()
+                        st.error(f"Error en auditoría masiva: {e}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_del_real, col_down_ex, col_down_txt = st.columns([1, 1, 1])
+            with col_del_real:
+                if st.button(f"🗑️ Borrar Selección", type="secondary", use_container_width=True):
+                    # Original delete logic Mikey
                     try:
                         for qid in st.session_state["bulk_selection"]:
                             q_to_del = db.query(Question).get(qid)
-                            if q_to_del:
-                                db.delete(q_to_del)
+                            if q_to_del: db.delete(q_to_del)
                         db.commit()
                         reset_selection()
-                        st.success("Preguntas eliminadas masivamente.")
+                        st.success("Preguntas eliminadas.")
                         st.rerun()
                     except Exception as e:
                         db.rollback()
-                        st.error(f"Error en borrado masivo: {e}")
+                        st.error(f"Error: {e}")
             
             # Export Logic
             selected_qs = db.query(Question).filter(Question.question_id.in_(list(st.session_state["bulk_selection"]))).all()
