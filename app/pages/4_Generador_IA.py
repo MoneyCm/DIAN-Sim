@@ -148,7 +148,12 @@ with col1:
     goa_mode = st.toggle("📄 Aplicar Protocolo situacional GOA 2667 (Recomendado)", value=True, help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.")
     
     st.info("💡 Todas las preguntas generadas serán **SITUACIONALES** (casos prácticos) si el modo GOA está activo, cumpliendo con el estándar de evaluación de la DIAN.")
-    st.caption("💎 **Tip Pro v47:** El nuevo motor 'Escudo Titán' ahora detecta si el documento es pequeño para asegurar cobertura total. Para libros extensos, usa lotes de 20-40 preguntas.")
+    
+    # v47.2 Massive File Alert
+    if char_count > 500000:
+        st.warning(f"⚠️ **Archivo Masivo Detectado:** Tu documento tiene {char_count:,} caracteres. Los proveedores gratuitos (Gemini/Groq) pueden agotar su cuota rápidamente. **Recomendación:** Genera lotes de máximo 10-15 preguntas a la vez.")
+    
+    st.caption("💎 **Tip Pro v47.2:** El motor 'Escudo Supernova' ahora comprime el contexto en archivos gigantes (>1M) para evitar bloqueos y respeta los tiempos de espera sugeridos por Google.")
     
     generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 

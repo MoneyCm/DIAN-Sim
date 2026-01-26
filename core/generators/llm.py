@@ -66,8 +66,12 @@ class LLMGenerator:
         remaining = count
         total_batches = (count + batch_size - 1) // batch_size
         
-        # v47 Smart Slice: Determine if we need Full Coverage or Sampling
-        window_size = 18000 # Increased for larger context Mikey
+        # v47.2 Supernova: Context Compression for Massive Files
+        window_size = 18000
+        if text_len > 1000000:
+            window_size = 12000 # Compact context for free tier limit avoidance
+            print(f"DEBUG: Massive File Detected ({text_len} chars). Compressing window to {window_size}. Mikey v47.2")
+        
         overlap = 2000 # Small overlap to keep context
         
         coverage_mode = "sampling"
@@ -246,11 +250,12 @@ class LLMGenerator:
                 # v43 Mikey: New SDK candidates
                 candidates = [
                     "gemini-2.0-flash",
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro",
-                    "gemini-1.5-flash-8b",
                     "gemini-2.0-flash-001",
-                    "gemini-1.5-flash-latest",
+                    "gemini-1.5-flash-002",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-8b",
+                    "gemini-1.5-pro-002",
+                    "gemini-1.5-pro",
                     "gemini-pro"
                 ]
                 
@@ -288,8 +293,17 @@ class LLMGenerator:
                     except Exception as e:
                         last_error = e
                         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                            print(f"⚠️ [429] Cuota excedida en {model_name}. Enfriando 2s... Mikey v47.1")
-                            time.sleep(2) 
+                            # v47.2 Adaptive Backoff: Try to extract retry-after
+                            wait_time = 5 # Default v47.2
+                            err_str = str(e)
+                            if "retry in " in err_str:
+                                try:
+                                    # Extract number after "retry in "
+                                    parts = err_str.split("retry in ")
+                                    wait_time = float(parts[1].split("s")[0]) + 1
+                                except: pass
+                            print(f"⚠️ [429] Cuota excedida en {model_name}. Esperando {wait_time}s... Mikey v47.2")
+                            time.sleep(wait_time) 
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 
