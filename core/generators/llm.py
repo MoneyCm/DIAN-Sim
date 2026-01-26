@@ -450,30 +450,40 @@ class LLMGenerator:
                 )
                 content = response.choices[0].message.content
             elif self.provider == "gemini":
+                # v38 Mikey: Extensive candidates list
                 candidates = [
-                    "models/gemini-1.5-flash-latest",
-                    "models/gemini-1.5-flash",
-                    "models/gemini-2.0-flash-001",
-                    "models/gemini-pro-latest",
-                    "models/gemini-1.5-pro-latest",
-                    "models/gemini-flash-latest"
+                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-latest",
+                    "gemini-1.5-pro",
+                    "gemini-pro",
+                    "gemini-2.0-flash-exp",
+                    "gemini-2.0-flash-001"
+                ]
+                
+                # Relax security filters for technical audit Mikey
+                safety_settings = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
                 ]
                 
                 content = ""
+                fail_log = []
                 for model_name in candidates:
                     try:
                         print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey")
                         model = genai.GenerativeModel(model_name=model_name)
-                        response = model.generate_content(prompt)
+                        response = model.generate_content(prompt, safety_settings=safety_settings)
                         if response and response.text:
                             content = response.text
                             break
                     except Exception as e:
-                        print(f"DEBUG: Audit Model {model_name} failed: {e}")
+                        fail_log.append(f"{model_name}: {str(e)[:50]}")
                         continue
                 
                 if not content:
-                    raise Exception("No se pudo conectar con ningún modelo de Gemini para la auditoría. (v37.1 Mikey)")
+                    raise Exception(f"Falla total en candidates: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
