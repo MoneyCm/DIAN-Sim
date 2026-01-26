@@ -1,11 +1,13 @@
 import datetime
 import json
 import uuid
+from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import DeclarativeBase, relationship
 
-Base = declarative_base()
-
+# --- SQLAlchemy 2.0 Style Base ---
+class Base(DeclarativeBase):
+    pass
 
 class Question(Base):
     __tablename__ = "questions"
@@ -14,8 +16,8 @@ class Question(Base):
     track = Column(String, nullable=False)  # FUNCIONAL | COMPORTAMENTAL | INTEGRIDAD
     competency = Column(String, nullable=False)
     topic = Column(String, nullable=False)
-    macro_dominio = Column(String, nullable=True) # Específico GOA
-    micro_competencia = Column(String, nullable=True) # Específico GOA
+    macro_dominio = Column(String, nullable=True) 
+    micro_competencia = Column(String, nullable=True) 
     difficulty = Column(Integer, nullable=False) # 1-5
     stem = Column(Text, nullable=False)
     options_json = Column(JSON, nullable=False)
@@ -32,7 +34,7 @@ class Attempt(Base):
 
     attempt_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     question_id = Column(String(36), ForeignKey("questions.question_id"))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Nullable for legacy
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     chosen_key = Column(String, nullable=False)
     is_correct = Column(Boolean, nullable=False)
@@ -61,33 +63,29 @@ class Achievement(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     name = Column(String, nullable=False)
     description = Column(String)
-    icon = Column(String) # Emoji or path
+    icon = Column(String)
     unlocked_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     user = relationship("User", back_populates="achievements")
 
-
 class Skill(Base):
     __tablename__ = "skills"
-
     skill_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     track = Column(String, nullable=False)
     competency = Column(String, nullable=False)
     topic = Column(String, nullable=False)
-    macro_dominio = Column(String, nullable=True) # Específico GOA
-    micro_competencia = Column(String, nullable=True) # Específico GOA
-    mastery_score = Column(Float, default=0.0) # 0-100
+    macro_dominio = Column(String, nullable=True)
+    micro_competencia = Column(String, nullable=True)
+    mastery_score = Column(Float, default=0.0)
     priority_weight = Column(Float, default=1.0)
     last_seen = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-    # Unique constraint for track/competency/topic combination could be added via Index/UniqueConstraint
-    # but for simplicity we'll handle uniqueness via application logic or add __table_args__
+    user = relationship("User", back_populates="skills")
 
 class Configuration(Base):
     __tablename__ = "configurations"
-    
     id = Column(Integer, primary_key=True)
     key_name = Column(String, unique=True, nullable=False)
     value = Column(String, nullable=False)
@@ -95,14 +93,13 @@ class Configuration(Base):
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
-    
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    opec_number = Column(String, nullable=False) # Removed Unique to allow multi-user with same OPEC
+    opec_number = Column(String, nullable=False)
     job_title = Column(String, nullable=False)
-    level = Column(String) # Profesional, Técnico, Asistencial
+    level = Column(String)
     purpose = Column(Text)
-    functions = Column(JSON) # List of strings or structured functions
+    functions = Column(JSON)
     requirements = Column(Text)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -111,14 +108,13 @@ class UserOPEC(Base):
 
 class QuestionPerformance(Base):
     __tablename__ = "question_performance"
-    
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     question_id = Column(String(36), ForeignKey("questions.question_id"))
     hits = Column(Integer, default=0)
     misses = Column(Integer, default=0)
     last_attempt = Column(DateTime, default=datetime.datetime.utcnow)
-    mastery_level = Column(Float, default=0.0) # 0 to 10.0 based on weighted algo (7.5 threshold)
+    mastery_level = Column(Float, default=0.0)
     is_mastered = Column(Boolean, default=False)
     
     question = relationship("Question")
@@ -130,7 +126,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True)
     password_hash = Column(String)
-    role = Column(String, default="user") # user, admin
+    role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     opecs = relationship("UserOPEC", back_populates="user")
@@ -140,9 +136,6 @@ class User(Base):
     achievements = relationship("Achievement", back_populates="user")
     skills = relationship("Skill", back_populates="user")
 
-# Forzar configuración de mappers para evitar errores en la nube
+# --- Mapper initialization ---
 from sqlalchemy.orm import configure_mappers
-try:
-    configure_mappers()
-except:
-    pass
+configure_mappers()
