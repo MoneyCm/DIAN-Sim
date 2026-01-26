@@ -10,6 +10,7 @@ import openai
 from google import genai
 from google.genai import types
 from core.normativa import NormativaManager
+from core.config import get_api_key
 
 class LLMGenerator:
     def __init__(self, provider: str, api_key: str, model_name: str = None):
@@ -19,17 +20,37 @@ class LLMGenerator:
         
         # Try to initialize both if possible (for fallbacks)
         self.openai_client = None
+        self.gemini_client = None
+        
+        # Primary Client
         if self.provider == "openai" and self.api_key:
             self.openai_client = openai.OpenAI(api_key=self.api_key)
-        
-        if self.provider == "gemini" and self.api_key:
+        elif self.provider == "gemini" and self.api_key:
             self.gemini_client = genai.Client(api_key=self.api_key)
-            
-        if self.provider == "groq" and self.api_key:
+        elif self.provider == "groq" and self.api_key:
             self.openai_client = openai.OpenAI(
                 api_key=self.api_key,
                 base_url="https://api.groq.com/openai/v1"
             )
+
+        # Fallback Clients (v44 Mikey: Universal Shield)
+        if self.provider == "gemini":
+            # Si somos Gemini, preparemos Groq/OpenAI como respaldo secreto
+            for fb_provider in ["groq", "openai"]:
+                fb_key = get_api_key(fb_provider)
+                if fb_key:
+                    try:
+                        if fb_provider == "groq":
+                            self.fallback_client = openai.OpenAI(
+                                api_key=fb_key,
+                                base_url="https://api.groq.com/openai/v1"
+                            )
+                        else:
+                            self.fallback_client = openai.OpenAI(api_key=fb_key)
+                        print(f"✅ Fallback {fb_provider} configurado exitosamente. Mikey v44")
+                        break # Usamos el primero que funcione
+                    except:
+                        pass
             
     def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None, user_id: int = None) -> List[dict]:
         """Generates questions by splitting into smarter segments if text is huge. Mikey"""
@@ -221,7 +242,7 @@ class LLMGenerator:
                 
                 for model_name in candidates:
                     try:
-                        print(f"DEBUG: Enviando lote a Gemini ({model_name})... Mikey v43")
+                        print(f"DEBUG: Enviando lote a Gemini ({model_name})... Mikey v44")
                         response = self.gemini_client.models.generate_content(
                             model=model_name,
                             contents=prompt,
@@ -232,13 +253,25 @@ class LLMGenerator:
                             break
                     except Exception as e:
                         last_error = e
+                        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                            print(f"⚠️ [429] Cuota excedida en {model_name}. Enfriando 2s... Mikey")
+                            time.sleep(2) # Cooldown
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 
-                if not content:
-                    if "quota" in str(last_error).lower() or "429" in str(last_error):
-                        raise Exception("❌ Cuota de Gemini agotada. Reintenta en 60s.")
-                    raise Exception(f"Gemini falló v43.0: {last_error}")
+                # v44 FALLBACK: Intento de rescate dinámico. Mikey
+                if not content and hasattr(self, 'fallback_client') and self.fallback_client:
+                    print(f"⚠️ [v44] Gemini falló. Activando RESCATE con Fallback... Mikey")
+                    try:
+                        # Usamos un modelo ligero pero potente para el rescate
+                        fb_response = self.fallback_client.chat.completions.create(
+                            model="gpt-4o-mini" if "openai" in str(self.fallback_client) else "llama-3.3-70b-versatile",
+                            messages=[{"role": "user", "content": prompt}],
+                            response_format={"type": "json_object"}
+                        )
+                        content = fb_response.choices[0].message.content
+                    except Exception as fe:
+                        print(f"❌ Falló incluso el rescate: {fe}")
 
                 # Cleanup markdown
                 if "```json" in content:
@@ -449,7 +482,7 @@ class LLMGenerator:
                 fail_log = []
                 for model_name in candidates:
                     try:
-                        print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey v43")
+                        print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey v44")
                         response = self.gemini_client.models.generate_content(
                             model=model_name,
                             contents=prompt,
@@ -460,24 +493,31 @@ class LLMGenerator:
                             break
                     except Exception as e:
                         fail_log.append(f"{model_name}: {str(e)[:40]}")
+                        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                            time.sleep(2) # Cooldown Mikey
                         continue
                 
-                # Fallback to OpenAI/Groq if Gemini fails
+                # Fallback Universal v44 (Intento de Rescate de Auditoría)
                 if not content:
-                    print(f"⚠️ [v43] Gemini Audit Failed. Attempting Fallback... Mikey")
-                    try:
-                        if hasattr(self, 'openai_client') and self.openai_client:
-                            response = self.openai_client.chat.completions.create(
-                                model="gpt-4o-mini",
+                    fb_client = getattr(self, 'fallback_client', None)
+                    if not fb_client and hasattr(self, 'openai_client'): fb_client = self.openai_client
+                    
+                    if fb_client:
+                        print(f"⚠️ [v44] Gemini Audit Failed. Attempting Fallback Rescue... Mikey")
+                        try:
+                            # Use Llama 3.3 for audit rescue if possible
+                            model_fb = "llama-3.3-70b-versatile" if "groq" in str(fb_client.base_url or "") else "gpt-4o-mini"
+                            response = fb_client.chat.completions.create(
+                                model=model_fb,
                                 messages=[{"role": "user", "content": prompt}],
                                 response_format={"type": "json_object"}
                             )
                             content = response.choices[0].message.content
-                    except Exception as ge:
-                        fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
+                        except Exception as ge:
+                            fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
                 
                 if not content:
-                    raise Exception(f"Falla total v43.0 Mikey: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total v44.0 Mikey: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -485,9 +525,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v43.0] {res.get('critique', '')}" # SDK Shield Mikey
+            res["critique"] = f"[v44.0] {res.get('critique', '')}" # Quantum Shield Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v43.0 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v44.0 Mikey): {e}"}
 
 
