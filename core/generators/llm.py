@@ -450,8 +450,9 @@ class LLMGenerator:
                 )
                 content = response.choices[0].message.content
             elif self.provider == "gemini":
-                # v40 Mikey: Universal Resiliency List
+                # v42 Mikey: Master Resiliency List
                 candidates = [
+                    "models/gemini-2.0-flash",
                     "models/gemini-1.5-flash",
                     "models/gemini-1.5-flash-latest",
                     "models/gemini-2.0-flash-001",
@@ -482,7 +483,7 @@ class LLMGenerator:
                 
                 # v39 FALLBACK: If Gemini fails (Quota/404), try Groq/OpenAI! Mikey
                 if not content:
-                    print(f"⚠️ [v40] Gemini Audit Failed. Attempting Fallback... Mikey")
+                    print(f"⚠️ [v42] Gemini Audit Failed. Attempting Fallback... Mikey")
                     try:
                         # Try the existing OpenAI/Groq client if initialized
                         if hasattr(self, 'openai_client') and self.openai_client:
@@ -496,7 +497,7 @@ class LLMGenerator:
                         fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
                 
                 if not content:
-                    raise Exception(f"Falla total v40.0 Mikey: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total v42.0 Mikey: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -504,9 +505,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v40.0] {res.get('critique', '')}" # Master Version Mikey
+            res["critique"] = f"[v42.0] {res.get('critique', '')}" # Shield Version Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v40.0 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v42.0 Mikey): {e}"}
 
 
