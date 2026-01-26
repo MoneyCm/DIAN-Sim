@@ -39,11 +39,22 @@ if not AuthManager.check_auth():
             btn_login = st.form_submit_button("Entrar", type="primary", use_container_width=True)
             
             if btn_login:
-                if AuthManager.login(user_in, pass_in):
-                    st.success("¡Bienvenido!")
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
+                try:
+                    if AuthManager.login(user_in, pass_in):
+                        st.success("¡Bienvenido!")
+                        st.rerun()
+                    else:
+                        st.error("Usuario o contraseña incorrectos")
+                except Exception as e:
+                    import traceback
+                    st.error(f"❌ Error de Sistema: Consulta los Logs para más detalle.")
+                    print(f"🔥 FULL ERROR TRACEBACK:\n{traceback.format_exc()}")
+                    # Intentar re-configurar mapeos si falló algo
+                    try:
+                        from sqlalchemy.orm import configure_mappers
+                        configure_mappers()
+                    except Exception as ce:
+                        print(f"🔥 Mapper Configuration Error: {ce}")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_l2:

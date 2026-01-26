@@ -19,6 +19,8 @@ class User(Base):
     performance = relationship("QuestionPerformance", back_populates="user")
     stats = relationship("UserStats", back_populates="user")
     attempts = relationship("Attempt", back_populates="user")
+    achievements = relationship("Achievement", back_populates="user")
+    skills = relationship("Skill", back_populates="user")
 
 class Question(Base):
     __tablename__ = "questions"
@@ -76,6 +78,8 @@ class Achievement(Base):
     description = Column(String)
     icon = Column(String) # Emoji or path
     unlocked_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="achievements")
 
 
 class Skill(Base):
