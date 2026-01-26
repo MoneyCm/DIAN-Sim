@@ -483,7 +483,7 @@ class LLMGenerator:
                         continue
                 
                 if not content:
-                    raise Exception(f"Falla total en candidates: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total en candidates (v38.1 Mikey): {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -491,9 +491,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v37.1] {res.get('critique', '')}" # Add version tag Mikey
+            res["critique"] = f"[v38.1] {res.get('critique', '')}" # Add version tag Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v37.1 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v38.1 Mikey): {e}"}
 
 
