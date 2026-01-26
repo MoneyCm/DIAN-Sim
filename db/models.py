@@ -43,7 +43,7 @@ class Attempt(Base):
     error_tag = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
 
-    question = relationship("Question", back_populates="attempts")
+    question = relationship(Question, back_populates="attempts")
     user = relationship("User", back_populates="attempts")
 
 class UserStats(Base):
@@ -129,12 +129,12 @@ class User(Base):
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
-    opecs = relationship("UserOPEC", back_populates="user")
-    performance = relationship("QuestionPerformance", back_populates="user")
-    stats = relationship("UserStats", back_populates="user")
-    attempts = relationship("Attempt", back_populates="user")
-    achievements = relationship("Achievement", back_populates="user")
-    skills = relationship("Skill", back_populates="user")
+    opecs = relationship(UserOPEC, back_populates="user")
+    performance = relationship(QuestionPerformance, back_populates="user")
+    stats = relationship(UserStats, back_populates="user")
+    attempts = relationship(Attempt, back_populates="user")
+    achievements = relationship(Achievement, back_populates="user")
+    skills = relationship(Skill, back_populates="user")
 
 # --- Mapper initialization ---
 from sqlalchemy.orm import configure_mappers
