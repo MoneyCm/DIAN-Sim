@@ -34,6 +34,10 @@ if "page_num" not in st.session_state:
 
 def reset_selection():
     st.session_state["bulk_selection"] = set()
+    # Clear individual checkbox keys Mikey v36
+    for key in list(st.session_state.keys()):
+        if key.startswith("sel_"):
+            st.session_state[key] = False
 
 # --- SIDEBAR TOOLS ---
 with st.sidebar:
@@ -59,7 +63,7 @@ db = SessionLocal()
 
 if action == "Explorar / Bulk":
     # FILTERS
-    col_filters = st.columns([2, 1, 1, 1])
+    col_filters = st.columns([2, 1, 1, 1, 1])
     with col_filters[0]:
         search = st.text_input("🔍 Buscar en enunciado o justificación...")
     with col_filters[1]:
@@ -67,6 +71,9 @@ if action == "Explorar / Bulk":
     with col_filters[2]:
         diff_f = st.multiselect("Dificultad", [1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x])
     with col_filters[3]:
+        # Quality Filter Mikey v36
+        quality_f = st.selectbox("Calidad", ["Todas", "Solo Verificadas ✅", "Pendientes ⏳"])
+    with col_filters[4]:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state["bulk_selection"]:
             st.markdown(f"### ⚙️ Acciones Masivas ({len(st.session_state['bulk_selection'])} ítems seleccionados)")
@@ -190,6 +197,12 @@ if action == "Explorar / Bulk":
     if diff_f:
         query = query.filter(Question.difficulty.in_(diff_f))
     
+    # v36 Quality Filter Logic Mikey
+    if quality_f == "Solo Verificadas ✅":
+        query = query.filter(Question.is_verified == True)
+    elif quality_f == "Pendientes ⏳":
+        query = query.filter(Question.is_verified == False)
+    
     # Pagination Logic
     PAGE_SIZE = 20
     offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
@@ -201,17 +214,19 @@ if action == "Explorar / Bulk":
     if not questions:
         st.warning("No hay preguntas que coincidan con la búsqueda.")
     else:
-        # SELECT ALL / UNSELECT ALL BUTTONS v35 Mikey
+        # SELECT ALL / UNSELECT ALL BUTTONS v36 Mikey
         col_m_sel, col_m_unsel = st.columns([1, 1])
         with col_m_sel:
             if st.button("✅ Seleccionar todas las visibles", use_container_width=True):
                 for q in questions:
                     st.session_state["bulk_selection"].add(q.question_id)
+                    st.session_state[f"sel_{q.question_id}"] = True # Force sync Mikey
                 st.rerun()
         with col_m_unsel:
             if st.button("❌ Deseleccionar visibles", use_container_width=True):
                 for q in questions:
                     st.session_state["bulk_selection"].discard(q.question_id)
+                    st.session_state[f"sel_{q.question_id}"] = False # Force sync Mikey
                 st.rerun()
         
         st.markdown("<br>", unsafe_allow_html=True)
