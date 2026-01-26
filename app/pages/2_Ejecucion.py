@@ -44,31 +44,36 @@ def finalize_exam(db, q_ids, answers_dict):
             )
             db.add(att)
             
-            # Update Skills
+            # Update Records with resilient assignment Mikey
             skill = db.query(Skill).filter_by(user_id=u_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
             if not skill:
-                skill = Skill(
-                    user_id=u_id,
-                    track=q_obj.track, 
-                    competency=q_obj.competency, 
-                    topic=q_obj.topic, 
-                    macro_dominio=q_obj.macro_dominio,
-                    micro_competencia=q_obj.micro_competencia,
-                    mastery_score=0.0, 
-                    priority_weight=1.0
-                )
+                skill = Skill()
+                skill.user_id = u_id
+                skill.track = q_obj.track
+                skill.competency = q_obj.competency
+                skill.topic = q_obj.topic
+                skill.mastery_score = 0.0
+                skill.priority_weight = 1.0
                 db.add(skill)
                 db.flush()
             
             # Sync taxonomy update
-            skill.macro_dominio = q_obj.macro_dominio
-            skill.micro_competencia = q_obj.micro_competencia
-            
+            try:
+                skill.macro_dominio = q_obj.macro_dominio
+                skill.micro_competencia = q_obj.micro_competencia
+            except AttributeError:
+                print("⚠️ [v20] Skill class is missing taxi fields, skipping...")
+
             # Update Mastery Record (Fase 2 OPEC)
             from db.models import QuestionPerformance
             perf = db.query(QuestionPerformance).filter_by(user_id=u_id, question_id=qid).first()
             if not perf:
-                perf = QuestionPerformance(user_id=u_id, question_id=qid, hits=0, misses=0, mastery_level=0.0)
+                perf = QuestionPerformance()
+                perf.user_id = u_id
+                perf.question_id = qid
+                perf.hits = 0
+                perf.misses = 0
+                perf.mastery_level = 0.0
                 db.add(perf)
             
             # Safety check for Nulls
