@@ -13,10 +13,11 @@ from core.normativa import NormativaManager
 from core.config import get_api_key
 
 class LLMGenerator:
-    def __init__(self, provider: str, api_key: str, model_name: str = None):
+    def __init__(self, provider: str, api_key: str, model_name: str = None, goa_mode: bool = True):
         self.provider = provider.lower()
         self.api_key = api_key.strip() if api_key else ""
         self.model_name = model_name
+        self.goa_mode = goa_mode
         
         # Try to initialize both if possible (for fallbacks)
         self.openai_client = None
@@ -131,14 +132,10 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error fetching normativa context: {e}")
 
-        # Context logic v29 Mikey
-        context = text[:15000] # Increased window Mikey
-        
-        prompt = f"""
-        Actúa como un Experto Constructor de Ítems de la CNSC para los procesos de selección de la DIAN.
-        Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
-        {opec_context}
-        {normativa_context}
+        # GOA logic v46 Mikey
+        goa_instr = ""
+        if self.goa_mode:
+            goa_instr = """
         REQUISITOS METODOLÓGICOS (Protocolo GOA 2667 - Estándar CNSC):
         1. ESTRUCTURA DE JUICIO SITUACIONAL: 
            - CASO (Contexto): Un párrafo de 80-120 palabras que describa una situación laboral REALISTA en la DIAN. Incluye variables técnicas y distractores contextuales (ruido).
@@ -151,8 +148,27 @@ class LLMGenerator:
         4. TAXONOMÍA OBLIGATORIA:
            - Macro-Dominio: Clasifica en (Tributario, Aduanero, Cambiario, Transversal, Comportamental, Integridad).
            - Micro-Competencia: Identifica el tema específico (ej: "Procedimiento de Cobro", "Régimen Simple", "Adaptabilidad").
+            """
+        else:
+            goa_instr = """
+        REQUISITOS DE GENERACIÓN TÉCNICA:
+        1. ENUNCIADO DIRECTO: Una pregunta clara y técnica sobre el contenido proporcionado.
+        2. OPCIONES: Tres opciones técnicas (A, B, C). Solo una es correcta.
+        3. JUSTIFICACIÓN: Referencia normativa precisa.
+            """
 
-        TEXTO DE REFERENCIA (Inyecta este contenido en los casos):
+        # Context definition v46 Mikey
+        context = text[:15000]
+        
+        prompt = f"""
+        Actúa como un Experto en Normativa de la DIAN y Constructor de Preguntas.
+        Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
+        {opec_context}
+        {normativa_context}
+        
+        {goa_instr}
+
+        TEXTO DE REFERENCIA:
         "{context}..."
         
         FORMATO DE SALIDA (Objeto JSON obligatorio):

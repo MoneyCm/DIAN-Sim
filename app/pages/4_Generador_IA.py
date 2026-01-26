@@ -130,7 +130,9 @@ with col1:
     difficulty_label = st.select_slider("Nivel de dificultad", options=list(difficulty_map.keys()), value=inv_difficulty_map.get(difficulty_p_val, "Intermedio"))
     difficulty_value = difficulty_map[difficulty_label]
     
-    st.info("💡 Todas las preguntas generadas serán **SITUACIONALES** (casos prácticos) para cumplir con el estándar de evaluación de la DIAN.")
+    goa_mode = st.toggle("📄 Aplicar Protocolo situacional GOA 2667 (Recomendado)", value=True, help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.")
+    
+    st.info("💡 Todas las preguntas generadas serán **SITUACIONALES** (casos prácticos) si el modo GOA está activo, cumpliendo con el estándar de evaluación de la DIAN.")
     st.caption("💎 **Tip Pro:** Para archivos grandes como el Estatuto, solicita lotes de **20 a 30** preguntas para asegurar que la IA mantenga el máximo detalle y no se corte por tiempo.")
     
     generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
@@ -164,7 +166,7 @@ if generate_btn:
     else:
         with st.spinner("Analizando texto y creando preguntas... (Esto puede tardar unos segundos)"):
             try:
-                generator = LLMGenerator(provider, api_key, model_name=model_name)
+                generator = LLMGenerator(provider, api_key, model_name=model_name, goa_mode=goa_mode)
                 
                 # Progress simulation/placeholder Mikey
                 prog_bar = st.progress(0, text="Iniciando generación masiva...")
