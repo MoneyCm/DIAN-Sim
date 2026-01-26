@@ -10,3 +10,4 @@ pypdf
 fpdf2
 passlib
 bcrypt
+rapidfuzz
