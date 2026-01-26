@@ -70,6 +70,12 @@ class Question(Base):
     source_refs: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     hash_norm: Mapped[str] = mapped_column(String, unique=True)
+    
+    # --- v32 Quality Control & Global Psychometrics Mikey ---
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    quality_report: Mapped[Optional[dict]] = mapped_column(JSON)
+    global_hits: Mapped[int] = mapped_column(Integer, default=0)
+    global_misses: Mapped[int] = mapped_column(Integer, default=0)
 
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")

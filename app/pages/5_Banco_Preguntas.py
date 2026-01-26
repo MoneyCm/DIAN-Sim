@@ -11,6 +11,8 @@ from db.session import SessionLocal
 from db.models import Question
 from core.dedupe import compute_hash, find_duplicates
 from core.import_utils import validate_import_df
+from core.generators.llm import LLMGenerator
+from core.config import get_api_key
 from ui_utils import load_css, render_header
 
 from core.auth import AuthManager
@@ -179,7 +181,8 @@ if action == "Explorar / Bulk":
                     st.session_state["bulk_selection"].discard(q.question_id)
             
             with col_exp:
-                display_title = f"{diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
+                status_icon = "✅" if getattr(q, 'is_verified', False) else "⏳"
+                display_title = f"{status_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
                 with st.expander(display_title):
                     st.markdown(f"**Enunciado:**\n{q.stem}")
                     ops = q.options_json if q.options_json else {}
@@ -193,10 +196,56 @@ if action == "Explorar / Bulk":
                         st.caption(f"Justificación: {q.rationale}")
                     
                     st.divider()
-                    if st.button("🗑️ Eliminar esta pregunta", key=f"del_single_{q.question_id}", type="secondary"):
-                        db.delete(q)
-                        db.commit()
-                        st.rerun()
+                    col_act1, col_act2, col_act3 = st.columns([1, 1, 1])
+                    
+                    with col_act1:
+                        if st.button("🛡️ Auditar con IA", key=f"audit_{q.question_id}", use_container_width=True):
+                            with st.spinner("Realizando auditoría técnica..."):
+                                try:
+                                    provider = st.session_state.get("current_provider", "Gemini")
+                                    api_key = get_api_key(provider)
+                                    if api_key:
+                                        gen = LLMGenerator(provider, api_key)
+                                        report = gen.audit_question({
+                                            "topic": q.topic, "stem": q.stem, 
+                                            "options_json": q.options_json, 
+                                            "correct_key": q.correct_key, 
+                                            "rationale": q.rationale
+                                        })
+                                        q.quality_report = report
+                                        if report.get("status") == "APPROVED":
+                                            q.is_verified = True
+                                        db.commit()
+                                        st.success(f"Auditoría completada: {report.get('score')}/10")
+                                        st.rerun()
+                                    else:
+                                        st.error("Falta API Key")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+
+                    with col_act2:
+                        if st.button("🗑️ Eliminar", key=f"del_single_{q.question_id}", type="secondary", use_container_width=True):
+                            db.delete(q)
+                            db.commit()
+                            st.rerun()
+                            
+                    with col_act3:
+                        # Psychometric Insight Mikey
+                        hits = getattr(q, 'global_hits', 0)
+                        misses = getattr(q, 'global_misses', 0)
+                        total = hits + misses
+                        disc_idx = (hits / total * 100) if total > 0 else 0
+                        st.caption(f"⚡ Índice de Acierto Global: {disc_idx:.0f}%")
+                    
+                    if getattr(q, 'quality_report', None):
+                        with st.expander("📄 Ver Reporte de Auditoría", expanded=False):
+                            rep = q.quality_report
+                            st.markdown(f"**Score:** {rep.get('score')}/10 | **Status:** {rep.get('status')}")
+                            st.write(f"**Crítica:** {rep.get('critique')}")
+                            st.write("**Hallazgos:**")
+                            for f in rep.get('findings', []):
+                                st.write(f"- {f}")
+                            st.info(f"💡 **Sugerencia:** {rep.get('suggestion')}")
 
 elif action == "Carga Masiva (Excel/CSV)":
     st.info("Sube un archivo `.xlsx` o `.csv`. Columnas requeridas: `track, competency, topic, stem, options_A, options_B, options_C, options_D, correct_key, rationale` (opcional)")

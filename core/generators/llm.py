@@ -400,4 +400,64 @@ class LLMGenerator:
             m_name = getattr(self, "model_name", "Unknown")
             return f"Tutor Mikey Error con modelo [{m_name}]: {str(e)}"
 
+    def audit_question(self, question_data: dict) -> dict:
+        """Audits a question against CNSC quality standards using IA. Mikey"""
+        # Fetch Normativa Context for Audit
+        normativa_context = ""
+        try:
+            from core.normativa import NormativaManager
+            normativa = NormativaManager()
+            normativa_context = normativa.get_law_context(question_data.get('stem', '') + " " + question_data.get('rationale', ''))
+        except Exception as e:
+            print(f"DEBUG: Error fetching normativa context for audit: {e}")
+
+        prompt = f"""
+        Actúa como un Auditor de Calidad Senior de la CNSC. Evalúa la siguiente pregunta bajo el Protocolo 2667 para la DIAN.
+        
+        {normativa_context}
+        
+        DATOS DE LA PREGUNTA:
+        TEMA: {question_data.get('topic')}
+        ENUNCIADO: {question_data.get('stem')}
+        OPCIONES: {question_data.get('options_json')}
+        CLAVE: {question_data.get('correct_key')}
+        JUSTIFICACIÓN: {question_data.get('rationale')}
+        
+        CRITERIOS DE EVALUACIÓN (0-10):
+        1. Precisión Legal: ¿La clave coincide con la norma citada?
+        2. Coherencia Situacional: ¿El caso plantea un escenario laboral realista?
+        3. Calidad de Distractores: ¿Son plausibles y técnicos?
+        4. No Inducción: ¿La pregunta no regala la respuesta?
+        5. Justificación Técnica: ¿Es clara y cita artículos reales?
+        
+        RESPONDE ÚNICAMENTE EN FORMATO JSON:
+        {{
+            "score": 0-10,
+            "status": "APPROVED | REJECTED | IMPROVABLE",
+            "critique": "Breve análisis técnico",
+            "findings": ["Hallazgo 1", "Hallazgo 2"],
+            "suggestion": "Mejora propuesta"
+        }}
+        """
+        
+        try:
+            content = ""
+            if self.provider == "openai" and self.openai_client:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+            elif self.provider == "gemini":
+                model = genai.GenerativeModel(model_name="models/gemini-1.5-flash-latest")
+                response = model.generate_content(prompt)
+                content = response.text
+                if "```json" in content:
+                    content = content.replace("```json", "").split("```")[0].strip()
+            
+            return json.loads(content)
+        except Exception as e:
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría: {e}"}
+
 

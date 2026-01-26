@@ -57,7 +57,11 @@ def finalize_exam(db, q_ids, answers_dict):
             )
             db.add(att)
             
-            # Update Records with resilient assignment v21 Mikey
+            # Update Records with resilient assignment v32 Mikey
+            if is_right:
+                safe_setattr(q_obj, 'global_hits', getattr(q_obj, 'global_hits', 0) + 1)
+            else:
+                safe_setattr(q_obj, 'global_misses', getattr(q_obj, 'global_misses', 0) + 1)
             skill = db.query(Skill).filter_by(user_id=u_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
             if not skill:
                 skill = Skill()

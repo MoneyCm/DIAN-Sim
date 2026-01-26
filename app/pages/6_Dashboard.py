@@ -62,6 +62,12 @@ except Exception as e:
 
 mastery_pct = (mastered_qs / total_qs * 100) if total_qs > 0 else 0
 
+# Quality Metrics v32 Mikey
+from db.models import Question
+total_bank = db.query(Question).count()
+verified_bank = db.query(Question).filter_by(is_verified=True).count()
+quality_idx = (verified_bank / total_bank * 100) if total_bank > 0 else 0
+
 col_s1, col_s2, col_s3, col_s4 = st.columns(4)
 with col_s1:
     st.metric("🔥 Racha Actual", f"{stats.current_streak} días")
@@ -71,6 +77,17 @@ with col_s3:
     st.metric("🏆 Puntos Totales", f"{stats.total_points} pts")
 with col_s4:
     st.metric("🔝 Racha Máxima", f"{stats.max_streak} días")
+
+# Quality Indicator Mikey
+st.markdown(f"""
+<div style="background: rgba(44, 62, 80, 0.05); border-radius: 10px; padding: 10px; margin-top: 10px; border-left: 5px solid #4CAF50;">
+    <span style="font-size: 0.8rem; font-weight: 700;">ÍNDICE DE CALIDAD DEL BANCO: {quality_idx:.0f}%</span>
+    <div style="background: #e0e0e0; height: 6px; border-radius: 3px; margin-top: 5px;">
+        <div style="background: #4CAF50; width: {quality_idx}%; height: 100%; border-radius: 3px;"></div>
+    </div>
+    <small style="color: #666;">{verified_bank} de {total_bank} preguntas auditadas y certificadas con IA.</small>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 

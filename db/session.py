@@ -42,7 +42,14 @@ try:
     
     with engine.begin() as conn:
         new_cols_map = {
-            "questions": [("macro_dominio", "VARCHAR"), ("micro_competencia", "VARCHAR")],
+            "questions": [
+                ("macro_dominio", "VARCHAR"), 
+                ("micro_competencia", "VARCHAR"),
+                ("is_verified", "BOOLEAN DEFAULT FALSE"),
+                ("quality_report", "JSON"),
+                ("global_hits", "INTEGER DEFAULT 0"),
+                ("global_misses", "INTEGER DEFAULT 0")
+            ],
             "skills": [
                 ("macro_dominio", "VARCHAR"), 
                 ("micro_competencia", "VARCHAR"), 
