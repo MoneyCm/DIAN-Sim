@@ -1,0 +1,12 @@
+streamlit
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pandas
+plotly
+google-generativeai
+openai
+pypdf
+fpdf2
+passlib
+bcrypt

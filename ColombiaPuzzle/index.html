@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colombia Puzzle - Animales Nativos</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>🇨🇴 Colombia Puzzle</h1>
+        <p>Arrastra el departamento a su lugar y descubre su fauna.</p>
+        <div id="score-board">Aciertos: <span id="score">0</span></div>
+    </header>
+
+    <main class="game-container">
+        <!-- Area de Piezas (Origen) -->
+        <section id="pieces-container" class="panel">
+            <h2>Piezas</h2>
+            <div id="pieces-list" class="pieces-grid">
+                <!-- Pieces injected by JS -->
+            </div>
+        </section>
+
+        <!-- Mapa (Destino) -->
+        <section id="map-container" class="panel">
+            <div id="colombia-map-wrapper">
+                <!-- SVG Map will be injected here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal or Info Box for Animal Info -->
+    <div id="info-box" class="hidden">
+        <h3 id="info-title">Departamento</h3>
+        <p id="info-animal">Animal: ...</p>
+        <img id="info-img" src="" alt="Animal" style="display:none; width: 100px;">
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
