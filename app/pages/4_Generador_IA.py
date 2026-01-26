@@ -115,14 +115,29 @@ with col1:
                 st.error(f"Error leyendo archivo: {e}")
 
     source_text = st.session_state["ai_source_text"]
-    st.caption(f"Caracteres detectados: {len(source_text)}")
+    char_count = len(source_text)
+    st.caption(f"Caracteres detectados: {char_count}")
     
     # Pre-fill topic from session state if available 
     default_topic = st.session_state.get("ai_default_topic", "Gestor II")
     custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
     
-    num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.") # Limit increased v28
+    num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, key="num_q_temp", help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.")
     
+    # v47 Coverage Indicator
+    if char_count > 0:
+        window_size = 18000
+        overlap = 2000
+        batch_size = 5
+        est_batches = (num_q + batch_size - 1) // batch_size
+        est_chars = est_batches * (window_size - overlap)
+        coverage_pct = min(100, int((est_chars / char_count) * 100))
+        
+        if coverage_pct >= 100:
+            st.success(f"🎯 **Cobertura Total:** Se analizará el 100% del documento.")
+        else:
+            st.info(f"🔍 **Cobertura de Muestreo:** Se analizará aprox. el {coverage_pct}% del documento.")
+
     difficulty_p_val = st.session_state.get("ai_default_diff", 2)
     inv_difficulty_map = {1: "Básico", 2: "Intermedio", 3: "Avanzado"}
     
@@ -133,7 +148,7 @@ with col1:
     goa_mode = st.toggle("📄 Aplicar Protocolo situacional GOA 2667 (Recomendado)", value=True, help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.")
     
     st.info("💡 Todas las preguntas generadas serán **SITUACIONALES** (casos prácticos) si el modo GOA está activo, cumpliendo con el estándar de evaluación de la DIAN.")
-    st.caption("💎 **Tip Pro:** Para archivos grandes como el Estatuto, solicita lotes de **20 a 30** preguntas para asegurar que la IA mantenga el máximo detalle y no se corte por tiempo.")
+    st.caption("💎 **Tip Pro v47:** El nuevo motor 'Escudo Titán' ahora detecta si el documento es pequeño para asegurar cobertura total. Para libros extensos, usa lotes de 20-40 preguntas.")
     
     generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 

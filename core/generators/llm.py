@@ -54,8 +54,8 @@ class LLMGenerator:
                         pass
             
     def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None, user_id: int = None) -> List[dict]:
-        """Generates questions by splitting into smarter segments if text is huge. Mikey"""
-        self.user_id = user_id # Store for batch use Mikey
+        """Generates questions by splitting into smarter segments with v47 logic. Mikey"""
+        self.user_id = user_id 
         all_results = []
         batch_size = 5 
         text_len = len(text)
@@ -64,30 +64,42 @@ class LLMGenerator:
         remaining = count
         total_batches = (count + batch_size - 1) // batch_size
         
-        # v29 Smart Slice: Use different parts of the doc if it's large Mikey
+        # v47 Smart Slice: Determine if we need Full Coverage or Sampling
+        window_size = 18000 # Increased for larger context Mikey
+        overlap = 2000 # Small overlap to keep context
+        
+        coverage_mode = "sampling"
+        if (total_batches * (window_size - overlap)) >= text_len:
+            coverage_mode = "full_coverage"
+            print(f"DEBUG: Active Mode: FULL COVERAGE (Text: {text_len} chars). Mikey v47")
+        else:
+            print(f"DEBUG: Active Mode: SAMPLING (Text: {text_len} chars). Mikey v47")
+
         for i in range(total_batches):
             current_batch = min(remaining, batch_size)
             
-            # Progress callback update Mikey
             if progress_callback:
                 pct = int((i / total_batches) * 100)
-                progress_callback(pct, f"Generando lote {i+1} de {total_batches}...")
+                progress_callback(pct, f"Generando lote {i+1} de {total_batches} ({coverage_mode})...")
 
-            # If doc is > 20k, let's pick a different window for each batch
-            # We skip the first batch (usually intro) if doc is huge? No, start at 0 but shift
-            window_size = 15000 # Increased for better context Mikey
-            
-            if text_len > window_size:
-                # Spread batches throughout the document
-                # Offset jumps by 20% of the document per batch or linearly
+            if coverage_mode == "full_coverage":
+                start = i * (window_size - overlap)
+                end = min(start + window_size, text_len)
+            else:
+                # Sampling: Spread batches throughout the document
                 step = text_len // (total_batches + 1)
                 start = i * step
-                end = start + window_size
-                batch_text = text[start:end]
-            else:
-                batch_text = text
+                end = min(start + window_size, text_len)
+            
+            # v47 Semantic Adjustment: Find a paragraph break near the end if possible
+            if end < text_len:
+                next_break = text.find("\n\n", end - 500, end + 500)
+                if next_break != -1:
+                    end = next_break
+            
+            batch_text = text[start:end]
                 
-            print(f"DEBUG: Generating Batch {i+1}/{total_batches} (Qs: {current_batch}) from offset {i}. Mikey")
+            print(f"DEBUG: Gen Batch {i+1}/{total_batches} (Qs: {current_batch}) | Range: [{start}:{end}]. Mikey v47")
             try:
                 batch_results = self._generate_batch(batch_text, current_batch, difficulty)
                 all_results.extend(batch_results)
@@ -95,10 +107,9 @@ class LLMGenerator:
                 if remaining > 0:
                     time.sleep(1)
             except Exception as e:
-                if all_results:
-                    break
-                else:
-                    raise e
+                print(f"ERROR: Batch {i} failed: {e}")
+                if all_results: break
+                else: raise e
                     
         return all_results
 
@@ -151,10 +162,11 @@ class LLMGenerator:
             """
         else:
             goa_instr = """
-        REQUISITOS DE GENERACIÓN TÉCNICA:
-        1. ENUNCIADO DIRECTO: Una pregunta clara y técnica sobre el contenido proporcionado.
-        2. OPCIONES: Tres opciones técnicas (A, B, C). Solo una es correcta.
-        3. JUSTIFICACIÓN: Referencia normativa precisa.
+        REQUISITOS DE GENERACIÓN TÉCNICA (Directo):
+        1. ENUNCIADO DIRECTO: Una pregunta clara y técnica. Sin preámbulos de casos.
+        2. OPCIONES: EXACTAMENTE TRES (A, B, C). Solo una es la clave técnica.
+        3. CALIDAD: Usa terminología de la DIAN (Estatuto Tributario, Resoluciones, etc.).
+        4. TAXONOMÍA OBLIGATORIA: Clasifica siempre en track (FUNCIONAL/COMPORTAMENTAL), macro_dominio y micro_competencia.
             """
 
         # Context definition v46 Mikey
@@ -204,6 +216,7 @@ class LLMGenerator:
                     response = self.openai_client.chat.completions.create(
                         model=model,
                         messages=[
+                            {"role": "system", "content": "Actúa como un experto en DIAN. Genera exclusivamente JSON válido."},
                             {"role": "user", "content": prompt}
                         ],
                         response_format={"type": "json_object"}
@@ -298,16 +311,10 @@ class LLMGenerator:
                 elif "```" in content:
                     content = content.replace("```", "")
         
-            # Parse JSON
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError as e:
-                # Attempt to clean common errors
-                content = content.replace("'", '"') # risky but common Fix
-                try:
-                    data = json.loads(content)
-                except:
-                    raise Exception(f"Error de sintaxis JSON en el lote: {str(e)}")
+            # v47 JSON Repair Célula Mikey
+            data = self._repair_and_parse_json(content)
+            if not data:
+                raise Exception("Fallo crítico: El contenido de la IA no pudo ser parseado como JSON tras reparación.")
 
             # Extract candidates
             candidates = []
@@ -544,10 +551,52 @@ class LLMGenerator:
                 elif "```" in content:
                     content = content.replace("```", "").strip()
             
-            res = json.loads(content)
+            # v47 JSON Repair Célula Mikey
+            res = self._repair_and_parse_json(content)
+            if not res:
+                raise Exception("Fallo en auditoría: El JSON del auditor no es válido tras reparación.")
             res["critique"] = f"[v45.0] {res.get('critique', '')}" # Quantum Shield v2 Mikey
             return res
         except Exception as e:
             return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
 
 
+    def _repair_and_parse_json(self, content: str) -> dict:
+        """v47 Advanced JSON Repair. Mikey"""
+        if not content or len(content.strip()) < 10:
+            return None
+            
+        # 1. Strip Markdown
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+        
+        # 2. Try Standard Load
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+            
+        # 3. Emergency Cleaning: Find first { and last }
+        try:
+            start = content.find("{")
+            end = content.rfind("}")
+            if start != -1 and end != -1:
+                chunk = content[start:end+1]
+                return json.loads(chunk)
+        except:
+            pass
+            
+        # 4. Harder clean: Replace some common errors
+        try:
+            # Replace smart quotes
+            clean = content.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+            # Try to fix double quotes inside strings? Risky.
+            return json.loads(clean)
+        except:
+            pass
+            
+        return None
