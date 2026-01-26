@@ -44,9 +44,19 @@ stats = db.query(UserStats).filter_by(user_id=u_id).first()
 if not stats:
     stats = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
 
-# Mastery Calculation
-total_qs = db.query(QuestionPerformance).filter_by(user_id=u_id).count()
-mastered_qs = db.query(QuestionPerformance).filter_by(user_id=u_id, is_mastered=True).count()
+# Mastery Calculation Mikey (Resilient v22)
+mastered_qs = 0
+total_qs = 0
+try:
+    total_qs = db.query(QuestionPerformance).filter_by(user_id=u_id).count()
+    if hasattr(QuestionPerformance, "is_mastered"):
+        mastered_qs = db.query(QuestionPerformance).filter_by(user_id=u_id, is_mastered=True).count()
+    else:
+        # Fallback: estimate mastery if field is missing Mikey
+        mastered_qs = 0 
+except Exception as e:
+    print(f"⚠️ Error en Mastery Calculation: {e}")
+
 mastery_pct = (mastered_qs / total_qs * 100) if total_qs > 0 else 0
 
 col_s1, col_s2, col_s3, col_s4 = st.columns(4)
@@ -68,8 +78,8 @@ skills = db.query(Skill).filter_by(user_id=u_id).all()
 if skills:
     df_skills = pd.DataFrame([{
         'Eje': s.track,
-        'Macro-Dominio': s.macro_dominio if hasattr(s, 'macro_dominio') and s.macro_dominio else "Transversal",
-        'Micro-Competencia': s.micro_competencia if hasattr(s, 'micro_competencia') and s.micro_competencia else s.topic,
+        'Macro-Dominio': getattr(s, 'macro_dominio', "Transversal") or "Transversal",
+        'Micro-Competencia': getattr(s, 'micro_competencia', s.topic) or s.topic,
         'Dominio': s.mastery_score
     } for s in skills])
     
