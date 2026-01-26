@@ -4,14 +4,22 @@ import uuid
 import sys
 from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
-# --- EL BLINDAJE DEFINITIVO v14.0 - MIKEY ---
-# Usamos strings para TODO. Cero dependencias de orden de clase.
-print("⚙️ [DB_MODELS] Iniciando registro v14.0 - Strings Puros Mikey", file=sys.stderr)
+# --- EL BLINDAJE ATÓMICO v15.0 - SINGLETON DE REGISTRO - MIKEY ---
+print("⚛️ [DB_MODELS] Iniciando Blindaje v15.0 Mikey", file=sys.stderr)
+
+# Forzamos un registro único global para evitar el KeyError en la nube
+if not hasattr(sys, "_sqlalchemy_registry_mikey"):
+    sys._sqlalchemy_registry_mikey = registry()
+    print("🔨 [DB_MODELS] Nuevo Registro Global Creado. Mikey", file=sys.stderr)
+else:
+    print("♻️ [DB_MODELS] Re-usando Registro Global Existente. Mikey", file=sys.stderr)
 
 class Base(DeclarativeBase):
-    pass
+    registry = sys._sqlalchemy_registry_mikey
+
+# --- CLASES ---
 
 class Question(Base):
     __tablename__ = "questions"
@@ -30,7 +38,6 @@ class Question(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
     hash_norm: Mapped[str] = mapped_column(String, unique=True)
 
-    # Relaciones 100% Strings Mikey
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
 
@@ -123,7 +130,6 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
-    # Todo en strings para evitar el KeyError Mikey
     opecs: Mapped[List["UserOPEC"]] = relationship("UserOPEC", back_populates="user", cascade="all, delete-orphan")
     performance: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="user", cascade="all, delete-orphan")
     stats: Mapped[Optional["UserStats"]] = relationship("UserStats", back_populates="user", cascade="all, delete-orphan")
@@ -131,4 +137,4 @@ class User(Base):
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
 
-print("✅ [DB_MODELS] Modelos registrados exitosamente en v14. Mikey.", file=sys.stderr)
+print("✅ [DB_MODELS] Modelos registrados exitosamente en v15. Mikey.", file=sys.stderr)

@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from db.session import SessionLocal
-from db.models import UserStats, User
+from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
 from ui_utils import load_css, render_header
 from core.auth import AuthManager
 

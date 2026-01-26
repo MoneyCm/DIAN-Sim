@@ -46,6 +46,7 @@ from sqlalchemy.orm import configure_mappers
 from sqlalchemy import text
 try:
     # 0. Ensure mappers are configured Mikey
+    # Esto ahora usará el Singleton definido en models.py
     configure_mappers()
 
     # 1. Ensure tables exist
