@@ -11,3 +11,4 @@ fpdf2
 passlib
 bcrypt
 rapidfuzz
+openpyxl
