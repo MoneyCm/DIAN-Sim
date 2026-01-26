@@ -232,6 +232,7 @@ class LLMGenerator:
                 last_error = None
                 
                 config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
                     safety_settings=[
                         types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
                         types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
@@ -259,11 +260,10 @@ class LLMGenerator:
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 
-                # v44 FALLBACK: Intento de rescate dinámico. Mikey
+                # v45 Validation & Rescue Mikey
                 if not content and hasattr(self, 'fallback_client') and self.fallback_client:
-                    print(f"⚠️ [v44] Gemini falló. Activando RESCATE con Fallback... Mikey")
+                    print(f"⚠️ [v45] Gemini falló. Activando RESCATE con Fallback... Mikey")
                     try:
-                        # Usamos un modelo ligero pero potente para el rescate
                         fb_response = self.fallback_client.chat.completions.create(
                             model="gpt-4o-mini" if "openai" in str(self.fallback_client) else "llama-3.3-70b-versatile",
                             messages=[{"role": "user", "content": prompt}],
@@ -272,6 +272,9 @@ class LLMGenerator:
                         content = fb_response.choices[0].message.content
                     except Exception as fe:
                         print(f"❌ Falló incluso el rescate: {fe}")
+
+                if not content:
+                    raise Exception(f"Falla total v45.0 Mikey: La IA no devolvió contenido tras {len(candidates)} intentos y rescate.")
 
                 # Cleanup markdown
                 if "```json" in content:
@@ -470,6 +473,7 @@ class LLMGenerator:
                 ]
                 
                 config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
                     safety_settings=[
                         types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
                         types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
@@ -517,7 +521,7 @@ class LLMGenerator:
                             fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
                 
                 if not content:
-                    raise Exception(f"Falla total v44.0 Mikey: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total v45.0 Mikey - Auditoría Inalcanzable: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -525,9 +529,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v44.0] {res.get('critique', '')}" # Quantum Shield Mikey
+            res["critique"] = f"[v45.0] {res.get('critique', '')}" # Quantum Shield v2 Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v44.0 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
 
 
