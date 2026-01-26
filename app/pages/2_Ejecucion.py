@@ -9,7 +9,15 @@ from core.rank_system import get_rank_info
 from core.generators.llm import LLMGenerator
 from ui_utils import load_css, render_header
 
-# --- v2.2: Exam Termination Function ---
+# --- v21: Safe Attribute Assignment Mikey ---
+def safe_setattr(obj, attr, value):
+    try:
+        if hasattr(obj, attr):
+            setattr(obj, attr, value)
+    except:
+        pass
+
+# --- v22: Exam Termination Function ---
 def finalize_exam(db, q_ids, answers_dict):
     """Processes all answers and saves to DB."""
     try:
@@ -44,36 +52,33 @@ def finalize_exam(db, q_ids, answers_dict):
             )
             db.add(att)
             
-            # Update Records with resilient assignment Mikey
+            # Update Records with resilient assignment v21 Mikey
             skill = db.query(Skill).filter_by(user_id=u_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
             if not skill:
                 skill = Skill()
-                skill.user_id = u_id
-                skill.track = q_obj.track
-                skill.competency = q_obj.competency
-                skill.topic = q_obj.topic
-                skill.mastery_score = 0.0
-                skill.priority_weight = 1.0
+                safe_setattr(skill, "user_id", u_id)
+                safe_setattr(skill, "track", q_obj.track)
+                safe_setattr(skill, "competency", q_obj.competency)
+                safe_setattr(skill, "topic", q_obj.topic)
+                safe_setattr(skill, "mastery_score", 0.0)
+                safe_setattr(skill, "priority_weight", 1.0)
                 db.add(skill)
                 db.flush()
             
-            # Sync taxonomy update
-            try:
-                skill.macro_dominio = q_obj.macro_dominio
-                skill.micro_competencia = q_obj.micro_competencia
-            except AttributeError:
-                print("⚠️ [v20] Skill class is missing taxi fields, skipping...")
-
+            # Sync taxonomy & weights safely
+            safe_setattr(skill, "macro_dominio", q_obj.macro_dominio)
+            safe_setattr(skill, "micro_competencia", q_obj.micro_competencia)
+            
             # Update Mastery Record (Fase 2 OPEC)
             from db.models import QuestionPerformance
             perf = db.query(QuestionPerformance).filter_by(user_id=u_id, question_id=qid).first()
             if not perf:
                 perf = QuestionPerformance()
-                perf.user_id = u_id
-                perf.question_id = qid
-                perf.hits = 0
-                perf.misses = 0
-                perf.mastery_level = 0.0
+                safe_setattr(perf, "user_id", u_id)
+                safe_setattr(perf, "question_id", qid)
+                safe_setattr(perf, "hits", 0)
+                safe_setattr(perf, "misses", 0)
+                safe_setattr(perf, "mastery_level", 0.0)
                 db.add(perf)
             
             # Safety check for Nulls
@@ -87,17 +92,22 @@ def finalize_exam(db, q_ids, answers_dict):
             
             total_attempts = perf.hits + perf.misses
             if total_attempts > 0:
-                perf.mastery_level = (perf.hits / total_attempts) * 10.0
+                safe_setattr(perf, "mastery_level", (perf.hits / total_attempts) * 10.0)
                 
-            perf.last_attempt = datetime.datetime.utcnow()
+            safe_setattr(perf, "last_attempt", datetime.datetime.utcnow())
             
-            # Use user recommended threshold: 7.5 mastery and at least 5 attempts
-            if total_attempts >= 5 and perf.mastery_level >= 7.5:
-                perf.is_mastered = True
+            # Threshold logic v21
+            m_lvl = getattr(perf, "mastery_level", 0.0)
+            if total_attempts >= 5 and m_lvl >= 7.5:
+                safe_setattr(perf, "is_mastered", True)
             
             skill.mastery_score = calculate_mastery_update(is_right, skill.mastery_score)
-            skill.priority_weight = update_priority(skill.priority_weight, is_right)
-            skill.last_seen = datetime.datetime.utcnow()
+            
+            # Update priority weight safely
+            new_weight = update_priority(getattr(skill, "priority_weight", 1.0), is_right)
+            safe_setattr(skill, "priority_weight", new_weight)
+            
+            safe_setattr(skill, "last_seen", datetime.datetime.utcnow())
         
         # Breakdown into dict of tuples for update_user_stats
         breakdown = {k: (v[0], v[1]) for k,v in eje_results.items()}

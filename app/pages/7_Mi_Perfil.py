@@ -82,13 +82,22 @@ st.divider()
 # 2. COMPETENCY ANALYTICS (RADAR)
 st.subheader("📊 Radar de Competencias (Maestría)")
 
-# Query performance joined with questions to get macro_dominio
-perf_data = db.query(
-    Question.macro_dominio, 
-    func.avg(QuestionPerformance.mastery_level).label('avg_mastery')
-).join(QuestionPerformance, Question.question_id == QuestionPerformance.question_id)\
- .filter(QuestionPerformance.user_id == u_id)\
- .group_by(Question.macro_dominio).all()
+# Query performance joined with questions to get macro_dominio Mikey (Resilient v21)
+try:
+    # Check if the class has the new attribute before querying
+    m_attr = getattr(QuestionPerformance, "mastery_level", None)
+    if m_attr is not None:
+        perf_data = db.query(
+            Question.macro_dominio, 
+            func.avg(QuestionPerformance.mastery_level).label('avg_mastery')
+        ).join(QuestionPerformance, Question.question_id == QuestionPerformance.question_id)\
+         .filter(QuestionPerformance.user_id == u_id)\
+         .group_by(Question.macro_dominio).all()
+    else:
+        perf_data = [] # Fallback safe Mikey
+except Exception as e:
+    print(f"⚠️ Analítica Radar no disponible (Clase stale?): {e}")
+    perf_data = []
 
 if perf_data:
     df_perf = pd.DataFrame(perf_data, columns=['Macro-Dominio', 'Nivel de Maestría'])
