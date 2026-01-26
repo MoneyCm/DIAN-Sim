@@ -90,22 +90,25 @@ if action == "Explorar / Bulk":
                             if not hasattr(gen, 'audit_question'):
                                 st.warning("⏳ Esperando actualización del servidor. Reintenta en 30s.")
                             else:
-                                prog_audit = st.progress(0, text="Iniciando Auditoría Masiva...")
-                                selection = list(st.session_state["bulk_selection"])
-                                for i, qid in enumerate(selection):
-                                    prog_audit.progress((i + 1) / len(selection), text=f"Auditando {i+1} de {len(selection)}...")
-                                    q_aud = db.query(Question).get(qid)
-                                    if q_aud and not q_aud.is_verified:
-                                        report = gen.audit_question({
-                                            "topic": q_aud.topic, "stem": q_aud.stem, 
-                                            "options_json": q_aud.options_json, 
-                                            "correct_key": q_aud.correct_key, 
-                                            "rationale": q_aud.rationale
-                                        })
-                                        q_aud.quality_report = report
-                                        if report.get("status") == "APPROVED":
-                                            q_aud.is_verified = True
-                                db.commit()
+                                    prog_audit = st.progress(0, text="Iniciando Auditoría Masiva...")
+                                    selection = list(st.session_state["bulk_selection"])
+                                    for i, qid in enumerate(selection):
+                                        prog_audit.progress((i + 1) / len(selection), text=f"Auditando {i+1} de {len(selection)}...")
+                                        q_aud = db.query(Question).get(qid)
+                                        if q_aud and not q_aud.is_verified:
+                                            report = gen.audit_question({
+                                                "topic": q_aud.topic, "stem": q_aud.stem, 
+                                                "options_json": q_aud.options_json, 
+                                                "correct_key": q_aud.correct_key, 
+                                                "rationale": q_aud.rationale
+                                            })
+                                            q_aud.quality_report = report
+                                            if report.get("status") == "APPROVED":
+                                                q_aud.is_verified = True
+                                        
+                                        # Delay to avoid 429 Rate Limit Mikey v39
+                                        time.sleep(1.5) 
+                                    db.commit()
                                 st.success("¡Auditoría masiva completada!")
                                 st.rerun()
                         else:

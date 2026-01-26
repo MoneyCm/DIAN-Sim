@@ -450,17 +450,15 @@ class LLMGenerator:
                 )
                 content = response.choices[0].message.content
             elif self.provider == "gemini":
-                # v38 Mikey: Extensive candidates list
+                # v39 Mikey: Universal Resiliency List
                 candidates = [
-                    "gemini-1.5-flash",
-                    "gemini-1.5-flash-latest",
-                    "gemini-1.5-pro",
-                    "gemini-pro",
-                    "gemini-2.0-flash-exp",
-                    "gemini-2.0-flash-001"
+                    "models/gemini-1.5-flash",
+                    "models/gemini-1.5-flash-latest",
+                    "models/gemini-2.0-flash-exp",
+                    "models/gemini-2.0-flash-001",
+                    "models/gemini-pro"
                 ]
                 
-                # Relax security filters for technical audit Mikey
                 safety_settings = [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -479,11 +477,26 @@ class LLMGenerator:
                             content = response.text
                             break
                     except Exception as e:
-                        fail_log.append(f"{model_name}: {str(e)[:50]}")
+                        fail_log.append(f"{model_name}: {str(e)[:40]}")
                         continue
                 
+                # v39 FALLBACK: If Gemini fails (Quota/404), try Groq/OpenAI! Mikey
                 if not content:
-                    raise Exception(f"Falla total en candidates (v38.1 Mikey): {', '.join(fail_log)}")
+                    print(f"⚠️ [v39] Gemini Audit Failed. Attempting Groq/OpenAI Fallback... Mikey")
+                    try:
+                        # Try the existing OpenAI/Groq client if initialized
+                        if hasattr(self, 'openai_client') and self.openai_client:
+                            response = self.openai_client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{"role": "user", "content": prompt}],
+                                response_format={"type": "json_object"}
+                            )
+                            content = response.choices[0].message.content
+                    except Exception as ge:
+                        fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
+                
+                if not content:
+                    raise Exception(f"Falla total v39.0: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -491,9 +504,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v38.1] {res.get('critique', '')}" # Add version tag Mikey
+            res["critique"] = f"[v39.0] {res.get('critique', '')}" # Version Sync Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v38.1 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v39.0 Mikey): {e}"}
 
 
