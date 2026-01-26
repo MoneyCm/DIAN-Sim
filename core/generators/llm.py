@@ -7,7 +7,8 @@ from typing import List
 from db.models import Question
 from core.dedupe import compute_hash
 import openai
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from core.normativa import NormativaManager
 
 class LLMGenerator:
@@ -22,7 +23,7 @@ class LLMGenerator:
             self.openai_client = openai.OpenAI(api_key=self.api_key)
         
         if self.provider == "gemini" and self.api_key:
-            genai.configure(api_key=self.api_key)
+            self.gemini_client = genai.Client(api_key=self.api_key)
             
         if self.provider == "groq" and self.api_key:
             self.openai_client = openai.OpenAI(
@@ -190,57 +191,54 @@ class LLMGenerator:
                 content = response.choices[0].message.content
                 
             elif self.provider == "gemini":
-                # Modelos verificados mediante diagnóstico en la cuenta del usuario
+                # v43 Mikey: New SDK candidates
                 candidates = [
-                    "models/gemini-flash-latest",
-                    "models/gemini-2.0-flash-001",
-                    "models/gemini-pro-latest",
-                    "models/gemini-1.5-pro-latest",
-                    "models/gemini-2.0-flash-lite-001",
+                    "gemini-2.0-flash",
+                    "gemini-1.5-flash",
+                    "gemini-2.0-flash-001",
+                    "gemini-1.5-flash-latest",
                     "gemini-pro"
                 ]
-                # If specialized model requested, put it at the very beginning
-                if self.model_name and "gemini-1.5-flash" not in self.model_name:
+                
+                # If specialized model requested
+                if self.model_name:
                     clean_name = self.model_name.replace("models/", "")
-                    full_name = f"models/{clean_name}"
-                    if full_name in candidates:
-                        candidates.remove(full_name)
-                    candidates.insert(0, full_name)
+                    if clean_name in candidates:
+                        candidates.remove(clean_name)
+                    candidates.insert(0, clean_name)
                 
                 content = ""
                 last_error = None
                 
-                # Relax security filters for technical legal content
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
+                config = types.GenerateContentConfig(
+                    safety_settings=[
+                        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    ]
+                )
                 
                 for model_name in candidates:
                     try:
-                        print(f"DEBUG: Enviando lote a Gemini ({model_name})...")
-                        model = genai.GenerativeModel(model_name=model_name)
-                        response = model.generate_content(prompt, safety_settings=safety_settings)
+                        print(f"DEBUG: Enviando lote a Gemini ({model_name})... Mikey v43")
+                        response = self.gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config=config
+                        )
                         if response and response.text:
                             content = response.text
                             break
                     except Exception as e:
                         last_error = e
-                        err_str = str(e).lower()
-                        if "404" in err_str:
-                             print(f"⚠️ El modelo {model_name} no está disponible, intentando siguiente...")
-                             continue
-                        if "safety" in err_str:
-                             print(f"⚠️ Aviso: Gemini bloqueó contenido por seguridad en {model_name}.")
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 
                 if not content:
                     if "quota" in str(last_error).lower() or "429" in str(last_error):
-                        raise Exception("❌ Cuota de Gemini agotada (Límite por minuto). Prueba de nuevo en 60 segundos o usa Groq.")
-                    raise Exception(f"Gemini falló: {last_error}")
+                        raise Exception("❌ Cuota de Gemini agotada. Reintenta en 60s.")
+                    raise Exception(f"Gemini falló v43.0: {last_error}")
 
                 # Cleanup markdown
                 if "```json" in content:
@@ -356,43 +354,22 @@ class LLMGenerator:
                 return response.choices[0].message.content
                 
             elif self.provider == "gemini":
-                candidates = [
-                    "models/gemini-flash-latest",
-                    "models/gemini-2.0-flash-001",
-                    "models/gemini-pro-latest",
-                    "models/gemini-1.5-pro-latest",
-                    "models/gemini-2.0-flash-lite-001",
-                    "gemini-pro"
-                ]
-                
-                # Priority to user selected model. Mikey
-                if self.model_name and "gemini-1.5-flash" not in self.model_name:
-                    clean_name = self.model_name.replace("models/", "")
-                    full_name = f"models/{clean_name}"
-                    if full_name in candidates: candidates.remove(full_name)
-                    candidates.insert(0, full_name)
-                
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
-                
+                candidates = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
                 exp_content = ""
+                config = types.GenerateContentConfig(
+                    safety_settings=[types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")]
+                )
                 for model_name in candidates:
                     try:
-                        model = genai.GenerativeModel(model_name=model_name)
-                        response = model.generate_content(prompt, safety_settings=safety_settings)
+                        response = self.gemini_client.models.generate_content(model=model_name, contents=prompt, config=config)
                         if response and response.text:
                             exp_content = response.text
                             break
                     except Exception:
                         continue
-                
                 if exp_content:
                     return exp_content
-                return "No se pudo obtener una explicación de los modelos de Gemini disponibles."
+                return "No se pudo obtener una explicación de Gemini v43.0."
                 
             return "No se pudo conectar con el proveedor de IA para la explicación."
         except Exception as e:
@@ -450,30 +427,34 @@ class LLMGenerator:
                 )
                 content = response.choices[0].message.content
             elif self.provider == "gemini":
-                # v42 Mikey: Master Resiliency List
+                # v43 Mikey: Resiliency List with new SDK
                 candidates = [
-                    "models/gemini-2.0-flash",
-                    "models/gemini-1.5-flash",
-                    "models/gemini-1.5-flash-latest",
-                    "models/gemini-2.0-flash-001",
-                    "models/gemini-pro",
-                    "models/gemini-1.5-pro"
+                    "gemini-2.0-flash",
+                    "gemini-1.5-flash",
+                    "gemini-2.0-flash-001",
+                    "gemini-pro",
+                    "gemini-1.5-pro"
                 ]
                 
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
+                config = types.GenerateContentConfig(
+                    safety_settings=[
+                        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    ]
+                )
                 
                 content = ""
                 fail_log = []
                 for model_name in candidates:
                     try:
-                        print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey")
-                        model = genai.GenerativeModel(model_name=model_name)
-                        response = model.generate_content(prompt, safety_settings=safety_settings)
+                        print(f"DEBUG: Auditing with Gemini ({model_name})... Mikey v43")
+                        response = self.gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config=config
+                        )
                         if response and response.text:
                             content = response.text
                             break
@@ -481,11 +462,10 @@ class LLMGenerator:
                         fail_log.append(f"{model_name}: {str(e)[:40]}")
                         continue
                 
-                # v39 FALLBACK: If Gemini fails (Quota/404), try Groq/OpenAI! Mikey
+                # Fallback to OpenAI/Groq if Gemini fails
                 if not content:
-                    print(f"⚠️ [v42] Gemini Audit Failed. Attempting Fallback... Mikey")
+                    print(f"⚠️ [v43] Gemini Audit Failed. Attempting Fallback... Mikey")
                     try:
-                        # Try the existing OpenAI/Groq client if initialized
                         if hasattr(self, 'openai_client') and self.openai_client:
                             response = self.openai_client.chat.completions.create(
                                 model="gpt-4o-mini",
@@ -497,7 +477,7 @@ class LLMGenerator:
                         fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
                 
                 if not content:
-                    raise Exception(f"Falla total v42.0 Mikey: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total v43.0 Mikey: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -505,9 +485,9 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             res = json.loads(content)
-            res["critique"] = f"[v42.0] {res.get('critique', '')}" # Shield Version Mikey
+            res["critique"] = f"[v43.0] {res.get('critique', '')}" # SDK Shield Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v42.0 Mikey): {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v43.0 Mikey): {e}"}
 
 
