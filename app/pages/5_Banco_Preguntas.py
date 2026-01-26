@@ -69,9 +69,12 @@ if action == "Explorar / Bulk":
     with col_filters[3]:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state["bulk_selection"]:
-            with col_del:
-                # v34 Bulk Audit Button Mikey
-                if st.button(f"🛡️ Auditar Selección ({len(st.session_state['bulk_selection'])})", type="primary", use_container_width=True):
+            st.markdown(f"### ⚙️ Acciones Masivas ({len(st.session_state['bulk_selection'])} ítems seleccionados)")
+            col_audit, col_del_real = st.columns([1, 1])
+            
+            with col_audit:
+                # v34.1 Bulk Audit Button Mikey
+                if st.button(f"🛡️ Auditar Selección", type="primary", use_container_width=True, help="Certifica la calidad de todas las preguntas seleccionadas."):
                     try:
                         provider = st.session_state.get("current_provider", "Gemini")
                         api_key = get_api_key(provider)
@@ -104,11 +107,8 @@ if action == "Explorar / Bulk":
                         db.rollback()
                         st.error(f"Error en auditoría masiva: {e}")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_del_real, col_down_ex, col_down_txt = st.columns([1, 1, 1])
             with col_del_real:
                 if st.button(f"🗑️ Borrar Selección", type="secondary", use_container_width=True):
-                    # Original delete logic Mikey
                     try:
                         for qid in st.session_state["bulk_selection"]:
                             q_to_del = db.query(Question).get(qid)
@@ -120,6 +120,8 @@ if action == "Explorar / Bulk":
                     except Exception as e:
                         db.rollback()
                         st.error(f"Error: {e}")
+            
+            st.divider()
             
             # Export Logic
             selected_qs = db.query(Question).filter(Question.question_id.in_(list(st.session_state["bulk_selection"]))).all()
