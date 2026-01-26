@@ -40,8 +40,8 @@ engine = create_engine(
     pool_recycle=300     # Recycle connections every 5 minutes
 )
 
-# Auto-create tables and handle migrations (PostgreSQL/SQLite)
-from db.models import Base
+# Auto-create tables and handle migrations
+from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
 from sqlalchemy import text
 try:
     # 1. Ensure tables exist
@@ -103,9 +103,7 @@ def get_cached_opec_list():
     @st.cache_data(ttl=3600)
     def _fetch():
         db = SessionLocal()
-        from db.models import UserOPEC
-        # We only cache public/template OPECs or a general list if needed
-        # For now, let's keep it simple: return all to show speed
+        # Use the already imported model
         results = db.query(UserOPEC).limit(100).all()
         db.close()
         return results

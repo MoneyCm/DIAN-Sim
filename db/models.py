@@ -1,18 +1,18 @@
 import datetime
 import json
 import uuid
-from typing import List, Optional
+import sys
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON
-from sqlalchemy.orm import DeclarativeBase, relationship, configure_mappers, backref
+from sqlalchemy.orm import DeclarativeBase, relationship, configure_mappers
 
-# --- SQLAlchemy 2.0 Base Clase ---
+# --- Marcador de Versión para Logs ---
+print("🚀 [DB_MODELS] Cargando Versión 6.0 - Relaciones Explícitas Mikey", file=sys.stderr)
+
 class Base(DeclarativeBase):
     pass
 
-# 1. Definimos las clases que NO dependen de User (o que User necesita)
 class Question(Base):
     __tablename__ = "questions"
-
     question_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     track = Column(String, nullable=False)
     competency = Column(String, nullable=False)
@@ -28,7 +28,26 @@ class Question(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     hash_norm = Column(String, unique=True, nullable=False)
 
-# 2. Definimos las clases secundarias (todas tienen FK a users.id)
+    # Relación explícita
+    attempts = relationship("Attempt", back_populates="question")
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True)
+    password_hash = Column(String)
+    role = Column(String, default="user")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relaciones explícitas (usando strings para evitar circularidad interna si fuera el caso)
+    opecs = relationship("UserOPEC", back_populates="user")
+    performance = relationship("QuestionPerformance", back_populates="user")
+    stats = relationship("UserStats", back_populates="user")
+    attempts = relationship("Attempt", back_populates="user")
+    achievements = relationship("Achievement", back_populates="user")
+    skills = relationship("Skill", back_populates="user")
+
 class Attempt(Base):
     __tablename__ = "attempts"
     attempt_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -42,7 +61,8 @@ class Attempt(Base):
     error_tag = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
 
-    question = relationship("Question", backref="attempts")
+    question = relationship("Question", back_populates="attempts")
+    user = relationship("User", back_populates="attempts")
 
 class UserStats(Base):
     __tablename__ = "user_stats"
@@ -52,6 +72,8 @@ class UserStats(Base):
     max_streak = Column(Integer, default=0)
     total_points = Column(Integer, default=0)
     last_activity = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="stats")
 
 class Achievement(Base):
     __tablename__ = "achievements"
@@ -61,6 +83,8 @@ class Achievement(Base):
     description = Column(String)
     icon = Column(String)
     unlocked_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="achievements")
 
 class Skill(Base):
     __tablename__ = "skills"
@@ -76,6 +100,8 @@ class Skill(Base):
     last_seen = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    user = relationship("User", back_populates="skills")
+
 class UserOPEC(Base):
     __tablename__ = "user_opec"
     id = Column(Integer, primary_key=True)
@@ -88,6 +114,8 @@ class UserOPEC(Base):
     requirements = Column(Text)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    user = relationship("User", back_populates="opecs")
 
 class QuestionPerformance(Base):
     __tablename__ = "question_performance"
@@ -101,6 +129,7 @@ class QuestionPerformance(Base):
     is_mastered = Column(Boolean, default=False)
     
     question = relationship("Question")
+    user = relationship("User", back_populates="performance")
 
 class Configuration(Base):
     __tablename__ = "configurations"
@@ -109,23 +138,9 @@ class Configuration(Base):
     value = Column(String, nullable=False)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-# 3. Definimos User al FINAL para que pueda referenciar a los anteriores por OBJETO
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    email = Column(String, unique=True)
-    password_hash = Column(String)
-    role = Column(String, default="user")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
-    # Referencias directas a los objetos ya definidos
-    opecs = relationship(UserOPEC, backref="user")
-    performance = relationship(QuestionPerformance, backref="user")
-    stats = relationship(UserStats, backref="user")
-    attempts = relationship(Attempt, backref="user")
-    achievements = relationship(Achievement, backref="user")
-    skills = relationship(Skill, backref="user")
-
 # Forzar configuración manual al final
-configure_mappers()
+try:
+    configure_mappers()
+    print("✅ [DB_MODELS] Mappers configurados con éxito.", file=sys.stderr)
+except Exception as e:
+    print(f"⚠️ [DB_MODELS] Error en mappers: {e}", file=sys.stderr)
