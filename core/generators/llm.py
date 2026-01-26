@@ -30,26 +30,48 @@ class LLMGenerator:
                 base_url="https://api.groq.com/openai/v1"
             )
             
-    def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2) -> List[dict]:
-        """Generates questions by splitting into smaller chunks for reliability."""
+    def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None) -> List[dict]:
+        """Generates questions by splitting into smarter segments if text is huge. Mikey"""
         all_results = []
-        batch_size = 5 # Reliable size for JSON generation
+        batch_size = 5 
+        text_len = len(text)
         
+        # Determine number of batches
         remaining = count
-        while remaining > 0:
+        total_batches = (count + batch_size - 1) // batch_size
+        
+        # v29 Smart Slice: Use different parts of the doc if it's large Mikey
+        for i in range(total_batches):
             current_batch = min(remaining, batch_size)
-            print(f"DEBUG: Generating batch of {current_batch} questions (Remaining: {remaining})...")
+            
+            # Progress callback update Mikey
+            if progress_callback:
+                pct = int((i / total_batches) * 100)
+                progress_callback(pct, f"Generando lote {i+1} de {total_batches}...")
+
+            # If doc is > 20k, let's pick a different window for each batch
+            # We skip the first batch (usually intro) if doc is huge? No, start at 0 but shift
+            window_size = 15000 # Increased for better context Mikey
+            
+            if text_len > window_size:
+                # Spread batches throughout the document
+                # Offset jumps by 20% of the document per batch or linearly
+                step = text_len // (total_batches + 1)
+                start = i * step
+                end = start + window_size
+                batch_text = text[start:end]
+            else:
+                batch_text = text
+                
+            print(f"DEBUG: Generating Batch {i+1}/{total_batches} (Qs: {current_batch}) from offset {i}. Mikey")
             try:
-                batch_results = self._generate_batch(text, current_batch, difficulty)
+                batch_results = self._generate_batch(batch_text, current_batch, difficulty)
                 all_results.extend(batch_results)
                 remaining -= current_batch
-                # Small delay to avoid aggressive rate limits in some providers
                 if remaining > 0:
                     time.sleep(1)
             except Exception as e:
-                # If we have some results already, return them instead of failing completely
                 if all_results:
-                    print(f"WARNING: Generation interrupted, but returning {len(all_results)} questions already generated. Error: {e}")
                     break
                 else:
                     raise e
@@ -82,8 +104,8 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error fetching normativa context: {e}")
 
-        # Increase context window to 10000 characters for better results
-        context = text[:10000]
+        # Context logic v29 Mikey
+        context = text[:15000] # Increased window Mikey
         
         prompt = f"""
         Actúa como un Experto Constructor de Ítems de la CNSC para los procesos de selección de la DIAN.

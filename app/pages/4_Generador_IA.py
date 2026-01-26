@@ -165,7 +165,22 @@ if generate_btn:
         with st.spinner("Analizando texto y creando preguntas... (Esto puede tardar unos segundos)"):
             try:
                 generator = LLMGenerator(provider, api_key, model_name=model_name)
-                results = generator.generate_from_text(source_text, num_q, difficulty=difficulty_value)
+                
+                # Progress simulation/placeholder Mikey
+                prog_bar = st.progress(0, text="Iniciando generación masiva...")
+                
+                # Monkey patch or modify to accept progress callback? 
+                # Better: LLMGenerator is already efficient. Let's just run it.
+                # Since LLMGenerator.generate_from_text is synchronous and slow, 
+                # we can't easily update the bar from inside without a callback.
+                
+                results = generator.generate_from_text(
+                    source_text, 
+                    num_q, 
+                    difficulty=difficulty_value, 
+                    progress_callback=prog_bar.progress
+                )
+                prog_bar.progress(100, text="¡Generación completada!")
                 
                 # Apply Custom Topic Override
                 if results and custom_topic.strip():
