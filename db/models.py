@@ -6,20 +6,53 @@ from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
-# --- EL REINICIO MAESTRO v18.0 - REGISTRY SEGURO - MIKEY ---
-# Cambiamos la clave para forzar a Streamlit Cloud a registrar las nuevas clases
-REGISTRY_KEY = "_sqlalchemy_registry_mikey_v18"
+# --- EL EXORCISMO TOTAL v19.0 - MIKEY ---
+# Forzamos que la CLASE BASE sea un objeto único global en el proceso de Python.
+# Esto es más agresivo que solo compartir el registry.
+BASE_KEY = "_mikey_sqlalchemy_base_v19"
 
-if not hasattr(sys, REGISTRY_KEY):
-    setattr(sys, REGISTRY_KEY, registry())
-    print(f"🔨 [DB_MODELS] Nuevo Registro Global {REGISTRY_KEY} Creado. Mikey", file=sys.stderr)
+if not hasattr(sys, BASE_KEY):
+    class Base(DeclarativeBase):
+        pass
+    setattr(sys, BASE_KEY, Base)
+    print(f"🔨 [DB_MODELS] Clase Base v19 Creada y Anclada en sys. Mikey", file=sys.stderr)
 else:
-    print(f"♻️ [DB_MODELS] Re-usando Registro Global {REGISTRY_KEY}. Mikey", file=sys.stderr)
-
-class Base(DeclarativeBase):
-    registry = getattr(sys, REGISTRY_KEY)
+    Base = getattr(sys, BASE_KEY)
+    print(f"♻️ [DB_MODELS] Clase Base v19 Recuperada de sys. Mikey", file=sys.stderr)
 
 # --- CLASES ---
+# Nota: Definimos las clases en un orden que facilite la resolución de strings de SQLAlchemy.
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String, unique=True)
+    email: Mapped[Optional[str]] = mapped_column(String, unique=True)
+    password_hash: Mapped[str] = mapped_column(String)
+    role: Mapped[str] = mapped_column(String, default="user")
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
+    opecs: Mapped[List["UserOPEC"]] = relationship("UserOPEC", back_populates="user", cascade="all, delete-orphan")
+    performance: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="user", cascade="all, delete-orphan")
+    stats: Mapped[Optional["UserStats"]] = relationship("UserStats", back_populates="user", cascade="all, delete-orphan")
+    attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="user", cascade="all, delete-orphan")
+    achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
+    skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
+
+class UserOPEC(Base):
+    __tablename__ = "user_opec"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    opec_number: Mapped[str] = mapped_column(String)
+    job_title: Mapped[str] = mapped_column(String)
+    level: Mapped[Optional[str]] = mapped_column(String)
+    purpose: Mapped[Optional[str]] = mapped_column(Text)
+    functions: Mapped[Optional[dict]] = mapped_column(JSON)
+    requirements: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
 
 class Question(Base):
     __tablename__ = "questions"
@@ -40,21 +73,6 @@ class Question(Base):
 
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
-
-class UserOPEC(Base):
-    __tablename__ = "user_opec"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
-    opec_number: Mapped[str] = mapped_column(String)
-    job_title: Mapped[str] = mapped_column(String)
-    level: Mapped[Optional[str]] = mapped_column(String)
-    purpose: Mapped[Optional[str]] = mapped_column(Text)
-    functions: Mapped[Optional[dict]] = mapped_column(JSON)
-    requirements: Mapped[Optional[str]] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
-
-    user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
 
 class Attempt(Base):
     __tablename__ = "attempts"
@@ -127,20 +145,11 @@ class Configuration(Base):
     key_name: Mapped[str] = mapped_column(String, unique=True)
     value: Mapped[str] = mapped_column(String)
 
-class User(Base):
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    username: Mapped[str] = mapped_column(String, unique=True)
-    email: Mapped[Optional[str]] = mapped_column(String, unique=True)
-    password_hash: Mapped[str] = mapped_column(String)
-    role: Mapped[str] = mapped_column(String, default="user")
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
-
-    opecs: Mapped[List["UserOPEC"]] = relationship("UserOPEC", back_populates="user", cascade="all, delete-orphan")
-    performance: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="user", cascade="all, delete-orphan")
-    stats: Mapped[Optional["UserStats"]] = relationship("UserStats", back_populates="user", cascade="all, delete-orphan")
-    attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="user", cascade="all, delete-orphan")
-    achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
-    skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
-
-print("✅ [DB_MODELS] Modelos reiniciados exitosamente en v18. Mikey.", file=sys.stderr)
+print("✅ [DB_MODELS] Modelos exorcizados y registrados en v19. Mikey.", file=sys.stderr)
+# Forzamos configuración inmediata para detectar errores de resolución de nombres
+from sqlalchemy.orm import configure_mappers
+try:
+    configure_mappers()
+    print("✨ [DB_MODELS] Mappers configurados exitosamente. Mikey.", file=sys.stderr)
+except Exception as e:
+    print(f"🔥 [DB_MODELS] Error en configuración de mappers: {e}", file=sys.stderr)
