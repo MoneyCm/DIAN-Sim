@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
-from db.models import Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance
+from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance
 from ui_utils import load_css, render_header
 import datetime, io
 
