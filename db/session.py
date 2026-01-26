@@ -22,22 +22,11 @@ if raw_url.startswith("postgres://") or raw_url.startswith("postgresql://"):
 
 DATABASE_URL = raw_url
 
-# Logging connection target for clarity
-if "sqlite" in DATABASE_URL:
-    print(f"🏠 CONNECTING TO: Local SQLite Database ({db_path})")
-else:
-    # Mask password for security in logs
-    masked_url = DATABASE_URL
-    if "@" in DATABASE_URL:
-        parts = DATABASE_URL.split("@")
-        masked_url = parts[0].split(":")[0] + ":****@" + parts[1]
-    print(f"🌐 CONNECTING TO: Cloud Database ({masked_url})")
-
 engine = create_engine(
     DATABASE_URL, 
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
-    pool_pre_ping=True,  # Crucial for cloud databases like Supabase
-    pool_recycle=300     # Recycle connections every 5 minutes
+    pool_pre_ping=True, 
+    pool_recycle=300
 )
 
 # Auto-create tables and handle migrations
@@ -46,7 +35,6 @@ from sqlalchemy.orm import configure_mappers
 from sqlalchemy import text
 try:
     # 0. Ensure mappers are configured Mikey
-    # Esto ahora usará el Singleton definido en models.py
     configure_mappers()
 
     # 1. Ensure tables exist
@@ -54,43 +42,46 @@ try:
     
     # 2. Universal Migration Logic (SQLite & Postgres)
     db_type = "postgres" if "postgres" in DATABASE_URL.lower() else "sqlite"
-    print(f"🔍 Database: {db_type.upper()} detected. Checking schema synchronization...")
+    print(f"🔍 [SESSION] Database: {db_type.upper()} detected. Starting v18 Auto-Sync...")
     
     with engine.begin() as conn:
-        # Tables to check
-        tables_to_migrate = ["questions", "skills", "configurations", "users", "user_opec", "attempts", "user_stats", "question_performance", "achievements"]
         new_cols_map = {
             "questions": ["macro_dominio", "micro_competencia"],
-            "skills": ["macro_dominio", "micro_competencia", "user_id"],
-            "attempts": ["user_id"],
-            "user_stats": ["user_id"],
-            "user_opec": ["user_id"],
-            "question_performance": ["user_id"],
-            "achievements": ["user_id"],
-            "configurations": [] 
+            "skills": [
+                ("macro_dominio", "VARCHAR"), 
+                ("micro_competencia", "VARCHAR"), 
+                ("priority_weight", "FLOAT"),
+                ("last_seen", "TIMESTAMP")
+            ],
+            "question_performance": [
+                ("mastery_level", "FLOAT"),
+                ("is_mastered", "BOOLEAN")
+            ],
         }
         
-        for table in tables_to_migrate:
+        for table, cols in new_cols_map.items():
             # Check existing columns
             if db_type == "sqlite":
-                # Ensure table exists first in SQLite if not created by metadata
-                conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table} (id_temp_init INTEGER PRIMARY KEY)"))
                 existing_cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
             else:
-                # Postgres
                 existing_cols = [row[0] for row in conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}';")).fetchall()]
             
-            for col in new_cols_map.get(table, []):
-                if col not in existing_cols:
-                    print(f"🔨 Adding column {col} to table {table}...")
-                    col_type = "INTEGER" if col == "user_id" else "VARCHAR"
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type};"))
+            for col_info in cols:
+                # Handle both simple strings and (name, type) tuples
+                col_name = col_info[0] if isinstance(col_info, tuple) else col_info
+                col_type = col_info[1] if isinstance(col_info, tuple) else "VARCHAR"
+                
+                if col_name not in existing_cols:
+                    print(f"🔨 [SESSION] Adding column {col_name} to table {table}...")
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
+                    except Exception as col_err:
+                        print(f"⚠️ [SESSION] Could not add {col_name}: {col_err}")
         
-        print("✅ Database schema synchronized successfully for Fase 3 (Users).")
+    print("✅ [SESSION] Database schema synchronized for v18. Mikey.")
 
 except Exception as e:
-    # In Streamlit Cloud, this will show up in the Logs (Manage App -> Logs)
-    print(f"❌ DATABASE MIGRATION ERROR: {e}")
+    print(f"❌ [SESSION] DATABASE ERROR: {e}")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -100,16 +91,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-# --- v5.0 NEW: High-Performance Caching ---
-def get_cached_opec_list():
-    """Retorna la lista de OPECs con cache (60 min) para máxima velocidad. Mikey"""
-    import streamlit as st
-    @st.cache_data(ttl=3600)
-    def _fetch():
-        db = SessionLocal()
-        # Use the already imported model
-        results = db.query(UserOPEC).limit(100).all()
-        db.close()
-        return results
-    return _fetch()

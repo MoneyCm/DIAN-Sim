@@ -6,17 +6,18 @@ from typing import List, Optional
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
-# --- EL BLINDAJE ATÓMICO v17.0 - SINGLETON + ANALÍTICA - MIKEY ---
-print("⚛️ [DB_MODELS] Iniciando Armonización v17.0 Mikey", file=sys.stderr)
+# --- EL REINICIO MAESTRO v18.0 - REGISTRY SEGURO - MIKEY ---
+# Cambiamos la clave para forzar a Streamlit Cloud a registrar las nuevas clases
+REGISTRY_KEY = "_sqlalchemy_registry_mikey_v18"
 
-if not hasattr(sys, "_sqlalchemy_registry_mikey"):
-    sys._sqlalchemy_registry_mikey = registry()
-    print("🔨 [DB_MODELS] Nuevo Registro Global Creado. Mikey", file=sys.stderr)
+if not hasattr(sys, REGISTRY_KEY):
+    setattr(sys, REGISTRY_KEY, registry())
+    print(f"🔨 [DB_MODELS] Nuevo Registro Global {REGISTRY_KEY} Creado. Mikey", file=sys.stderr)
 else:
-    print("♻️ [DB_MODELS] Re-usando Registro Global Existente. Mikey", file=sys.stderr)
+    print(f"♻️ [DB_MODELS] Re-usando Registro Global {REGISTRY_KEY}. Mikey", file=sys.stderr)
 
 class Base(DeclarativeBase):
-    registry = sys._sqlalchemy_registry_mikey
+    registry = getattr(sys, REGISTRY_KEY)
 
 # --- CLASES ---
 
@@ -142,4 +143,4 @@ class User(Base):
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
 
-print("✅ [DB_MODELS] Modelos armonizados exitosamente en v17. Mikey.", file=sys.stderr)
+print("✅ [DB_MODELS] Modelos reiniciados exitosamente en v18. Mikey.", file=sys.stderr)
