@@ -41,7 +41,8 @@ engine = create_engine(
 )
 
 # Auto-create tables and handle migrations
-from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
+from db.base import Base
+from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
 from sqlalchemy import text
 try:
     # 1. Ensure tables exist
