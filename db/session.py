@@ -42,8 +42,12 @@ engine = create_engine(
 
 # Auto-create tables and handle migrations
 from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
+from sqlalchemy.orm import configure_mappers
 from sqlalchemy import text
 try:
+    # 0. Ensure mappers are configured Mikey
+    configure_mappers()
+
     # 1. Ensure tables exist
     Base.metadata.create_all(bind=engine)
     

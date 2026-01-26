@@ -1,8 +1,3 @@
-from sqlalchemy.orm import DeclarativeBase
-
-class Base(DeclarativeBase):
-    """
-    Clase Base única para todo el proyecto. 
-    Esto garantiza que el registro de SQLAlchemy sea global y único.
-    """
-    pass
+# ARCHIVO OBSOLETO - NO USAR - Mikey
+# Los modelos y la Base única están en db/models.py
+# Se mantiene este archivo vacío para evitar errores de importación si algún archivo no se actualizó.
