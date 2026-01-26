@@ -473,15 +473,17 @@ class LLMGenerator:
                         continue
                 
                 if not content:
-                    raise Exception("No se pudo conectar con ningún modelo de Gemini para la auditoría.")
+                    raise Exception("No se pudo conectar con ningún modelo de Gemini para la auditoría. (v37.1 Mikey)")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
                 elif "```" in content:
                     content = content.replace("```", "").strip()
             
-            return json.loads(content)
+            res = json.loads(content)
+            res["critique"] = f"[v37.1] {res.get('critique', '')}" # Add version tag Mikey
+            return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría: {e}"}
+            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v37.1 Mikey): {e}"}
 
 
