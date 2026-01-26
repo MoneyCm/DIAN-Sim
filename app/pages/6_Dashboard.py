@@ -1,14 +1,8 @@
 import streamlit as st
 import os, sys
 
-# Add root to python path to import modules
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+# Imports de base de datos Mikey
 
-import importlib
-import db.models
-importlib.reload(db.models)
 
 import pandas as pd
 import plotly.express as px

@@ -2,7 +2,8 @@ import bcrypt
 import os
 import streamlit as st
 from sqlalchemy.orm import Session
-from db.models import User
+# Importación preventiva para registrar todos los modelos en SQLAlchemy registry Mikey
+from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance
 from db.session import SessionLocal
 
 class AuthManager:

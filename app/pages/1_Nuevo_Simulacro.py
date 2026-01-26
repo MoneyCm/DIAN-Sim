@@ -2,15 +2,6 @@ import streamlit as st
 import os, sys
 import pandas as pd
 
-# Ensure project root is in PYTHONPATH
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-import importlib
-import db.models
-importlib.reload(db.models)
-
 from db.session import SessionLocal
 from db.models import Question, Skill, UserOPEC
 from core.adaptive import select_questions_for_simulation
