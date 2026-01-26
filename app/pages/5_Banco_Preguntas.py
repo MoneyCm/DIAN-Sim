@@ -127,6 +127,9 @@ if action == "Explorar / Bulk":
             selected_qs = db.query(Question).filter(Question.question_id.in_(list(st.session_state["bulk_selection"]))).all()
             
             if selected_qs:
+                st.markdown("### 📥 Exportar Seleccionadas")
+                col_down_ex, col_down_txt = st.columns([1, 1])
+                
                 # 1. Excel Export
                 export_data = []
                 for q in selected_qs:
