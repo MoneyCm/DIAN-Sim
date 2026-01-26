@@ -30,8 +30,9 @@ class LLMGenerator:
                 base_url="https://api.groq.com/openai/v1"
             )
             
-    def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None) -> List[dict]:
+    def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None, user_id: int = None) -> List[dict]:
         """Generates questions by splitting into smarter segments if text is huge. Mikey"""
+        self.user_id = user_id # Store for batch use Mikey
         all_results = []
         batch_size = 5 
         text_len = len(text)
@@ -85,7 +86,11 @@ class LLMGenerator:
             from db.session import SessionLocal
             from db.models import UserOPEC
             db = SessionLocal()
-            active_opec = db.query(UserOPEC).filter_by(is_active=True).first()
+            # Filter by specific user if provided Mikey
+            if hasattr(self, 'user_id') and self.user_id:
+                active_opec = db.query(UserOPEC).filter_by(user_id=self.user_id, is_active=True).first()
+            else:
+                active_opec = db.query(UserOPEC).filter_by(is_active=True).first()
             if active_opec:
                 opec_context = f"\nCARGO OBJETIVO: {active_opec.job_title} (Nivel {active_opec.level})\n"
                 opec_context += f"PROPÓSITO: {active_opec.purpose}\n"

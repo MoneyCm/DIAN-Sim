@@ -174,17 +174,18 @@ if generate_btn:
                 # Since LLMGenerator.generate_from_text is synchronous and slow, 
                 # we can't easily update the bar from inside without a callback.
                 
-                # Resilient Call Mikey v30
+                # Resilient Call Mikey v31
                 try:
                     results = generator.generate_from_text(
                         source_text, 
                         num_q, 
                         difficulty=difficulty_value, 
-                        progress_callback=prog_bar.progress
+                        progress_callback=prog_bar.progress,
+                        user_id=st.session_state.get("user_id")
                     )
                 except TypeError as te:
-                    if "unexpected keyword argument 'progress_callback'" in str(te):
-                        print("⚠️ [v30] Fallback: El servidor aún tiene llm.py en caché. Mikey")
+                    if "unexpected keyword argument" in str(te):
+                        print("⚠️ [v31] Fallback: El servidor aún tiene llm.py en caché. Mikey")
                         results = generator.generate_from_text(source_text, num_q, difficulty=difficulty_value)
                     else:
                         raise te
