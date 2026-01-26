@@ -46,10 +46,12 @@ class LLMGenerator:
                                 api_key=fb_key,
                                 base_url="https://api.groq.com/openai/v1"
                             )
+                            self.fallback_type = "groq"
                         else:
                             self.fallback_client = openai.OpenAI(api_key=fb_key)
-                        print(f"✅ Fallback {fb_provider} configurado exitosamente. Mikey v44")
-                        break # Usamos el primero que funcione
+                            self.fallback_type = "openai"
+                        print(f"✅ Fallback {fb_provider} configurado exitosamente. Mikey v47.1")
+                        break 
                     except:
                         pass
             
@@ -245,6 +247,8 @@ class LLMGenerator:
                 candidates = [
                     "gemini-2.0-flash",
                     "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-flash-8b",
                     "gemini-2.0-flash-001",
                     "gemini-1.5-flash-latest",
                     "gemini-pro"
@@ -284,26 +288,28 @@ class LLMGenerator:
                     except Exception as e:
                         last_error = e
                         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                            print(f"⚠️ [429] Cuota excedida en {model_name}. Enfriando 2s... Mikey")
-                            time.sleep(2) # Cooldown
+                            print(f"⚠️ [429] Cuota excedida en {model_name}. Enfriando 2s... Mikey v47.1")
+                            time.sleep(2) 
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 
-                # v45 Validation & Rescue Mikey
+                # v47.1 Validation & Rescue Mikey
                 if not content and hasattr(self, 'fallback_client') and self.fallback_client:
-                    print(f"⚠️ [v45] Gemini falló. Activando RESCATE con Fallback... Mikey")
+                    fb_t = getattr(self, 'fallback_type', 'openai')
+                    print(f"⚠️ [v47.1] Gemini falló. Activando RESCATE con {fb_t}... Mikey")
                     try:
+                        fb_model = "gpt-4o-mini" if fb_t == "openai" else "llama-3.3-70b-versatile"
                         fb_response = self.fallback_client.chat.completions.create(
-                            model="gpt-4o-mini" if "openai" in str(self.fallback_client) else "llama-3.3-70b-versatile",
+                            model=fb_model,
                             messages=[{"role": "user", "content": prompt}],
                             response_format={"type": "json_object"}
                         )
                         content = fb_response.choices[0].message.content
                     except Exception as fe:
-                        print(f"❌ Falló incluso el rescate: {fe}")
+                        print(f"❌ Falló incluso el rescate {fb_t}: {fe}")
 
                 if not content:
-                    raise Exception(f"Falla total v45.0 Mikey: La IA no devolvió contenido tras {len(candidates)} intentos y rescate.")
+                    raise Exception(f"Falla total v47.1 Mikey: La IA no devolvió contenido tras {len(candidates)} intentos y rescate.")
 
                 # Cleanup markdown
                 if "```json" in content:
@@ -524,16 +530,18 @@ class LLMGenerator:
                             time.sleep(2) # Cooldown Mikey
                         continue
                 
-                # Fallback Universal v44 (Intento de Rescate de Auditoría)
+                # Fallback Universal v47.1 (Intento de Rescate de Auditoría)
                 if not content:
                     fb_client = getattr(self, 'fallback_client', None)
-                    if not fb_client and hasattr(self, 'openai_client'): fb_client = self.openai_client
+                    fb_type = getattr(self, 'fallback_type', 'openai')
+                    if not fb_client and hasattr(self, 'openai_client'): 
+                        fb_client = self.openai_client
+                        fb_type = "openai" if "api.openai.com" in str(fb_client.base_url) else "groq"
                     
                     if fb_client:
-                        print(f"⚠️ [v44] Gemini Audit Failed. Attempting Fallback Rescue... Mikey")
+                        print(f"⚠️ [v47.1] Gemini Audit Failed. Attempting Fallback Rescue with {fb_type}... Mikey")
                         try:
-                            # Use Llama 3.3 for audit rescue if possible
-                            model_fb = "llama-3.3-70b-versatile" if "groq" in str(fb_client.base_url or "") else "gpt-4o-mini"
+                            model_fb = "gpt-4o-mini" if fb_type == "openai" else "llama-3.3-70b-versatile"
                             response = fb_client.chat.completions.create(
                                 model=model_fb,
                                 messages=[{"role": "user", "content": prompt}],
@@ -544,7 +552,7 @@ class LLMGenerator:
                             fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
                 
                 if not content:
-                    raise Exception(f"Falla total v45.0 Mikey - Auditoría Inalcanzable: {', '.join(fail_log)}")
+                    raise Exception(f"Falla total v47.1 Mikey - Auditoría Inalcanzable: {', '.join(fail_log)}")
 
                 if "```json" in content:
                     content = content.replace("```json", "").split("```")[0].strip()
@@ -555,7 +563,7 @@ class LLMGenerator:
             res = self._repair_and_parse_json(content)
             if not res:
                 raise Exception("Fallo en auditoría: El JSON del auditor no es válido tras reparación.")
-            res["critique"] = f"[v45.0] {res.get('critique', '')}" # Quantum Shield v2 Mikey
+            res["critique"] = f"[v47.1] {res.get('critique', '')}" # Quantum Shield v2 Mikey
             return res
         except Exception as e:
             return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
