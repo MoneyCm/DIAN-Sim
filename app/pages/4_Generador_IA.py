@@ -80,7 +80,12 @@ st.divider()
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("1. Origen del Contenido")
+    # Move parameters ABOVE tabs to fix NameError in JSON Import Mikey v47.3.1
+    # Pre-fill topic from session state if available 
+    default_topic = st.session_state.get("ai_default_topic", "Gestor II")
+    custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
+    
+    num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, key="num_q_temp", help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.")
     
     tab_text, tab_file, tab_json = st.tabs(["📋 Pegar Texto", "📂 Subir Archivo", "🧩 Importar JSON"])
     
@@ -177,12 +182,6 @@ with col1:
     source_text = st.session_state["ai_source_text"]
     char_count = len(source_text)
     st.caption(f"Caracteres detectados: {char_count}")
-    
-    # Pre-fill topic from session state if available 
-    default_topic = st.session_state.get("ai_default_topic", "Gestor II")
-    custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
-    
-    num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, key="num_q_temp", help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.")
     
     # v47 Coverage Indicator
     if char_count > 0:
