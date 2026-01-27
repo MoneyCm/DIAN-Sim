@@ -201,21 +201,37 @@ if run_sim:
     try:
         db = get_db()
         
-        # 1. Fetch Candidates
-        query = db.query(Question)
+        # 1. Fetch Candidates (OPEC-Agnostic first, then filtered)
+        # We use the QuestionService to enforce OPEC constraints (Standard Platinum)
+        from services.question_service import QuestionService
         
-        if final_query_filters.get("tracks"):
-            query = query.filter(Question.track.in_(final_query_filters["tracks"]))
-        if final_query_filters.get("competencies"):
-            query = query.filter(Question.competency.in_(final_query_filters["competencies"]))
-        if final_query_filters.get("topics"):
-            query = query.filter(Question.topic.in_(final_query_filters["topics"]))
-        if final_query_filters.get("difficulties"):
-            query = query.filter(Question.difficulty.in_(final_query_filters["difficulties"]))
-        if final_query_filters.get("only_situational"):
-            query = query.filter(Question.stem.ilike("%SITUACIÓN%"))
+        user_id = st.session_state.get("user_id")
+        base_candidates = QuestionService.get_questions_for_user(db, user_id)
         
-        all_candidates = query.all()
+        # Apply UI Filters (In-Memory Python Filtering)
+        # This is fast enough for <1000 items
+        final_candidates = []
+        for q in base_candidates:
+            # Track Filter
+            if final_query_filters.get("tracks") and q.track not in final_query_filters["tracks"]:
+                continue
+            # Competency Filter
+            if final_query_filters.get("competencies") and q.competency not in final_query_filters["competencies"]:
+                continue
+            # Topic Filter
+            if final_query_filters.get("topics") and q.topic not in final_query_filters["topics"]:
+                continue
+            # Difficulty Filter
+            if final_query_filters.get("difficulties") and q.difficulty not in final_query_filters["difficulties"]:
+                continue
+            # Strict Situational Filter (From Toggle)
+            if final_query_filters.get("only_situational", False):
+                if "SITUACIÓN" not in q.stem.upper():
+                    continue
+            
+            final_candidates.append(q)
+            
+        all_candidates = final_candidates
         
         # 2. Fetch Skills for Adaptive Logic
         u_id = st.session_state.get("user_id")
