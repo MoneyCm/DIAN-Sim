@@ -239,7 +239,14 @@ else:
 
 options = question.options_json 
 opts_keys = list(options.keys())
-opts_values = [f"{k}) {v}" for k,v in options.items()]
+opts_values = []
+for k, v in options.items():
+    # v47.5 Label Cleanup: Avoid repeating 'A) A.' if the text already has it Mikey
+    clean_v = str(v).strip()
+    if clean_v.startswith(f"{k})") or clean_v.startswith(f"{k}. "):
+        opts_values.append(clean_v)
+    else:
+        opts_values.append(f"{k}) {clean_v}")
 existing_ans = st.session_state["answers"].get(current_q_id)
 index_ans = opts_keys.index(existing_ans) if existing_ans else None
 selected_val = st.radio("Selecciona la mejor respuesta:", opts_values, index=index_ans, key=f"q_{current_idx}")
