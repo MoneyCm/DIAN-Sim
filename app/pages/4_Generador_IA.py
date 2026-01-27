@@ -82,7 +82,7 @@ col1, col2 = st.columns([1, 1])
 with col1:
     st.subheader("1. Origen del Contenido")
     
-    tab_text, tab_file = st.tabs(["📋 Pegar Texto", "📂 Subir Archivo"])
+    tab_text, tab_file, tab_json = st.tabs(["📋 Pegar Texto", "📂 Subir Archivo", "🧩 Importar JSON"])
     
     # Persistent source text logic
     if "ai_source_text" not in st.session_state:
@@ -113,6 +113,66 @@ with col1:
                     st.success("Archivo de texto cargado.")
             except Exception as e:
                 st.error(f"Error leyendo archivo: {e}")
+
+    with tab_json:
+        st.info("💡 Usa esta opción si generaste las preguntas en **Gemini Web** usando el Mega-Prompt.")
+        json_input = st.text_area("Pega aquí el JSON generado:", height=300, help="Copia todo el bloque JSON que te dio Gemini y pégalo aquí.")
+        import_btn = st.button("🚀 Procesar e Importar JSON", use_container_width=True)
+        
+        if import_btn:
+            if not json_input:
+                st.warning("Pega el JSON primero.")
+            else:
+                try:
+                    # Usamos el generador para limpiar y parsear
+                    temp_gen = LLMGenerator("gemini", "none") # Dummy para usar utilidades
+                    data = temp_gen._repair_and_parse_json(json_input)
+                    
+                    if not data:
+                        st.error("No se pudo parsear el JSON. Asegúrate de copiar el bloque completo.")
+                    else:
+                        # Extraer preguntas (lógica similar a _generate_batch)
+                        candidates = []
+                        if isinstance(data, dict):
+                            if "questions" in data:
+                                candidates = data["questions"]
+                            elif len(data.keys()) == 1:
+                                candidates = list(data.values())[0]
+                            else:
+                                if "stem" in data:
+                                    candidates = [data]
+                        elif isinstance(data, list):
+                            candidates = data
+                        
+                        if not candidates:
+                            st.error("No se encontraron preguntas válidas en el JSON.")
+                        else:
+                            # Convertir al formato interno
+                            import uuid
+                            from core.dedupe import compute_hash
+                            results = []
+                            for item in candidates:
+                                if not item.get("stem"): continue
+                                results.append({
+                                    "question_id": str(uuid.uuid4()),
+                                    "track": item.get("track", "FUNCIONAL"),
+                                    "macro_dominio": item.get("macro_dominio", "Transversal"),
+                                    "micro_competencia": item.get("micro_competencia", item.get("competency", "General")),
+                                    "topic": custom_topic.strip() if custom_topic.strip() else item.get("topic", "Importado"),
+                                    "difficulty": item.get("difficulty", 2),
+                                    "stem": item.get("stem"),
+                                    "options_json": item.get("options"),
+                                    "correct_key": item.get("correct_key"),
+                                    "rationale": item.get("rationale"),
+                                    "source_refs": "Importación Manual Gemini Web",
+                                    "hash_norm": compute_hash(item.get("stem", ""))
+                                })
+                            
+                            st.session_state["generated_questions"] = results
+                            st.success(f"¡{len(results)} preguntas importadas con éxito! Revísalas a la derecha.")
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Error procesando JSON: {e}")
 
     source_text = st.session_state["ai_source_text"]
     char_count = len(source_text)
