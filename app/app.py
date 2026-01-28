@@ -32,7 +32,6 @@ if not AuthManager.check_auth():
     col_l1, col_l2 = st.columns([1, 1])
     
     with col_l1:
-        st.markdown('<div class="dian-card">', unsafe_allow_html=True)
         st.subheader("🔑 Iniciar Sesión")
         with st.form("login_form"):
             user_in = st.text_input("Usuario")
@@ -56,10 +55,8 @@ if not AuthManager.check_auth():
                         configure_mappers()
                     except Exception as ce:
                         print(f"🔥 Mapper Configuration Error: {ce}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_l2:
-        st.markdown('<div class="dian-card">', unsafe_allow_html=True)
         st.subheader("📝 Registrarse")
         st.info("¿Aún no tienes cuenta? Crea una para guardar tus 5 cargos (OPECs).")
         with st.form("register_form"):
@@ -89,7 +86,6 @@ if not AuthManager.check_auth():
                             st.error(f"Error al registrar: {e}")
                         finally:
                             db.close()
-        st.markdown('</div>', unsafe_allow_html=True)
     st.stop() # Stop execution here if not logged in
 
 # --- v2.0 NEW: Sidebar Gamification Info ---
