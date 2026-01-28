@@ -129,9 +129,8 @@ with col1:
                 st.warning("Pega el JSON primero.")
             else:
                 try:
-                    # Usamos el generador para limpiar y parsear
-                    temp_gen = LLMGenerator("gemini", "none") # Dummy para usar utilidades
-                    data = temp_gen._repair_and_parse_json(json_input)
+                    # Usamos el generador para limpiar y parsear (Método estático v48.2)
+                    data = LLMGenerator._repair_and_parse_json(json_input)
                     
                     if not data:
                         st.error("No se pudo parsear el JSON. Asegúrate de copiar el bloque completo.")
