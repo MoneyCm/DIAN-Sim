@@ -27,8 +27,11 @@ def sync_master():
         print("❌ Error: DATABASE_URL no configurada para la nube (Supabase).")
         return
 
-    # Trigger local migrations (adding user_id to attempts if missing)
-    db_local = SessionLocal() # This uses local SQLite if not configured otherwise
+    # FORZAR MOTOR LOCAL SQLITE (Aunque el .env diga Cloud)
+    from sqlalchemy import create_engine
+    engine_local = create_engine(f"sqlite:///{local_db_path}")
+    SessionLocalSQLite = sessionmaker(bind=engine_local)
+    db_local = SessionLocalSQLite()
     
     # 2. Assign 'cesar' (ID 2) to all orphan attempts in local
     print("🔧 Reparando intentos locales huérfanos...")
