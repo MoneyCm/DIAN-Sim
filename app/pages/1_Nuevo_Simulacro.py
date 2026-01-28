@@ -10,7 +10,7 @@ import pandas as pd
 from db.session import SessionLocal
 from db.models import Question, Skill, UserOPEC
 from core.adaptive import select_questions_for_simulation
-from ui_utils import load_css, render_header
+from ui_utils import load_css, render_header, render_custom_sidebar
 from core.profiles import PROFILES, get_profile_topics
 
 def get_db():
@@ -25,7 +25,9 @@ if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")
     st.stop()
 
+# UI Setup
 load_css()
+render_custom_sidebar()
 render_header(title="Nuevo Simulacro", subtitle="Configura los parámetros de tu sesión de estudio")
 
 with st.container():

@@ -252,14 +252,13 @@ class LLMGenerator:
             elif self.provider == "gemini":
                 # v43 Mikey: New SDK candidates
                 candidates = [
+                    "gemini-2.0-flash-exp",
                     "gemini-2.0-flash",
                     "gemini-2.0-flash-001",
                     "gemini-1.5-flash-002",
                     "gemini-1.5-flash",
-                    "gemini-1.5-flash-8b",
                     "gemini-1.5-pro-002",
-                    "gemini-1.5-pro",
-                    "gemini-pro"
+                    "gemini-1.5-pro"
                 ]
                 
                 # If specialized model requested
@@ -295,18 +294,30 @@ class LLMGenerator:
                             break
                     except Exception as e:
                         last_error = e
-                        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        err_str = str(e)
+                        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                             # v47.2 Adaptive Backoff: Try to extract retry-after
-                            wait_time = 5 # Default v47.2
-                            err_str = str(e)
+                            wait_time = 10 # Safer default for peak hours
                             if "retry in " in err_str:
                                 try:
                                     # Extract number after "retry in "
                                     parts = err_str.split("retry in ")
                                     wait_time = float(parts[1].split("s")[0]) + 1
                                 except: pass
-                            print(f"⚠️ [429] Cuota excedida en {model_name}. Esperando {wait_time}s... Mikey v47.2")
+                            print(f"⚠️ [429] Cuota excedida en {model_name}. Esperando {wait_time}s para reintento automático... Mikey v6.2")
                             time.sleep(wait_time) 
+                            # Re-attempt same model once before switching
+                            try:
+                                response = self.gemini_client.models.generate_content(
+                                    model=model_name,
+                                    contents=prompt,
+                                    config=config
+                                )
+                                if response and response.text:
+                                    content = response.text
+                                    break
+                            except: pass
+                        
                         print(f"DEBUG: Fallo Gemini {model_name}: {e}")
                         continue
                 

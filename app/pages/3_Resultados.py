@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from db.session import SessionLocal
 from db.models import Question
-from ui_utils import load_css, render_header, metric_card
+from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
 
 from core.auth import AuthManager
@@ -22,6 +22,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
+render_custom_sidebar()
 render_header(title="Resultados del Simulacro", subtitle="Análisis de tu desempeño reciente")
 # v2.5.1 - Fix PDF Binary
 

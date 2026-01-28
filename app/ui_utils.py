@@ -78,3 +78,75 @@ def metric_card(label: str, value: str, sublabel: str = ""):
         <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">{sublabel}</div>
     </div>
     """, unsafe_allow_html=True)
+
+def render_custom_sidebar():
+    """Renderiza el sidebar categorizado con gamificación v6.2. Mikey"""
+    from db.session import SessionLocal
+    from db.models import UserStats
+    from core.rank_system import get_rank_info
+    from core.auth import AuthManager
+    
+    db_s = SessionLocal()
+    u_id = st.session_state.get("user_id")
+    stats_s = None
+    rank = {"name": "Aspirante", "icon": "🎓", "color": "#475569", "threshold": 0}
+    next_rank = None
+    pct = 0
+    
+    try:
+        if u_id:
+            stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
+        
+        if not stats_s and u_id:
+            stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
+            db_s.add(stats_s)
+            db_s.commit()
+            db_s.refresh(stats_s)
+            
+        if stats_s:
+            rank, next_rank = get_rank_info(stats_s.total_points)
+            if next_rank:
+                total_needed = next_rank["threshold"] - rank["threshold"]
+                current_progress = stats_s.total_points - rank["threshold"]
+                pct = min(100, int((current_progress / total_needed) * 100))
+            else:
+                pct = 100
+                
+            st.sidebar.markdown(f"""
+            <div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 5px; border-top: 3px solid {rank["color"]};'>
+                <div style='font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;'>Rango Actual</div>
+                <div style='font-size: 2.5rem; margin: 5px 0;'>{rank["icon"]}</div>
+                <div style='font-size: 1.1rem; font-weight: 800; color: {rank["color"]}; margin-bottom: 5px;'>{rank["name"]}</div>
+                <div style='background: rgba(0,0,0,0.05); height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden;'>
+                    <div style='background: {rank["color"]}; width: {pct}%; height: 100%; transition: width 0.5s ease;'></div>
+                </div>
+                <div style='font-size: 0.7rem; color: var(--text-muted);'>
+                    {stats_s.total_points} / {next_rank["threshold"] if next_rank else "MAX"} PTS
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
+        st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
+        st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
+        
+        st.sidebar.button("🚪 Cerrar Sesión", on_click=AuthManager.logout, use_container_width=True, key="sidebar_logout_btn")
+        
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Sidebar Error: {e}")
+    finally:
+        db_s.close()
+    
+    return stats_s, rank
+def get_db_info():
+    """Retorna información del estado de la base de datos. Mikey"""
+    from db.session import SessionLocal, DATABASE_URL
+    from db.models import Question
+    try:
+        db = SessionLocal()
+        count = db.query(Question).count()
+        db.close()
+        db_type = "Cloud (Supabase)" if "postgres" in DATABASE_URL.lower() else "Local (SQLite)"
+        return count, db_type
+    except Exception as e:
+        return 0, f"Error: {e}"

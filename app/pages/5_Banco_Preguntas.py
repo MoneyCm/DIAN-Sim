@@ -13,7 +13,7 @@ from core.dedupe import compute_hash, find_duplicates
 from core.import_utils import validate_import_df
 from core.generators.llm import LLMGenerator
 from core.config import get_api_key
-from ui_utils import load_css, render_header
+from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
 
@@ -40,13 +40,15 @@ def reset_selection():
             st.session_state[key] = False
 
 # --- SIDEBAR TOOLS ---
+stats_s, rank = render_custom_sidebar()
+
 with st.sidebar:
+    st.divider()
     st.markdown("### 🛠️ Herramientas Pro")
     if st.button("🗑️ Limpiar Selección"):
         reset_selection()
         st.rerun()
     
-    st.divider()
     st.caption("Paginación")
     cols_page = st.columns(2)
     if cols_page[0].button("⬅️ Ant."):

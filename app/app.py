@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from db.session import SessionLocal
 from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
-from ui_utils import load_css, render_header, metric_card
+from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 
@@ -89,63 +89,7 @@ if not AuthManager.check_auth():
     st.stop() # Stop execution here if not logged in
 
 # --- v2.0 NEW: Sidebar Gamification Info ---
-db_s = SessionLocal()
-u_id = st.session_state.get("user_id")
-stats_s = None
-rank = {"name": "Aspirante", "icon": "🎓", "color": "#475569", "threshold": 0}
-next_rank = None
-pct = 0
-
-try:
-    if u_id:
-        stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
-    
-    if not stats_s and u_id:
-        # Create stats for new user if not exist
-        stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
-        db_s.add(stats_s)
-        db_s.commit()
-        db_s.refresh(stats_s)
-    
-    if stats_s:
-        rank, next_rank = get_rank_info(stats_s.total_points)
-        
-        # Calculate progress to next rank
-        if next_rank:
-            total_needed = next_rank["threshold"] - rank["threshold"]
-            current_progress = stats_s.total_points - rank["threshold"]
-            pct = min(100, int((current_progress / total_needed) * 100))
-        else:
-            pct = 100
-            
-        st.sidebar.markdown(f"""
-<div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 5px; border-top: 3px solid {rank["color"]};'>
-    <div style='font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;'>Rango Actual</div>
-    <div style='font-size: 2.5rem; margin: 5px 0;'>{rank["icon"]}</div>
-    <div style='font-size: 1.1rem; font-weight: 800; color: {rank["color"]}; margin-bottom: 5px;'>{rank["name"]}</div>
-    <div style='background: rgba(0,0,0,0.05); height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden;'>
-        <div style='background: {rank["color"]}; width: {pct}%; height: 100%; transition: width 0.5s ease;'></div>
-    </div>
-    <div style='font-size: 0.7rem; color: var(--text-muted);'>
-        {stats_s.total_points} / {next_rank["threshold"] if next_rank else "MAX"} PTS
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-        # Categorización Visual en el Sidebar v6.0
-        st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
-        # (Simulacro, Resultados, Banco - Rendered by pages/)
-        
-        st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
-        # (Generador, Auditor - Rendered by pages/)
-
-        st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
-        # (OPEC, Perfil - Rendered by pages/)
-        
-    st.sidebar.button("🚪 Cerrar Sesión", on_click=AuthManager.logout, use_container_width=True)
-except Exception as e:
-    st.sidebar.error(f"⚠️ Error: {e}")
-db_s.close()
+stats_s, rank = render_custom_sidebar()
 
 
 # Inject Global CSS

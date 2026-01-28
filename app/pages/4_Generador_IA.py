@@ -12,7 +12,7 @@ from core.generators.llm import LLMGenerator
 from core.generators.utils import repair_and_parse_json
 from core.dedupe import compute_hash
 from core.config import get_api_key, save_api_key_local # NUEVO
-from ui_utils import load_css, render_header
+from ui_utils import load_css, render_header, render_custom_sidebar, metric_card, get_db_info
 
 import pypdf
 import io
@@ -95,12 +95,10 @@ with col1:
         st.session_state["ai_source_text"] = st.session_state.get("ai_default_text", "")
     
     with tab_text:
-        pasted_text = st.text_area("Pega aquí el artículo o ley:", 
-                                  value=st.session_state["ai_source_text"], 
-                                  height=300,
-                                  key="ia_text_input")
-        if pasted_text:
-            st.session_state["ai_source_text"] = pasted_text
+        # Fixed: Direct binding to key to avoid sync lag Mikey v6.2
+        st.text_area("Pega aquí el artículo o ley:", 
+                    key="ai_source_text", 
+                    height=300)
             
     with tab_file:
         uploaded_file = st.file_uploader("Sube un documento (PDF, TXT)", type=["pdf", "txt"])
@@ -113,10 +111,12 @@ with col1:
                         extracted.append(page.extract_text())
                     st.session_state["ai_source_text"] = "\n".join(extracted)
                     st.success(f"PDF cargado: {len(reader.pages)} páginas leídas.")
+                    st.rerun() # Force refresh for counter Mikey
                 else:
                     # TXT
                     st.session_state["ai_source_text"] = uploaded_file.read().decode("utf-8")
                     st.success("Archivo de texto cargado.")
+                    st.rerun() # Force refresh Mikey
             except Exception as e:
                 st.error(f"Error leyendo archivo: {e}")
 
@@ -216,18 +216,8 @@ with col1:
     
     generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 
-# Helper to get info
-def get_db_info():
-    try:
-        from db.session import SessionLocal, DATABASE_URL
-        db = SessionLocal()
-        count = db.query(Question).count()
-        db.close()
-        db_type = "Cloud (Supabase)" if "postgres" in DATABASE_URL.lower() else "Local (SQLite)"
-        return count, db_type
-    except Exception as e:
-        return 0, f"Error: {e}"
-
+# --- v2.0 NEW: Sidebar Gamification Info ---
+stats_s, rank = render_custom_sidebar()
 total_q, current_db = get_db_info()
 
 st.sidebar.markdown(f"""

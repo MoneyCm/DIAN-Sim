@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
 from db.models import UserOPEC
-from ui_utils import load_css, render_header
+from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
 
@@ -20,6 +20,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
+render_custom_sidebar()
 render_header(title="Mi Meta: OPEC", subtitle="Configura tu cargo y enfoca tu preparación")
 
 def get_active_opec():
