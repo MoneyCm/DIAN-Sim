@@ -12,6 +12,45 @@ from google.genai import types
 from core.normativa import NormativaManager
 from core.config import get_api_key
 
+def repair_and_parse_json(content: str) -> dict:
+    """v47 Advanced JSON Repair. Mikey"""
+    if not content or len(content.strip()) < 10:
+        return None
+        
+    # 1. Strip Markdown
+    content = content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    if content.endswith("```"):
+        content = content[:-3]
+    content = content.strip()
+    
+    # 2. Try Standard Load
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+        
+    # 3. Emergency Cleaning: Find first { and last }
+    try:
+        start = content.find("{")
+        end = content.rfind("}")
+        if start != -1 and end != -1:
+            chunk = content[start:end+1]
+            return json.loads(chunk)
+    except:
+        pass
+        
+    # 4. Harder clean: Replace some common errors
+    try:
+        # Replace smart quotes
+        clean = content.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        return json.loads(clean)
+    except:
+        pass
+        
+    return None
+
 class LLMGenerator:
     def __init__(self, provider: str, api_key: str, model_name: str = None, goa_mode: bool = True):
         self.provider = provider.lower()
@@ -55,46 +94,6 @@ class LLMGenerator:
                     except:
                         pass
             
-    @staticmethod
-    def _repair_and_parse_json(content: str) -> dict:
-        """v47 Advanced JSON Repair. Mikey"""
-        if not content or len(content.strip()) < 10:
-            return None
-            
-        # 1. Strip Markdown
-        content = content.strip()
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        
-        # 2. Try Standard Load
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-            
-        # 3. Emergency Cleaning: Find first { and last }
-        try:
-            start = content.find("{")
-            end = content.rfind("}")
-            if start != -1 and end != -1:
-                chunk = content[start:end+1]
-                return json.loads(chunk)
-        except:
-            pass
-            
-        # 4. Harder clean: Replace some common errors
-        try:
-            # Replace smart quotes
-            clean = content.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-            # Try to fix double quotes inside strings
-            return json.loads(clean)
-        except:
-            pass
-            
-        return None
 
     def generate_from_text(self, text: str, count: int = 5, difficulty: int = 2, progress_callback=None, user_id: int = None) -> List[dict]:
         """Generates questions by splitting into smarter segments with v47 logic. Mikey"""
@@ -373,7 +372,7 @@ class LLMGenerator:
                     content = content.replace("```", "")
         
             # v47 JSON Repair Célula Mikey
-            data = self._repair_and_parse_json(content)
+            data = repair_and_parse_json(content)
             if not data:
                 raise Exception("Fallo crítico: El contenido de la IA no pudo ser parseado como JSON tras reparación.")
 
@@ -615,7 +614,7 @@ class LLMGenerator:
                     content = content.replace("```", "").strip()
             
             # v47 JSON Repair Célula Mikey
-            res = self._repair_and_parse_json(content)
+            res = repair_and_parse_json(content)
             if not res:
                 raise Exception("Fallo en auditoría: El JSON del auditor no es válido tras reparación.")
             res["critique"] = f"[v47.1] {res.get('critique', '')}" # Quantum Shield v2 Mikey

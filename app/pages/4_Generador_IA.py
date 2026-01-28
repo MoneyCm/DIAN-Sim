@@ -8,7 +8,7 @@ if PROJECT_ROOT not in sys.path:
 
 from db.session import SessionLocal
 from db.models import Question
-from core.generators.llm import LLMGenerator
+from core.generators.llm import LLMGenerator, repair_and_parse_json
 from core.dedupe import compute_hash
 from core.config import get_api_key, save_api_key_local # NUEVO
 from ui_utils import load_css, render_header
@@ -129,8 +129,8 @@ with col1:
                 st.warning("Pega el JSON primero.")
             else:
                 try:
-                    # Usamos el generador para limpiar y parsear (Método estático v48.2)
-                    data = LLMGenerator._repair_and_parse_json(json_input)
+                    # Usamos la utilidad global para limpiar y parsear v48.2.1 Mikey
+                    data = repair_and_parse_json(json_input)
                     
                     if not data:
                         st.error("No se pudo parsear el JSON. Asegúrate de copiar el bloque completo.")
