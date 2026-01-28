@@ -63,10 +63,17 @@ st.divider()
 
 db = SessionLocal()
 
-# OPEC Focus Toggle Mikey v48.1
+# OPEC Focus Toggle Mikey v6.4
 u_id = st.session_state.get("user_id")
 from services.question_service import QuestionService
-opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)", value=False, help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
+
+# Detect if user has active OPEC to set default
+from db.models import UserOPEC
+has_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first() is not None
+
+opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)", 
+                       value=has_opec, 
+                       help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
 
 if action == "Explorar / Bulk":
     # FILTERS

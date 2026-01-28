@@ -37,17 +37,21 @@ class QuestionService:
             q_text = (q.topic + " " + q.competency + " " + q.stem).lower()
             
             # A. Filtros Negativos Cruzados (Blindaje Cesar/Cualquier Usuario)
-            if is_tributaria and not is_aduanera:
-                # Si soy puramente tributario, prohibido temas de aduana (Cesar Rule)
-                forbidden = ['aduan', 'arancel', 'import', 'export', 'tráfico postal', 'cabotaje', 'zona franca']
-                if any(f in q_text for f in forbidden):
-                    continue
+            # v6.4 Mikey: Los temas transversales (Integridad, Etica, Comportamental) NUNCA se filtran.
+            is_transcendental = any(x in q_text for x in ['integridad', 'ética', 'etica', 'constitución', 'constitucion', 'comportamental', 'conductual'])
             
-            if is_aduanera and not is_tributaria:
-                # Si soy puramente aduanero, prohibido temas de recaudo tributario interno puro
-                forbidden = ['renta pbx', 'retención en la fuente', 'impuesto de consumo']
-                if any(f in q_text for f in forbidden):
-                    continue
+            if not is_transcendental:
+                if is_tributaria and not is_aduanera:
+                    # Si soy puramente tributario, prohibido temas de aduana (Cesar Rule)
+                    forbidden = ['aduan', 'arancel', 'import', 'export', 'tráfico postal', 'cabotaje', 'zona franca']
+                    if any(f in q_text for f in forbidden):
+                        continue
+                
+                if is_aduanera and not is_tributaria:
+                    # Si soy puramente aduanero, prohibido temas de recaudo tributario interno puro
+                    forbidden = ['renta pbx', 'retención en la fuente', 'impuesto de consumo']
+                    if any(f in q_text for f in forbidden):
+                        continue
 
             # B. Validación de Formato GOA (Situacional + 3 Opciones)
             # Para cargos Profesionales (Nivel 1/2) somos más estrictos con el protocolo 2667
