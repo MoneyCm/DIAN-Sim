@@ -151,6 +151,15 @@ class Configuration(Base):
     key_name: Mapped[str] = mapped_column(String, unique=True)
     value: Mapped[str] = mapped_column(String)
 
+class NormativaChunk(Base):
+    __tablename__ = "normativa_chunks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_file: Mapped[str] = mapped_column(String)
+    page: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    hash_content: Mapped[str] = mapped_column(String, unique=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
 print("✅ [DB_MODELS] Modelos exorcizados y registrados en v19. Mikey.", file=sys.stderr)
 # Forzamos configuración inmediata para detectar errores de resolución de nombres
 from sqlalchemy.orm import configure_mappers
