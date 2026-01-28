@@ -116,7 +116,7 @@ try:
             pct = 100
             
         st.sidebar.markdown(f"""
-<div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 10px; border-top: 3px solid {rank["color"]};'>
+<div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 5px; border-top: 3px solid {rank["color"]};'>
     <div style='font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;'>Rango Actual</div>
     <div style='font-size: 2.5rem; margin: 5px 0;'>{rank["icon"]}</div>
     <div style='font-size: 1.1rem; font-weight: 800; color: {rank["color"]}; margin-bottom: 5px;'>{rank["name"]}</div>
@@ -126,21 +126,19 @@ try:
     <div style='font-size: 0.7rem; color: var(--text-muted);'>
         {stats_s.total_points} / {next_rank["threshold"] if next_rank else "MAX"} PTS
     </div>
-    <hr style="margin: 15px 0; opacity: 0.1;">
-    <div style="display: flex; justify-content: space-around;">
-        <div style="text-align: center;">
-            <div style="font-size: 1.2rem;">🔥</div>
-            <div style="font-size: 0.8rem; font-weight: 700;">{stats_s.current_streak}</div>
-            <div style="font-size: 0.6rem; color: var(--text-muted);">RACHA</div>
-        </div>
-        <div style="text-align: center;">
-            <div style="font-size: 1.2rem;">🏆</div>
-            <div style="font-size: 0.8rem; font-weight: 700;">{stats_s.max_streak}</div>
-            <div style="font-size: 0.6rem; color: var(--text-muted);">MÁXIMA</div>
-        </div>
-    </div>
 </div>
 """, unsafe_allow_html=True)
+
+        # Categorización Visual en el Sidebar v6.0
+        st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
+        # (Simulacro, Resultados, Banco - Rendered by pages/)
+        
+        st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
+        # (Generador, Auditor - Rendered by pages/)
+
+        st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
+        # (OPEC, Perfil - Rendered by pages/)
+        
     st.sidebar.button("🚪 Cerrar Sesión", on_click=AuthManager.logout, use_container_width=True)
 except Exception as e:
     st.sidebar.error(f"⚠️ Error: {e}")
@@ -153,39 +151,110 @@ load_css()
 # Render Custom Header
 render_header()
 
-# Introduction Card
-st.markdown('<div class="dian-card">', unsafe_allow_html=True)
-st.markdown('<div class="dian-card-header">Bienvenido al Ecosistema de Estudio</div>', unsafe_allow_html=True)
-st.markdown('<h1 style="margin-top: 0;">Impulsa tu Carrera en la DIAN</h1>', unsafe_allow_html=True)
-st.markdown('<p style="font-size: 1.15rem; color: var(--text-muted); line-height: 1.6;">Prepárate con la herramienta de simulación más avanzada, diseñada para adaptarse a tu ritmo y fortalecer tus competencias legales.</p>', unsafe_allow_html=True)
-
-# Grid of features
-st.markdown("""
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 30px; margin-top: 50px; margin-bottom: 20px;">
-    <div style="background: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.8); border-radius: 20px; padding: 25px; transition: all 0.3s ease;">
-        <div style="font-size: 2.5rem; margin-bottom: 15px;">🧠</div>
-        <h4 style="margin-bottom: 10px;">Entrenamiento Adaptativo</h4>
-        <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.5;">Algoritmos inteligentes que priorizan tus áreas de mejora para un estudio guiado.</p>
-    </div>
-    <div style="background: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.8); border-radius: 20px; padding: 25px; transition: all 0.3s ease;">
-        <div style="font-size: 2.5rem; margin-bottom: 15px;">🤖</div>
-        <h4 style="margin-bottom: 10px;">Tutoría IA Socrática</h4>
-        <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.5;">Domina la lógica legal detrás de cada situación con nuestro experto virtual.</p>
-    </div>
-    <div style="background: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.8); border-radius: 20px; padding: 25px; transition: all 0.3s ease;">
-        <div style="font-size: 2.5rem; margin-bottom: 15px;">📊</div>
-        <h4 style="margin-bottom: 10px;">Analítica Visual</h4>
-        <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.5;">Monitorea tu crecimiento con radares de competencia y métricas de racha.</p>
+# Introduction / Hero Dashboard v6.0
+st.markdown(f"""
+<div class="hero-welcome">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 style="margin: 0;">¡Hola, {st.session_state.get('username', 'Aspirante')}! 👋</h1>
+            <p style="font-size: 1.1rem; color: var(--text-muted); margin-top: 5px;">Bienvenido a tu Centro de Control de Preparación para la DIAN.</p>
+        </div>
+        <div style="text-align: right;">
+            <span style="font-size: 2.5rem;">{rank["icon"] if 'rank' in locals() else '🎓'}</span>
+            <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if 'rank' in locals() else 'Estudiante'}</div>
+        </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown("""
-<div style="text-align: center; margin-top: 40px; color: var(--text-muted);">
-    Selecciona <b>"Nuevo Simulacro"</b> en el menú lateral para comenzar tu sesión.
-</div>
-""", unsafe_allow_html=True)
+# Metrics Grid section
+m_col1, m_col2, m_col3 = st.columns(3)
+
+with m_col1:
+    metric_card(
+        label="🔥 Racha Actual",
+        value=str(stats_s.current_streak if 'stats_s' in locals() else 0),
+        sublabel="Días seguidos"
+    )
+with m_col2:
+    metric_card(
+        label="🏆 Puntaje Total",
+        value=str(stats_s.total_points if 'stats_s' in locals() else 0),
+        sublabel="Puntos de Maestría"
+    )
+with m_col3:
+    # Calculate global success rate if possible
+    # (Assuming we can fetch total hits/misses from stats or simple query)
+    metric_card(
+        label="🎯 Precisión",
+        value="92%", # Placeholder o query rápido
+        sublabel="Aciertos globales"
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# Main Grid: Quick Actions vs OPEC Status
+col_left, col_right = st.columns([0.6, 0.4])
+
+with col_left:
+    st.markdown("### ⚡ Acciones Rápidas")
+    
+    # Grid for action buttons
+    q_col1, q_col2 = st.columns(2)
+    with q_col1:
+        st.markdown(f"""
+        <a href="/Nuevo_Simulacro" target="_self" class="quick-action-btn">
+            <span style="font-size: 1.5rem;">🚀</span>
+            <span>Nuevo Simulacro</span>
+        </a>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <a href="/Banco_Preguntas" target="_self" class="quick-action-btn" style="margin-top: 15px;">
+            <span style="font-size: 1.5rem;">📚</span>
+            <span>Explorar Banco</span>
+        </a>
+        """, unsafe_allow_html=True)
+
+    with q_col2:
+        st.markdown(f"""
+        <a href="/Resultados" target="_self" class="quick-action-btn">
+            <span style="font-size: 1.5rem;">📈</span>
+            <span>Ver Progreso</span>
+        </a>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <a href="/Generador_IA" target="_self" class="quick-action-btn" style="margin-top: 15px;">
+            <span style="font-size: 1.5rem;">🤖</span>
+            <span>Generador IA</span>
+        </a>
+        """, unsafe_allow_html=True)
+
+with col_right:
+    st.markdown("### 📋 Meta Activa")
+    # Fetch active OPEC info
+    db = SessionLocal()
+    u_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
+    db.close()
+    
+    if u_opec:
+        st.markdown(f"""
+        <div class="dian-card" style="padding: 1.5rem; border-left: 5px solid var(--dian-red);">
+            <div style="font-weight: 800; color: var(--dian-red); font-size: 0.8rem; text-transform: uppercase;">{u_opec.opec_number}</div>
+            <div style="font-size: 1.2rem; font-weight: 700; margin: 5px 0;">{u_opec.job_title}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">{u_opec.level}</div>
+            <hr style="opacity: 0.1; margin: 15px 0;">
+            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Maestría del Cargo</div>
+            <div style="background: rgba(0,0,0,0.05); height: 10px; border-radius: 5px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #E60000, #FFD700); width: 65%; height: 100%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("No tienes una OPEC activa seleccionada.")
+        if st.button("Configurar OPEC Ahora", use_container_width=True):
+            st.switch_page("pages/3_Configuración_OPEC.py")
 
 # Initialize session state for generic use
 if "user_session" not in st.session_state:

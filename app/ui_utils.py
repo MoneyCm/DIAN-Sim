@@ -26,9 +26,9 @@ def render_header(title: str = None, subtitle: str = None):
         try:
             if os.path.exists(logo_path):
                 # Using st.image directly for reliability
-                st.image(logo_path, width=380)
+                st.image(logo_path, width=280) # Sized down from 380
             else:
-                st.markdown("<h1 style='color: var(--dian-red); font-size: 3rem; margin:0;'>DIAN Sim</h1>", unsafe_allow_html=True)
+                st.markdown("<h1 style='color: var(--dian-red); font-size: 2.2rem; margin:0;'>DIAN Sim</h1>", unsafe_allow_html=True)
         except Exception:
             st.markdown("🇨🇴 **DIAN Sim**")
             
@@ -42,9 +42,9 @@ def render_header(title: str = None, subtitle: str = None):
             </div>
             """, unsafe_allow_html=True)
         if subtitle:
-            st.markdown(f"<p style='color: var(--dian-text-muted); font-size: 0.9rem;'>{subtitle}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='color: var(--dian-text-muted); font-size: 0.85rem; margin-top: -5px;'>{subtitle}</p>", unsafe_allow_html=True)
     
-    st.divider()
+    st.markdown("<hr style='margin: 0.5rem 0; opacity: 0.1;'>", unsafe_allow_html=True)
 
 def _get_conn_badge():
     """Retorna un badge HTML según el tipo de conexión activa. Mikey"""
