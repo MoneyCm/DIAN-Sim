@@ -94,8 +94,11 @@ if not AuthManager.check_auth():
 
 # --- v2.0 NEW: Sidebar Gamification Info ---
 db_s = SessionLocal()
+u_id = st.session_state.get("user_id")
+stats_s = None
+rank = {"name": "Aspirante", "icon": "🎓", "color": "#475569", "threshold": 0}
+
 try:
-    u_id = st.session_state.get("user_id")
     stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
     if not stats_s:
         # Create stats for new user if not exist
@@ -160,8 +163,8 @@ st.markdown(f"""
             <p style="font-size: 1.1rem; color: var(--text-muted); margin-top: 5px;">Bienvenido a tu Centro de Control de Preparación para la DIAN.</p>
         </div>
         <div style="text-align: right;">
-            <span style="font-size: 2.5rem;">{rank["icon"] if 'rank' in locals() else '🎓'}</span>
-            <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if 'rank' in locals() else 'Estudiante'}</div>
+            <span style="font-size: 2.5rem;">{rank["icon"] if rank else '🎓'}</span>
+            <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if rank else 'Estudiante'}</div>
         </div>
     </div>
 </div>
@@ -173,13 +176,13 @@ m_col1, m_col2, m_col3 = st.columns(3)
 with m_col1:
     metric_card(
         label="🔥 Racha Actual",
-        value=str(stats_s.current_streak if 'stats_s' in locals() else 0),
+        value=str(stats_s.current_streak if stats_s else 0),
         sublabel="Días seguidos"
     )
 with m_col2:
     metric_card(
         label="🏆 Puntaje Total",
-        value=str(stats_s.total_points if 'stats_s' in locals() else 0),
+        value=str(stats_s.total_points if stats_s else 0),
         sublabel="Puntos de Maestría"
     )
 with m_col3:
