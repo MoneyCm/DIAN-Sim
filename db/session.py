@@ -60,6 +60,9 @@ try:
                 ("mastery_level", "FLOAT"),
                 ("is_mastered", "BOOLEAN")
             ],
+            "attempts": [
+                ("user_id", "INTEGER")
+            ]
         }
         
         for table, cols in new_cols_map.items():

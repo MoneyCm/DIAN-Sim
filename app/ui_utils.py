@@ -34,11 +34,27 @@ def render_header(title: str = None, subtitle: str = None):
             
     with col_text:
         if title:
-            st.markdown(f"<h2 style='margin-bottom: 0;'>{title}</h2>", unsafe_allow_html=True)
+            # Inline flex for title + status badge
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <h2 style='margin: 0;'>{title}</h2>
+                {_get_conn_badge()}
+            </div>
+            """, unsafe_allow_html=True)
         if subtitle:
             st.markdown(f"<p style='color: var(--dian-text-muted); font-size: 0.9rem;'>{subtitle}</p>", unsafe_allow_html=True)
     
     st.divider()
+
+def _get_conn_badge():
+    """Retorna un badge HTML según el tipo de conexión activa. Mikey"""
+    from db.session import DATABASE_URL
+    is_cloud = "supabase" in DATABASE_URL.lower() or "postgres" in DATABASE_URL.lower()
+    
+    if is_cloud:
+        return '<span style="background: rgba(0, 200, 100, 0.2); color: #00ff88; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #00ff88; font-weight: bold; text-transform: uppercase;">🌐 Nube (Sync)</span>'
+    else:
+        return '<span style="background: rgba(255, 150, 0, 0.2); color: #ff9900; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #ff9900; font-weight: bold; text-transform: uppercase;">🏠 Local (Offline)</span>'
 
 def card_container(key=None):
     """Retorna un contenedor estilo tarjeta."""
