@@ -97,7 +97,10 @@ next_rank = None
 pct = 0
 
 try:
-    if not stats_s:
+    if u_id:
+        stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
+    
+    if not stats_s and u_id:
         # Create stats for new user if not exist
         stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
         db_s.add(stats_s)
