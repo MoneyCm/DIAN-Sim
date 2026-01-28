@@ -90,6 +90,7 @@ if not AuthManager.check_auth():
 
 # --- v2.0 NEW: Sidebar Gamification Info ---
 stats_s, rank = render_custom_sidebar()
+u_id = st.session_state.get("user_id")
 
 
 # Inject Global CSS
