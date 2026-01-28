@@ -6,71 +6,66 @@ class QuestionService:
     @staticmethod
     def get_questions_for_user(db, user_id):
         """
-        Fetches questions filtered by the user's OPEC profile.
-        Returns a list of Question objects.
+        Calcula las preguntas pertinentes para el usuario basándose en su OPEC activa.
+        Utiliza un motor de keywords dinámico v48.1 Mikey.
         """
-        # 1. Get User Profile
         user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
         
         # Base Query
         query = db.query(Question)
         
-        # If no profile, maybe return all? or none? Let's return all for now (Admin view)
+        # Si no hay perfil, devolvemos todo (para Administradores o usuarios nuevos)
         if not user_opec:
             return query.all()
 
-        # 2. Logic for OPEC 236844 (Gestor II - Tributaria/Cobranzas)
-        if str(user_opec.opec_number) == "236844":
-            print(f"Applying filters for OPEC {user_opec.opec_number} (Cesar Rules)...")
-            
-            # A. Exclude Customs/Foreign Trade (Negative Filter)
-            forbidden_keywords = [
-                'Aduan', 'Import', 'Export', 'Tránsito', 'Transito', 
-                'Cabotaje', 'Zona Franca', 'Cambiari', 'Transporte', 
-                'Arancel'
-            ]
-            for kw in forbidden_keywords:
-                query = query.filter(
-                    and_(
-                        ~Question.topic.ilike(f'%{kw}%'), 
-                        ~Question.competency.ilike(f'%{kw}%')
-                    )
-                )
+        # 1. Extracción de Keywords de la OPEC
+        functions = user_opec.functions if isinstance(user_opec.functions, list) else []
+        purpose = user_opec.purpose if user_opec.purpose else ""
+        job_title = user_opec.job_title if user_opec.job_title else ""
+        
+        opec_text = (job_title + " " + purpose + " " + " ".join(functions)).lower()
+        
+        # 2. Detección de Naturaleza (Tributaria vs Aduanera)
+        is_tributaria = any(w in opec_text for w in ['tributari', 'impuesto', 'renta', 'iva', 'cobro', 'recaudo'])
+        is_aduanera = any(w in opec_text for w in ['aduan', 'arancel', 'import', 'export', 'tránsito', 'cabotaje', 'zona franca'])
 
-            # B. Strict GOA: Functional questions must have 3 options
-            # Heuristic: Functional = NOT Behavioral
-            # We filter out questions that are FUNCTIONAL (not behavioral) AND have != 3 options
+        # 3. Aplicación de Filtros Maestro
+        all_candidates = query.all()
+        final_questions = []
+        
+        for q in all_candidates:
+            q_text = (q.topic + " " + q.competency + " " + q.stem).lower()
             
-            # Using Python filtering for JSON length might be slow in SQL, 
-            # but usually we can check string length or just fetch and filter in python for 955 items 
-            # (Fetching 1000 items is fast).
+            # A. Filtros Negativos Cruzados (Blindaje Cesar/Cualquier Usuario)
+            if is_tributaria and not is_aduanera:
+                # Si soy puramente tributario, prohibido temas de aduana (Cesar Rule)
+                forbidden = ['aduan', 'arancel', 'import', 'export', 'tráfico postal', 'cabotaje', 'zona franca']
+                if any(f in q_text for f in forbidden):
+                    continue
             
-            all_candidates = query.all()
-            final_questions = []
+            if is_aduanera and not is_tributaria:
+                # Si soy puramente aduanero, prohibido temas de recaudo tributario interno puro
+                forbidden = ['renta pbx', 'retención en la fuente', 'impuesto de consumo']
+                if any(f in q_text for f in forbidden):
+                    continue
+
+            # B. Validación de Formato GOA (Situacional + 3 Opciones)
+            # Para cargos Profesionales (Nivel 1/2) somos más estrictos con el protocolo 2667
+            is_behavioral = any(x in q.competency.lower() or x in q.topic.lower() for x in ['comportamental', 'conductual', 'integridad', 'valores', 'ética', 'etica'])
             
-            for q in all_candidates:
-                # Check 1: Topic match (Double check 'Gestor II')
-                # If we want to be strict that it MUST satisfy Gestor II logic
-                # For now, the negative filter handles the "Topic" part well enough as verified in previous steps.
+            if not is_behavioral:
+                # Requerir formato situacional para preguntas técnicas (GOA 2667)
+                if "SITUACIÓN" not in q.stem.upper():
+                    continue
                 
-                # Check 2: GOA Options Format
-                is_behavioral = any(x in q.competency.lower() or x in q.topic.lower() for x in ['comportamental', 'conductual', 'integridad', 'valores', 'ética', 'etica'])
-                
+                # Requerir exactamente 3 opciones (Estándar CNSC 2024)
                 try:
-                    opts = json.loads(q.options_json)
-                    if not is_behavioral and len(opts) != 3:
-                        continue # Skip non-compliant functional questions
+                    opts = q.options_json if isinstance(q.options_json, dict) else json.loads(q.options_json)
+                    if len(opts) != 3:
+                        continue
                 except:
-                    continue # Skip malformed questions
+                    continue
 
-                # Check 3: Situational (Stem starts with SITUACIÓN)
-                if not is_behavioral:
-                    if "SITUACIÓN" not in q.stem.upper():
-                         continue
-                
-                final_questions.append(q)
-            
-            return final_questions
-
-        # Default for other OPECs (Return all for now)
-        return query.all()
+            final_questions.append(q)
+        
+        return final_questions

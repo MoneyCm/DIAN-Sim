@@ -201,17 +201,17 @@ if run_sim:
     try:
         db = get_db()
         
-        # 1. Fetch Candidates (OPEC-Agnostic first, then filtered)
-        # We use the QuestionService to enforce OPEC constraints (Standard Platinum)
+        # 1. Fetch Candidates (High Precision OPEC Filtering v48.1)
         from services.question_service import QuestionService
-        
         user_id = st.session_state.get("user_id")
-        base_candidates = QuestionService.get_questions_for_user(db, user_id)
+        
+        # Si venimos de la pestaña OPEC, forzamos el filtrado por OPEC
+        # Si venimos de manual, el servicio igual aplica los filtros base de la meta activa del usuario
+        all_candidates = QuestionService.get_questions_for_user(db, user_id)
         
         # Apply UI Filters (In-Memory Python Filtering)
-        # This is fast enough for <1000 items
         final_candidates = []
-        for q in base_candidates:
+        for q in all_candidates:
             # Track Filter
             if final_query_filters.get("tracks") and q.track not in final_query_filters["tracks"]:
                 continue
@@ -231,7 +231,7 @@ if run_sim:
             
             final_candidates.append(q)
             
-        all_candidates = final_candidates
+        selected_candidates = final_candidates
         
         # 2. Fetch Skills for Adaptive Logic
         u_id = st.session_state.get("user_id")

@@ -61,6 +61,11 @@ st.divider()
 
 db = SessionLocal()
 
+# OPEC Focus Toggle Mikey v48.1
+u_id = st.session_state.get("user_id")
+from services.question_service import QuestionService
+opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)", value=False, help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
+
 if action == "Explorar / Bulk":
     # FILTERS
     col_filters = st.columns([2, 1, 1, 1, 1])
@@ -192,27 +197,49 @@ if action == "Explorar / Bulk":
                     )
 
     # QUERY
-    query = db.query(Question)
-    if search:
-        query = query.filter(Question.stem.ilike(f"%{search}%") | Question.rationale.ilike(f"%{search}%"))
-    if track_f != "Todos":
-        query = query.filter(Question.track == track_f)
-    if diff_f:
-        query = query.filter(Question.difficulty.in_(diff_f))
-    
-    # v36 Quality Filter Logic Mikey
-    if quality_f == "Solo Verificadas ✅":
-        query = query.filter(Question.is_verified == True)
-    elif quality_f == "Pendientes ⏳":
-        query = query.filter(Question.is_verified == False)
-    
-    # Pagination Logic
-    PAGE_SIZE = 20
-    offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
-    total_count = query.count()
-    questions = query.offset(offset).limit(PAGE_SIZE).all()
-    
-    st.info(f"📚 Mostrando **{len(questions)}** de **{total_count}** preguntas (Página {st.session_state['page_num']}).")
+    if opec_focus:
+        # Usamos el servicio de alta precisión
+        questions_all = QuestionService.get_questions_for_user(db, u_id)
+        # Aplicamos filtros de UI sobre el set filtrado por OPEC (Filtrado en memoria Python)
+        filtered = []
+        for q in questions_all:
+            if search and not (search.lower() in (q.stem + (q.rationale or "")).lower()):
+                continue
+            if track_f != "Todos" and q.track != track_f:
+                continue
+            if diff_f and q.difficulty not in diff_f:
+                continue
+            if quality_f == "Solo Verificadas ✅" and not q.is_verified:
+                continue
+            if quality_f == "Pendientes ⏳" and q.is_verified:
+                continue
+            filtered.append(q)
+        
+        total_count = len(filtered)
+        PAGE_SIZE = 20
+        offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
+        questions = filtered[offset:offset+PAGE_SIZE]
+        st.info(f"🎯 **Enfoque OPEC:** Filtrando **{total_count}** preguntas pertinentes para tu cargo.")
+    else:
+        # Búsqueda global estándar (SQL)
+        query = db.query(Question)
+        if search:
+            query = query.filter(Question.stem.ilike(f"%{search}%") | Question.rationale.ilike(f"%{search}%"))
+        if track_f != "Todos":
+            query = query.filter(Question.track == track_f)
+        if diff_f:
+            query = query.filter(Question.difficulty.in_(diff_f))
+        
+        if quality_f == "Solo Verificadas ✅":
+            query = query.filter(Question.is_verified == True)
+        elif quality_f == "Pendientes ⏳":
+            query = query.filter(Question.is_verified == False)
+        
+        total_count = query.count()
+        PAGE_SIZE = 20
+        offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
+        questions = query.offset(offset).limit(PAGE_SIZE).all()
+        st.info(f"📚 Mostrando **{len(questions)}** de **{total_count}** preguntas totales.")
     
     if not questions:
         st.warning("No hay preguntas que coincidan con la búsqueda.")
