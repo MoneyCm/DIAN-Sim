@@ -8,7 +8,8 @@ if PROJECT_ROOT not in sys.path:
 
 from db.session import SessionLocal
 from db.models import Question
-from core.generators.llm import LLMGenerator, repair_and_parse_json
+from core.generators.llm import LLMGenerator
+from core.generators.utils import repair_and_parse_json
 from core.dedupe import compute_hash
 from core.config import get_api_key, save_api_key_local # NUEVO
 from ui_utils import load_css, render_header
