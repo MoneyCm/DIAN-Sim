@@ -311,3 +311,31 @@ div[data-testid="stSlider"] [role="slider"] {
     border: 2px solid rgba(230, 0, 0, 0.4) !important;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
 }
+
+/* Fix for Session Persistence: Premium st.page_link Mikey v6.2.3 */
+[data-testid="stPageLink"] {
+    background: white !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 6px 4px !important;
+    font-weight: 700 !important;
+    transition: var(--transition) !important;
+    margin-bottom: 12px !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+[data-testid="stPageLink"]:hover {
+    background: var(--dian-red-glass) !important;
+    border-color: var(--dian-red) !important;
+    transform: translateX(5px) !important;
+    box-shadow: var(--shadow-md) !important;
+}
+
+[data-testid="stPageLink"] p {
+    color: var(--text-main) !important;
+    font-size: 1rem !important;
+}
+
+[data-testid="stPageLink"]:hover p {
+    color: var(--dian-red) !important;
+}

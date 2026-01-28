@@ -150,34 +150,12 @@ with col_left:
     # Grid for action buttons
     q_col1, q_col2 = st.columns(2)
     with q_col1:
-        st.markdown(f"""
-        <a href="/Nuevo_Simulacro" target="_self" class="quick-action-btn">
-            <span style="font-size: 1.5rem;">🚀</span>
-            <span>Nuevo Simulacro</span>
-        </a>
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <a href="/Banco_Preguntas" target="_self" class="quick-action-btn" style="margin-top: 15px;">
-            <span style="font-size: 1.5rem;">📚</span>
-            <span>Explorar Banco</span>
-        </a>
-        """, unsafe_allow_html=True)
+        st.page_link("pages/1_Nuevo_Simulacro.py", label="Nuevo Simulacro", icon="🚀", use_container_width=True)
+        st.page_link("pages/5_Banco_Preguntas.py", label="Explorar Banco", icon="📚", use_container_width=True)
 
     with q_col2:
-        st.markdown(f"""
-        <a href="/Resultados" target="_self" class="quick-action-btn">
-            <span style="font-size: 1.5rem;">📈</span>
-            <span>Ver Progreso</span>
-        </a>
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <a href="/Generador_IA" target="_self" class="quick-action-btn" style="margin-top: 15px;">
-            <span style="font-size: 1.5rem;">🤖</span>
-            <span>Generador IA</span>
-        </a>
-        """, unsafe_allow_html=True)
+        st.page_link("pages/3_Resultados.py", label="Ver Progreso", icon="📈", use_container_width=True)
+        st.page_link("pages/4_Generador_IA.py", label="Generador IA", icon="🤖", use_container_width=True)
 
 with col_right:
     st.markdown("### 📋 Meta Activa")
