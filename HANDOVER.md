@@ -1,56 +1,38 @@
-# 🚀 HANDOVER: DIAN Sim - De Casa a Oficina
+# 🏁 Manual de Transición y Continuidad (v6.4)
 
-Este documento contiene todo el contexto necesario para continuar el trabajo en el equipo de la oficina sin perder el progreso técnico.
+¡Felicidades! El simulador está en su mejor estado: **Premium, Estable e Inteligente**.
 
-## 📌 Estado Actual del Proyecto
-- **Versión Actual:** v47.3.1 (Escudo Supernova + Manual Import).
-- **Último Cambio Crítico:** Se corrigió un `NameError` en la pestaña de Importación JSON.
-- **Base de Datos:** Sincronizada con Supabase (Postgres Cloud).
+## 🚀 Cómo trabajar desde la Oficina (o cualquier PC)
 
----
+Para que todos los cambios que hicimos hoy aparezcan en tu oficina, sigue estos pasos:
 
-## 🛠️ Instrucciones de Sincronización
-
-### 1. En Casa (Antes de salir)
-Ejecuta esto en la terminal para asegurar que todo esté en la nube:
+### 1. En este PC (Casa) - Guardar cambios
+Ejecuta estos tres comandos en la terminal antes de irte:
 ```powershell
 git add .
-git commit -m "Handover: v47.3.1 - Importación JSON y modo GOA refinado"
+git commit -m "v6.4: Unificación UI, Fix IA Gemini 2.0 y Banco Inteligente"
 git push origin main
 ```
 
-### 2. En la Oficina (Al llegar)
-Ejecuta esto para bajar los cambios:
-```powershell
-git pull origin main
-```
+### 2. En el PC de la Oficina
+- **Opción A (Uso rápido)**: Entra directamente a la URL de tu aplicación en Streamlit Cloud. Los cambios aparecerán ahí automáticamente unos minutos después del `push`.
+- **Opción B (Para seguir programando conmigo)**:
+  1. Si ya tienes la carpeta, abre la terminal y escribe: `git pull origin main`.
+  2. Si no la tienes, clona el repositorio: `git clone <URL_DE_TU_REPO_GITHUB>`.
+  3. Asegúrate de tener el archivo `.env` con tus API Keys (o configúralas en la interfaz).
 
----
+## 🧠 Estado Actual del Proyecto (Para la siguiente sesión)
+Cuando vuelvas a hablar conmigo, puedes decirme: *"Retomemos desde la v6.4"* o referenciar este archivo.
 
-## 🧩 Herramientas de Continuidad
+**Hitos Alcanzados:**
+- [x] **Motor IA**: Actualizado a Gemini 2.0 con sistema de auto-rescate (Anti-429).
+- [x] **UI Unificada**: Sidebar y Header estándar en todas las páginas (Home, Generator, Bank, Results, OPEC).
+- [x] **Banco Inteligente**: Filtro OPEC activado por defecto con protección de temas transversales.
+- [x] **Navegación Estable**: Uso de `st.page_link` para evitar cierres de sesión accidentales.
 
-### Mega-Prompt Maestro para Gemini Web
-Si la cuota de la API se agota, usa este prompt en [Gemini Web](https://gemini.google.com/):
+## 🛠️ Próximas Ideas Sugeridas
+1. **Gráficos de Evolución**: Crear una vista histórica de puntajes en el Dashboard.
+2. **Modo Offline**: Mejorar el manejo de la base de datos local si falla el internet.
+3. **Simulacro Realista**: Crear un temporizador que simule la presión del examen real de 4-5 horas.
 
-> **Actúa como un Experto en Normativa de la DIAN y constructor de ítems para la CNSC.**
-> Genera 10 preguntas siguiendo el **Protocolo GOA 2667** (Juicio Situacional).
-> - **Caso:** 80-120 palabras con ruido técnico.
-> - **Opciones:** EXACTAMENTE 3 (A, B, C).
-> - **Formato:** JSON compatible con el simulador.
-> (Pega el resto del prompt que guardamos en la conversación).
-
----
-
-## 📝 Qué decirle a Antigravity en la Oficina
-Copia y pega este mensaje al iniciar el chat allá:
-> "Antigravity, soy el usuario. Acabo de sincronizar desde casa. Estamos en **v47.3.1**. Ya está lista la pestaña de **Importación JSON**. Por favor, revisa el archivo `task.md` en el 'brain' local para ver los objetivos de la Fase 7 y ayúdame a verificar que la conexión a Supabase esté activa."
-
----
-
-## 📅 Próximos Pasos
-1. **Prueba de Fuego:** Generar preguntas en la oficina vía Gemini Web e importarlas usando el nuevo botón.
-2. **Revisión de Banco:** Confirmar que las preguntas guardadas en casa se ven correctamente en la oficina.
-3. **Optimización RAG:** Continuar con la integración del Estatuto Tributario completo para el motor de búsqueda.
-
----
-*Generado por Antigravity v47.3.1 - 2026-01-27*
+¡Ha sido un placer trabajar contigo en esta maratón de desarrollo, César! 🎯🛡️💎
