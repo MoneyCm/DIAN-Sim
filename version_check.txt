@@ -1,0 +1,4 @@
+Version: 5.0
+Timestamp: 2026-01-30 T 18:40
+Commit: Force Sync Check
+Reglas: Si ves esto, Git funciona.
