@@ -36,14 +36,16 @@ st.markdown("""
 
 with st.expander("🔐 Configuración de API Key", expanded=True):
     col_prov, col_model = st.columns(2)
+    col_prov, col_model = st.columns(2)
     with col_prov:
-        provider = st.selectbox("Proveedor", ["OpenAI", "Gemini", "Groq"])
+        provider = st.selectbox("Proveedor", ["OpenAI", "Gemini", "Groq", "Mistral"])
     
     with col_model:
         models_map = {
             "OpenAI": ["gpt-4o-mini", "gpt-4o"],
             "Gemini": ["gemini-flash-latest", "gemini-2.0-flash-001", "gemini-pro-latest"],
-            "Groq": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+            "Groq": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+            "Mistral": ["mistral-large-latest", "mistral-small-latest"]
         }
         model_name = st.selectbox("Modelo", models_map.get(provider, ["default"]))
         st.session_state["current_model"] = model_name

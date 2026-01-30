@@ -12,3 +12,4 @@ passlib
 bcrypt
 rapidfuzz
 openpyxl
+mistralai
