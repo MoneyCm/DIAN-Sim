@@ -12,7 +12,7 @@ from google.genai import types
 from core.normativa import NormativaManager
 from core.config import get_api_key
 from .utils import repair_and_parse_json
-from mistralai import Mistral # v47.3 Mistral Integration
+# from mistralai import Mistral # Moved to lazy import
 
 
 class LLMGenerator:
@@ -38,7 +38,12 @@ class LLMGenerator:
                 base_url="https://api.groq.com/openai/v1"
             )
         elif self.provider == "mistral" and self.api_key:
-            self.mistral_client = Mistral(api_key=self.api_key)
+            try:
+                from mistralai import Mistral
+                self.mistral_client = Mistral(api_key=self.api_key)
+            except ImportError:
+                print("⚠️ MistralAI not installed.")
+                self.mistral_client = None
 
         # Fallback Clients (v44 Mikey: Universal Shield)
         if self.provider == "gemini":
