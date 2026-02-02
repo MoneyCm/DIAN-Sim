@@ -7,6 +7,7 @@ from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
 # --- EL EXORCISMO TOTAL v19.0 - MIKEY ---
+# FORCE DEPLOY v20 - User reported Import Error, assuming stale cache.
 # Forzamos que la CLASE BASE sea un objeto único global en el proceso de Python.
 # Esto es más agresivo que solo compartir el registry.
 BASE_KEY = "_mikey_sqlalchemy_base_v19"
