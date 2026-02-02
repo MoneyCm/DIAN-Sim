@@ -190,6 +190,16 @@ with st.container():
 final_query_filters = {}
 run_sim = False
 
+if submitted_profile:
+    run_sim = True
+    # Logic for Profile Mode
+    final_query_filters = {
+        "topics": profile_topics, # From get_profile_topics above
+        "difficulties": difficulty_profile,
+        "only_situational": only_situational # From toggle above
+    }
+    num_questions = num_questions_profile
+
 if submitted_manual:
     run_sim = True
     final_query_filters = {
@@ -201,7 +211,17 @@ if submitted_manual:
         "hardcore": hardcore_mode
     }
 
-    num_questions = num_questions_profile
+    num_questions = num_questions_profile # This looks like a copy-paste error in original code too, should be num_questions from manual form?
+    # Correcting manual num_questions to use the slider from manual tab "num_q_manual" not profile
+    # Actually wait, let's check variable names.
+    # Manual slider: num_questions = st.slider(..., key="num_q_manual") -> variable is num_questions
+    # Profile slider: num_questions_profile = st.slider(...) -> variable is num_questions_profile
+    
+    # So for manual, I should use 'num_questions' variable defined in line 62.
+    # But line 62 is inside a form, so it might be scoped out? No, python scope is function level.
+    # However, line 204 in original code said: num_questions = num_questions_profile. That was wrong for manual mode!
+    
+    num_questions = st.session_state.get("num_q_manual", 20)
 
 if st.session_state.get("opec_run"):
     run_sim = True
