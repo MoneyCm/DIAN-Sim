@@ -43,7 +43,9 @@ class QuestionService:
                 # pero por ahora devolvemos lo específico que es lo que pide el usuario.
                 return strict_matches
         
-        # [1] Heurística Keywords (Legacy / Fallback)
+        
+        # [1] Heurística Keywords (Legacy / Fallback) - SI NO HAY MATCH EXACTO
+        for q in all_candidates:
             q_text = (q.topic + " " + q.competency + " " + q.stem).lower()
             
             # A. Filtros Negativos Cruzados (Blindaje Cesar/Cualquier Usuario)
