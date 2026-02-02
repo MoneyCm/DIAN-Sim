@@ -14,7 +14,7 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy.orm import joinedload
 from db.session import get_db
 from db.models import CaseStudy, Question
-from app.ui_utils import inject_custom_css
+from app.ui_utils import load_css as inject_custom_css
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
