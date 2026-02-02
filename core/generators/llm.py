@@ -161,6 +161,24 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error fetching normativa context: {e}")
 
+        # Fetch Behavioral Competencies (Res 65) - v48 Mikey
+        behavioral_context = ""
+        try:
+            res_65_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "res_65_competencias.json")
+            if os.path.exists(res_65_path):
+                with open(res_65_path, "r", encoding="utf-8") as f:
+                    comp_data = json.load(f)
+                    behavioral_context = "\nMARCO DE COMPETENCIAS COMPORTAMENTALES (Resolución 0065 DIAN):\n"
+                    # Add common competencies definitions
+                    for key, val in comp_data.get("common_competencies", {}).items():
+                        behavioral_context += f"- {val['name']}: {val['definition']}\n"
+                        # Add Level 3 indicators specifically for Gestor III
+                        if "3" in val.get("levels", {}):
+                            behavioral_context += f"  Conductas Nivel 3 (Profesional): {'; '.join(val['levels']['3'])}\n"
+                    print(f"DEBUG: Loaded Behavioral Context ({len(behavioral_context)} chars). Mikey v48")
+        except Exception as e:
+            print(f"DEBUG: Error loading Res 65 context: {e}")
+
         # GOA logic v46 Mikey
         goa_instr = ""
         if self.goa_mode:
@@ -195,6 +213,7 @@ class LLMGenerator:
         Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
         {opec_context}
         {normativa_context}
+        {behavioral_context}
         
         {goa_instr}
 

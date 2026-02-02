@@ -1,0 +1,69 @@
+{
+    "meta": {
+        "source": "Resolución 0065 de 2024 - DIAN",
+        "description": "Diccionario de Competencias Comportamentales",
+        "levels": [
+            "Nivel 1 (Asistencial)",
+            "Nivel 2 (Técnico)",
+            "Nivel 3 (Profesional/Gestor)",
+            "Nivel 4 (Directivo/Asesor)"
+        ]
+    },
+    "common_competencies": {
+        "ORIENTACION_AL_USUARIO": {
+            "name": "Orientación al Usuario y al Ciudadano",
+            "definition": "Dirigir las decisiones y acciones a la satisfacción de las necesidades e intereses de los usuarios internos y externos, de conformidad con las responsabilidades públicas asignadas a la entidad.",
+            "levels": {
+                "3": [
+                    "Identifica las necesidades del usuario y propone soluciones efectivas, alineadas con la normativa.",
+                    "Garantiza que la información dada al usuario sea veraz, completa y oportuna.",
+                    "Establece mecanismos para medir la satisfacción del usuario en el servicio prestado."
+                ]
+            }
+        },
+        "ORIENTACION_AL_RESULTADO": {
+            "name": "Orientación al Resultado",
+            "definition": "Realizar las funciones y cumplir los compromisos organizacionales con eficacia, calidad y oportunidad.",
+            "levels": {
+                "3": [
+                    "Asume la responsabilidad por sus resultados y los de su equipo de trabajo.",
+                    "Actúa con velocidad y sentido de urgencia cuando se requieren decisiones importantes.",
+                    "Identifica los riesgos que pueden afectar el cumplimiento de las metas y propone acciones mitigantes."
+                ]
+            }
+        },
+        "COMPROMISO_ORGANIZACIONAL": {
+            "name": "Compromiso con la Organización",
+            "definition": "Alinear el propio comportamiento con las necesidades, prioridades y metas organizacionales.",
+            "levels": {
+                "3": [
+                    "Antepone las necesidades de la organización a sus propias necesidades.",
+                    "Apoya a la organización en situaciones difíciles o de crisis.",
+                    "Promueve el cumplimiento de las normas y políticas organizacionales."
+                ]
+            }
+        },
+        "INTEGRIDAD": {
+            "name": "Integridad",
+            "definition": "Actuar con rectitud, honestidad y transparencia de conformidad con la Constitución y la Ley.",
+            "levels": {
+                "3": [
+                    "Denuncia cualquier irregularidad o acto de corrupción que detecte en el ejercicio de sus funciones.",
+                    "No utiliza su cargo para obtener beneficios personales o para terceros.",
+                    "Actúa con coherencia entre lo que dice y lo que hace."
+                ]
+            }
+        }
+    },
+    "specific_competencies": {
+        "GESTOR_TRIBUTARIO": {
+            "name": "Gestión y Fiscalización Tributaria",
+            "definition": "Capacidad para aplicar la normativa tributaria en procesos de fiscalización y control.",
+            "indicators": [
+                "Aplica rigurosamente el debido proceso en todas las actuaciones de fiscalización.",
+                "Fundamenta sus hallazgos en pruebas fehacientes y normativa vigente.",
+                "Mantiene la reserva de la información tributaria del contribuyente."
+            ]
+        }
+    }
+}
