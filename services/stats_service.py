@@ -74,3 +74,40 @@ class StatsService:
         ).order_by(Skill.mastery_score.asc()).limit(limit).all()
         db.close()
         return skills
+    @staticmethod
+    def get_smart_mix_topics(user_id, count=3):
+        """
+        Retorna una mezcla inteligente de temas para simulacros:
+        - 70% Debilidades (< 70 mastery)
+        - 30% Mantenimiento (> 70 mastery)
+        Spaced Repetition Logic v5.0 implementation.
+        """
+        db = SessionLocal()
+        all_skills = db.query(Skill).filter_by(user_id=user_id).all()
+        db.close()
+        
+        if not all_skills:
+            return [] # Cold start
+            
+        weak = [s.topic for s in all_skills if s.mastery_score < 70]
+        strong = [s.topic for s in all_skills if s.mastery_score >= 70]
+        
+        selection = []
+        import random
+        
+        # Debilidades (Priority)
+        num_weak = min(len(weak), int(count * 0.7) + 1)
+        if weak:
+            selection.extend(random.sample(weak, num_weak))
+            
+        # Mantenimiento
+        remaining = count - len(selection)
+        if remaining > 0 and strong:
+            num_strong = min(len(strong), remaining)
+            selection.extend(random.sample(strong, num_strong))
+            
+        # Fill rest with random weak if needed
+        while len(selection) < count and weak:
+             selection.append(random.choice(weak))
+             
+        return selection

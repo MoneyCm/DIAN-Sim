@@ -79,13 +79,40 @@ if "user_answers" not in st.session_state:
 
 def load_exam_cases():
     db = next(get_db())
-    # Load 3 random cases for the simulation
-    # Use joinedload to fetch questions efficiently
-    cases = db.query(CaseStudy).options(joinedload(CaseStudy.questions)).order_by(func.random()).limit(3).all()
-    # Filter cases that actually have questions
-    valid_cases = [c for c in cases if c.questions]
-    db.close()
-    return valid_cases
+    user_id = st.session_state.get("user_id")
+    
+    # v5.0 SMART MIX LOGIC
+    smart_topics = []
+    if user_id:
+        smart_topics = StatsService.get_smart_mix_topics(user_id, count=2) # 2 targeted, 1 random
+    
+    final_cases = []
+    
+    try:
+        if smart_topics:
+            # Try to find cases matching these topics
+            for t in smart_topics:
+                # Find a case that has at least one question with this topic
+                # This is a bit complex in SQL, for speed we might do a loose LIKE
+                c = db.query(CaseStudy).join(Question).filter(Question.topic == t).first()
+                if c and c not in final_cases:
+                    final_cases.append(c)
+        
+        # Fill the rest with random cases
+        needed = 3 - len(final_cases)
+        if needed > 0:
+            random_cases = db.query(CaseStudy).options(joinedload(CaseStudy.questions)).order_by(func.random()).limit(needed * 2).all()
+            for rc in random_cases:
+                if len(final_cases) >= 3: break
+                if rc not in final_cases and rc.questions:
+                    final_cases.append(rc)
+                    
+        return final_cases
+    except Exception as e:
+        print(f"Error smart mix: {e}")
+        return []
+    finally:
+        db.close()
 
 def start_exam():
     with st.spinner("Preparando entorno de examen..."):
