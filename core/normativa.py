@@ -117,8 +117,10 @@ class NormativaManager:
         db.close()
         
         if count == 0:
-            print("💡 RAG: Banco vacío, auto-indexando normativa... Mikey v48")
-            self.index_all()
+            # print("💡 RAG: Banco vacío, auto-indexando normativa... Mikey v48")
+            # self.index_all()
+            print("⚠️ RAG: Banco vacío. Saltando contexto legal para evitar bloqueo UI.")
+            return ""
 
         snippets = self.search_in_laws(topic)
         if not snippets:

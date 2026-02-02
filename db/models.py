@@ -55,9 +55,22 @@ class UserOPEC(Base):
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
 
+class CaseStudy(Base):
+    __tablename__ = "case_studies"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title: Mapped[Optional[str]] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+    difficulty: Mapped[int] = mapped_column(Integer, default=2)
+    topic: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+    
+    questions: Mapped[List["Question"]] = relationship("Question", back_populates="case_study", cascade="all, delete-orphan")
+
+
 class Question(Base):
     __tablename__ = "questions"
     question_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    case_id: Mapped[Optional[str]] = mapped_column(ForeignKey("case_studies.id"))
     track: Mapped[str] = mapped_column(String)
     competency: Mapped[str] = mapped_column(String)
     topic: Mapped[str] = mapped_column(String)
@@ -78,6 +91,7 @@ class Question(Base):
     global_hits: Mapped[int] = mapped_column(Integer, default=0)
     global_misses: Mapped[int] = mapped_column(Integer, default=0)
 
+    case_study: Mapped[Optional["CaseStudy"]] = relationship("CaseStudy", back_populates="questions")
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
 
