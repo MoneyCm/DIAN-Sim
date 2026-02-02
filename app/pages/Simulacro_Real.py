@@ -113,6 +113,10 @@ def finish_exam():
             total += 1
             
     st.session_state.exam_score = (correct, total)
+    # Save for review
+    st.session_state.last_exam_cases = st.session_state.exam_cases
+    st.session_state.last_user_answers = st.session_state.user_answers
+    
     st.session_state.exam_active = False
     st.rerun()
 
@@ -137,9 +141,40 @@ if not st.session_state.exam_active:
         c, t = st.session_state.exam_score
         pct = (c/t)*100 if t > 0 else 0
         st.success(f"### Resultado Final: {c}/{t} ({pct:.1f}%)")
-        del st.session_state.exam_score
+        
+        # --- REVIEW SECTION ---
+        st.markdown("### 📝 Revisión de Respuestas")
+        with st.expander("Ver Detalles y Retroalimentación", expanded=True):
+            cases = st.session_state.get("last_exam_cases", [])
+            answers = st.session_state.get("last_user_answers", {})
+            
+            for c_idx, case in enumerate(cases):
+                st.markdown(f"#### 📂 Caso {c_idx+1}: {case.title}")
+                st.caption(case.text[:150] + "...") # Preview text
+                
+                for q in case.questions:
+                    user_ans = answers.get(q.question_id)
+                    is_ok = (user_ans == q.correct_key)
+                    icon = "✅" if is_ok else "❌"
+                    color = "green" if is_ok else "red"
+                    
+                    st.markdown(f"**{icon} Pregunta:** {q.stem}")
+                    st.markdown(f"**Tu respuesta:** {user_ans} | **Correcta:** {q.correct_key}")
+                    
+                    if not is_ok:
+                        st.markdown(f"Expected: {q.options_json.get(q.correct_key)}")
+                    
+                    st.info(f"💡 **Explicación:** {q.rationale}")
+                    st.divider()
+        
+        # Cleanup score but keep review data until new exam starts
+        # del st.session_state.exam_score # Keep it for display
     
     if st.button("🔴 INICIAR EXAMEN AHORA", type="primary", use_container_width=True):
+        # Clear previous review data
+        if "last_exam_cases" in st.session_state: del st.session_state.last_exam_cases
+        if "last_user_answers" in st.session_state: del st.session_state.last_user_answers
+        if "exam_score" in st.session_state: del st.session_state.exam_score
         start_exam()
 
 else:
