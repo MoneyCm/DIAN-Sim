@@ -1,5 +1,4 @@
-# --- CONFIGURACIÓN PRINCIPAL MIKEY v50.2 (RELOAD FORCE) ---
-st.set_page_config(
+import streamlit as st
 import sys
 import os
 
