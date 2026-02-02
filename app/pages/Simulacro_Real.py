@@ -12,6 +12,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 from db.session import get_db
 from db.models import CaseStudy, Question
 from ui_utils import load_css as inject_custom_css
