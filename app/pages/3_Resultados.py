@@ -12,6 +12,7 @@ from db.session import SessionLocal
 from db.models import Question
 from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
+from services.stats_service import StatsService
 
 from core.auth import AuthManager
 
@@ -81,6 +82,50 @@ with col3:
 with col4:
     metric_card("Módulo Funcional", "ELIMINATORIO", "Aprobado" if is_passed else "Reprobado")
 
+
+st.divider()
+
+# --- v4.2 WEAKNESS RADAR (Adaptive Learning) ---
+st.subheader("📉 Radar de Debilidades (Histórico)")
+user_id = st.session_state.get("user_id")
+if user_id:
+    weak_skills = StatsService.get_weakest_topics(user_id, limit=3)
+    
+    if weak_skills:
+        c_radar, c_recommend = st.columns([1, 1])
+        with c_radar:
+            st.markdown("##### ⚠️ Tus temas más críticos:")
+            for w in weak_skills:
+                # Heatmap color logic
+                color = "#ff4b4b" if w.mastery_score < 40 else "#ffa500"
+                st.markdown(f"**{w.topic}** ({w.mastery_score:.0f}%)")
+                st.progress(int(max(w.mastery_score, 0)) / 100)
+                
+        with c_recommend:
+            st.markdown("##### 💡 Recomendación Inteligente:")
+            top_weak = weak_skills[0]
+            st.info(f"Deberías reforzar: **{top_weak.topic}**")
+            
+            # Smart Source Lookup
+            try:
+                # Find a reference from the bank for this topic
+                db_ref = SessionLocal()
+                ref_q = db_ref.query(Question).filter(Question.topic == top_weak.topic).filter(Question.source_refs != None).first()
+                if ref_q and ref_q.source_refs:
+                    st.markdown(f"> **📖 Lectura Prioritaria:**  \n*{ref_q.source_refs}*")
+                else:
+                    st.markdown(f"El sistema ha detectado que este es tu punto más débil. Te sugerimos revisar la normativa asociada.")
+                db_ref.close()
+            except:
+                pass
+            
+            if st.button("💊 Generar Refuerzo (Solo Fallos)", key="btn_refuerzo", type="primary"):
+                 st.toast("Iniciando generador focalizado...", icon="🤖")
+                 # Future: Redirect to specific generator config
+    else:
+        st.success("¡Tu mapa de calor está verde! Sigue así.")
+else:
+    st.info("Inicia sesión para ver tu rastreo de debilidades.")
 
 st.divider()
 

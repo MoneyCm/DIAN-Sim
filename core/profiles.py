@@ -83,6 +83,39 @@ PROFILES = {
         - REALIZAR LA PRACTICA DE PRUEBAS SOLICITADAS...
         - REVISAR TECNICA Y O JURIDICAMENTE LOS EXPEDIENTES...
         """
+    },
+    "Gestor III (OPEC 236739)": {
+        "description": "Perfil Profesional Gestor III - Fiscalización y Liquidación (OPEC 236739).",
+        "functional_tracks": {
+            "FUNCIONAL": [
+                "Fiscalización Tributaria",
+                "Liquidación Oficial",
+                "Procedimiento Administrativo",
+                "Evasión y Elusión",
+                "Régimen Probatorio",
+                "Impuesto sobre la Renta",
+                "IVA"
+            ],
+            "INTEGRIDAD": [
+                "Ética Pública",
+                "Código Disciplinario",
+                "Transparencia"
+            ]
+        },
+        "behavioral_competencies": [
+            "Análisis de Datos", 
+            "Pensamiento Crítico",
+            "Resolución de Problemas",
+            "Trabajo en Equipo",
+            "Comunicación Asertiva"
+        ],
+        "raw_text": """
+        Propósito: DESARROLLAR PROCESOS DE FISCALIZACIÓN Y LIQUIDACIÓN...
+        Funciones:
+        - PROFERIR ACTOS ADMINISTRATIVOS DE DETERMINACIÓN DE TRIBUTOS...
+        - RESOLVER RECURSOS EN LA VÍA GUBERNATIVA...
+        - ADELANTAR INVESTIGACIONES TRIBUTARIAS...
+        """
     }
 }
 

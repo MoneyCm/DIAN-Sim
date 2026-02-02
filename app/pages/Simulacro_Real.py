@@ -16,6 +16,7 @@ from sqlalchemy import func
 from db.session import get_db
 from db.models import CaseStudy, Question
 from ui_utils import load_css as inject_custom_css
+from services.stats_service import StatsService
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -105,12 +106,30 @@ def finish_exam():
     correct = 0
     total = 0
     
+    # v4.1 Persistence
+    user_id = st.session_state.get("user_id")
+    
     for case in st.session_state.exam_cases:
         for q in case.questions:
             user_choice = st.session_state.user_answers.get(q.question_id)
+            is_correct = False
             if user_choice == q.correct_key:
                 correct += 1
+                is_correct = True
             total += 1
+            
+            # Save Attempt to DB
+            if user_id:
+                try:
+                    StatsService.record_attempt(
+                        user_id=user_id,
+                        question_id=q.question_id,
+                        chosen_key=user_choice if user_choice else "SKIPPED",
+                        is_correct=is_correct,
+                        time_sec=0 
+                    )
+                except Exception as e:
+                    print(f"Stats Error: {e}")
             
     st.session_state.exam_score = (correct, total)
     # Save for review

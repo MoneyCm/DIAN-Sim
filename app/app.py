@@ -96,7 +96,10 @@ u_id = st.session_state.get("user_id")
 # Inject Global CSS
 load_css()
 
-from app.components.NewsTicker import render_news_ticker
+try:
+    from app.components.NewsTicker import render_news_ticker
+except ImportError:
+    from components.NewsTicker import render_news_ticker
 
 # Render Custom Header
 render_header()
