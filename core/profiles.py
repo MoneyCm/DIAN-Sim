@@ -44,6 +44,45 @@ PROFILES = {
         Control de Grandes Contribuyentes: Aplicar mecanismos de control...
         Sistemas de Información (TI): Gestionar sistemas de información...
         """
+    },
+    "Gestor III (OPEC 236769)": {
+        "description": "Perfil Profesional especializado en Fiscalización, Investigación Tributaria y Detección de Evasión.",
+        "functional_tracks": {
+            "FUNCIONAL": [
+                "Fiscalización",
+                "Procedimiento Tributario",
+                "Investigación",
+                "Evasión",
+                "Lavado de Activos",
+                "Régimen Sancionatorio", 
+                "Pruebas",
+                "Actos Administrativos"
+            ],
+            "INTEGRIDAD": [
+                "Ética Pública",
+                "Código Disciplinario",
+                "Transparencia"
+            ]
+        },
+        "behavioral_competencies": [
+            "Análisis de Información", 
+            "Pensamiento Crítico",
+            "Toma de Decisiones",
+            "Trabajo en Equipo",
+            "Comunicación Efectiva"
+        ],
+        "raw_text": """
+        Propósito: DESARROLLAR INVESTIGACIONES PARA LA VERIFICACION DEL CUMPLIMIENTO DE OBLIGACIONES...
+        Funciones:
+        - HACER EL ANALISIS PRELIMINAR DE LAS DENUNCIAS DE FISCALIZACION...
+        - HACER LA PRECRITICA Y CLASIFICACION DE LOS INSUMOS...
+        - ORGANIZAR LA INFORMACION Y PROPUESTAS DE ASUNTOS DE FISCALIZACION...
+        - PARTICIPAR EN LA EJECUCION DE ACCIONES DE FISCALIZACION...
+        - PROFERIR LOS ACTOS ADMINISTRATIVOS DE TRAMITE...
+        - REALIZAR INVESTIGACIONES PARA DETERMINAR EL CUMPLIMIENTO...
+        - REALIZAR LA PRACTICA DE PRUEBAS SOLICITADAS...
+        - REVISAR TECNICA Y O JURIDICAMENTE LOS EXPEDIENTES...
+        """
     }
 }
 

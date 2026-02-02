@@ -26,7 +26,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Generador de Preguntas con IA v4.0 (TEST)", subtitle="Crea material de estudio a partir de documentos")
+render_header(title="Generador de Preguntas con IA v5.0", subtitle="Crea material de estudio a partir de documentos")
 
 st.markdown("""
 <div class="dian-card">
@@ -52,31 +52,55 @@ with st.expander("🔐 Configuración de API Key", expanded=True):
         st.session_state["current_provider"] = provider
 
     # Usar el nuevo sistema de carga persistente
-    api_key_saved = get_api_key(provider)
+    # Usar el nuevo sistema de carga persistente v5 (User-Secure)
+    from core.user_keys import get_user_key, save_user_key
+    
+    current_user_id = st.session_state.get("user_id")
+    user_key_saved = get_user_key(current_user_id, provider) if current_user_id else None
+    system_key_saved = get_api_key(provider) # Fallback system key
+    
+    # Logic: If user key exists, use it. If not, use system key.
+    active_key_source = "Personal" if user_key_saved else ("Sistema" if system_key_saved else "Ninguna")
+    effective_key_val = user_key_saved if user_key_saved else system_key_saved
+    
     col_key, col_save_btn = st.columns([0.8, 0.2])
     
     with col_key:
-        api_key = st.text_input(f"API Key {provider}", value=api_key_saved, type="password", help="Pega aquí tu llave de API")
-        if api_key_saved:
-            st.success(f"✅ Llave de {provider} cargada (Persistente)")
+        api_key_input = st.text_input(
+            f"API Key {provider}", 
+            value=effective_key_val if effective_key_val else "", 
+            type="password", 
+            help="Tu llave se guarda ENCRIPTADA en tu cuenta Personal."
+        )
+        
+        if active_key_source == "Personal":
+            st.success(f"✅ Llave PERSONAL de {provider} cargada y encriptada.")
+        elif active_key_source == "Sistema":
+            st.info(f"🌎 Usando llave del SISTEMA (Global). Puedes sobreescribirla con una personal.")
         else:
-            st.info(f"💡 Ingresa tu llave de {provider} y dale a Guardar")
+            st.warning(f"⚠️ No hay llave configurada para {provider}.")
     
     with col_save_btn:
         st.write("<br>", unsafe_allow_html=True)
-        if st.button("💾 Guardar", help="Guardar esta llave permanentemente en la base de datos"):
-            if api_key:
-                if save_api_key_local(provider, api_key):
-                    st.success("¡Guardada!")
-                    st.rerun()
+        if st.button("💾 Guardar", help="Guardar llave personal encriptada"):
+            if api_key_input:
+                if current_user_id:
+                    if save_user_key(current_user_id, provider, api_key_input):
+                        st.success("¡Encriptada y Guardada!")
+                        st.rerun()
+                    else:
+                        st.error("Error BD")
                 else:
-                    st.error("Error al guardar")
+                    st.error("Debes iniciar sesión")
             else:
-                st.warning("Escribe una llave")
+                st.warning("Escribe algo")
     
-    st.caption("🔒 **Sincronización:** Las llaves se guardan en la base de datos central para que aparezcan automáticamente en tu móvil y PC. También se crea un respaldo local en `.env`.")
+    st.caption("🔒 **Seguridad v5:** Tus llaves se cifran (Fernet 256-bit) y solo tú puedes usarlas.")
     if provider == "Groq":
-        st.warning("⚠️ **Nota sobre Groq:** El nivel gratuito de Groq tiene límites diarios estrictos (TPD). Si recibes un error, te recomendamos usar **Gemini** (Google), que es más estable y generoso en sus cuotas gratuitas.")
+        st.warning("⚠️ **Nota Groq:** Límite gratuito diario muy estricto. Recomendamos Gemini.")
+        
+    # Ensure api_key is available for the generator logic below
+    api_key = api_key_input
 
 st.divider()
 

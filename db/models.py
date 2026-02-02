@@ -38,6 +38,7 @@ class User(Base):
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="user", cascade="all, delete-orphan")
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
+    api_keys: Mapped[List["UserAPIKey"]] = relationship("UserAPIKey", back_populates="user", cascade="all, delete-orphan")
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
@@ -159,6 +160,16 @@ class NormativaChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     hash_content: Mapped[str] = mapped_column(String, unique=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
+class UserAPIKey(Base):
+    __tablename__ = "user_api_keys"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    provider: Mapped[str] = mapped_column(String)
+    encrypted_key: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
+    user: Mapped["User"] = relationship("User", back_populates="api_keys")
 
 print("✅ [DB_MODELS] Modelos exorcizados y registrados en v19. Mikey.", file=sys.stderr)
 # Forzamos configuración inmediata para detectar errores de resolución de nombres

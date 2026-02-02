@@ -11,7 +11,26 @@ from db.session import SessionLocal
 from db.models import Question, Skill, UserOPEC
 from core.adaptive import select_questions_for_simulation
 from ui_utils import load_css, render_header, render_custom_sidebar
-from core.profiles import PROFILES, get_profile_topics
+# V51.1: Nuclear Option - Direct Definition
+import core.profiles
+import importlib
+try:
+    importlib.reload(core.profiles)
+    from core.profiles import PROFILES, get_profile_topics
+except:
+    pass
+
+# FALLBACK DEFINITION (To Bypass Streamlit Caching Issues)
+# SI lees esto, es porque el reload falló.
+PROFILES = {
+    "Gestor II (Código 302, Grado 02)": core.profiles.PROFILES.get("Gestor II (Código 302, Grado 02)"),
+    "Gestor III (OPEC 236769)": {
+        "description": "Perfil Profesional especializado en Fiscalización, Investigación Tributaria y Detección de Evasión.",
+        "functional_tracks": {"FUNCIONAL": ["Fiscalización", "Procedimiento Tributario", "Investigación", "Evasión", "Lavado de Activos", "Régimen Sancionatorio", "Pruebas", "Actos Administrativos"], "INTEGRIDAD": ["Ética Pública", "Código Disciplinario", "Transparencia"]},
+        "behavioral_competencies": ["Análisis de Información", "Pensamiento Crítico", "Toma de Decisiones", "Trabajo en Equipo", "Comunicación Efectiva"],
+        "raw_text": "Propósito: DESARROLLAR INVESTIGACIONES..."
+    }
+}
 
 def get_db():
     return SessionLocal()

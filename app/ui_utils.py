@@ -25,12 +25,24 @@ def render_header(title: str = None, subtitle: str = None):
         logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
         try:
             if os.path.exists(logo_path):
-                # Using st.image directly for reliability
-                st.image(logo_path, width=280) # Sized down from 380
+                # V50.1 Mikey: Clickable Logo (Base64)
+                import base64
+                with open(logo_path, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode()
+                
+                # Use HTML to make it clickable (Main Page Redirect)
+                st.markdown(
+                    f"""
+                    <a href="/" target="_self">
+                        <img src="data:image/png;base64,{encoded_string}" width="280" style="margin-bottom: 10px; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    </a>
+                    """,
+                    unsafe_allow_html=True
+                )
             else:
                 st.markdown("<h1 style='color: var(--dian-red); font-size: 2.2rem; margin:0;'>DIAN Sim</h1>", unsafe_allow_html=True)
-        except Exception:
-            st.markdown("🇨🇴 **DIAN Sim**")
+        except Exception as e:
+            st.markdown(f"🇨🇴 **DIAN Sim** ({e})")
             
     with col_text:
         if title:

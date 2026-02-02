@@ -32,8 +32,18 @@ class QuestionService:
         # 3. Aplicación de Filtros Maestro
         all_candidates = query.all()
         final_questions = []
+
+        # [0] PRIORIDAD ABSOLUTA V50: Coincidencia Exacta de OPEC
+        # Si existen preguntas "hechas a medida" para este código OPEC, ignoramos el resto.
+        if user_opec.opec_number:
+            strict_matches = [q for q in all_candidates if user_opec.opec_number in q.topic]
+            # Si tenemos un banco decente (>10 preguntas) específico, usamos SOLO esto.
+            if len(strict_matches) >= 5:
+                # Opcional: Mezclar con comportamentales genéricas si se desea, 
+                # pero por ahora devolvemos lo específico que es lo que pide el usuario.
+                return strict_matches
         
-        for q in all_candidates:
+        # [1] Heurística Keywords (Legacy / Fallback)
             q_text = (q.topic + " " + q.competency + " " + q.stem).lower()
             
             # A. Filtros Negativos Cruzados (Blindaje Cesar/Cualquier Usuario)
