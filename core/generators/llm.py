@@ -653,3 +653,92 @@ class LLMGenerator:
             return res
         except Exception as e:
             return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
+
+    def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2) -> dict:
+        """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
+        
+        prompt = f"""
+        Actúa como un Diseñador de Pruebas Situacionales para la DIAN (Concursos CNSC).
+        Tu tarea es crear un CASO PROTAGÓNICO (Case Study) completo y original.
+        
+        TEMA PRINCIPAL: {topic}
+        DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado)
+        CANTIDAD DE PREGUNTAS: {num_questions}
+        
+        ESTRUCTURA DEL CONTENIDO:
+        1. TÍTULO: Un título profesional y descriptivo.
+        2. TEXTO DEL CASO (SITUACIÓN): Una narrativa detallada de 300-500 palabras.
+           - Debe describir una situación compleja en un entorno de la DIAN (Aduanas, Fiscalización, Atención, etc.).
+           - Incluye detalles técnicos, cifras, fechas o normativas implicadas.
+           - El protagonista debe enfrentar un dilema o una serie de procedimientos a resolver.
+        3. PREGUNTAS: Genera {num_questions} preguntas que SOLO se puedan responder leyendo el texto del caso.
+           - Cada pregunta debe indagar sobre una parte específica del procedimiento descrito.
+        
+        FORMATO DE SALIDA (JSON ÚNICAMENTE):
+        {{
+            "title": "Título del Caso",
+            "text": "Narrativa completa del caso...",
+            "topic": "{topic}",
+            "questions": [
+                {{
+                    "stem": "Pregunta relacionada con el caso...",
+                    "options": {{
+                        "A": "Opción 1",
+                        "B": "Opción 2",
+                        "C": "Opción 3"
+                    }},
+                    "correct_key": "A",
+                    "rationale": "Justificación técnica...",
+                    "track": "FUNCIONAL",
+                    "competency": "Competencia evaluada"
+                }}
+            ]
+        }}
+        """
+        
+        try:
+            content = ""
+            if self.provider == "openai" and self.openai_client:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+                
+            elif self.provider == "gemini":
+                # Use Gemini 1.5 Flash for speed/context
+                config = types.GenerateContentConfig(response_mime_type="application/json")
+                try:
+                    response = self.gemini_client.models.generate_content(
+                        model="gemini-1.5-flash",
+                        contents=prompt,
+                        config=config
+                    )
+                    content = response.text
+                except Exception as ex:
+                     # Fallback to text if JSON mode fails
+                     response = self.gemini_client.models.generate_content(
+                        model="gemini-1.5-flash",
+                        contents=prompt + "\nRESPOND ONLY IN JSON."
+                    )
+                     content = response.text
+
+            elif self.provider == "groq" and self.openai_client:
+                 response = self.openai_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                 content = response.choices[0].message.content
+                 
+            # Parse JSON
+            data = repair_and_parse_json(content)
+            if not data:
+                raise Exception("Failed to parse Case Study JSON.")
+                
+            return data
+            
+        except Exception as e:
+            print(f"ERROR generating Case Study: {e}")
+            raise e
