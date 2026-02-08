@@ -1,0 +1,102 @@
+{
+    "informacion_general": {
+        "titulo": "Protocolo del Día del Examen - Concurso de Méritos DIAN",
+        "fuente": "Guía de Orientación al Aspirante (GOA) - CNSC",
+        "proceso": "2676-2025"
+    },
+    "logistica": {
+        "hora_llegada_recomendada": "7:30 a.m.",
+        "hora_cierre_puertas": "8:30 a.m.",
+        "excepciones_cierre": "NINGUNA - Sin excepciones bajo ninguna circunstancia",
+        "duracion_total": "5 horas",
+        "hora_inicio_aproximada": "8:30 a.m.",
+        "hora_finalizacion_aproximada": "1:30 p.m."
+    },
+    "material_permitido": {
+        "obligatorio": [
+            "Documento de identidad original (cédula de ciudadanía)",
+            "Citación impresa o digital",
+            "Lápiz de mina negra No. 2 (mínimo 2 unidades)",
+            "Borrador de nata"
+        ],
+        "opcional": [
+            "Sacapuntas",
+            "Botella de agua transparente sin etiqueta"
+        ],
+        "prohibido": [
+            "Teléfonos celulares",
+            "Calculadoras",
+            "Relojes inteligentes (smartwatch)",
+            "Apuntes, libros o material de estudio",
+            "Audífonos o dispositivos electrónicos",
+            "Gorras o sombreros",
+            "Bolsos grandes (solo carteras pequeñas)"
+        ]
+    },
+    "estructura_examen": {
+        "total_preguntas": 120,
+        "distribucion": {
+            "funcional": {
+                "porcentaje": 70,
+                "cantidad_aproximada": 84,
+                "descripcion": "Conocimientos técnicos específicos del cargo (tributario, aduanero, cambiario)",
+                "peso_calificacion": 60,
+                "es_eliminatorio": true,
+                "puntaje_minimo_aprobacion": 70
+            },
+            "comportamental": {
+                "porcentaje": 20,
+                "cantidad_aproximada": 24,
+                "descripcion": "Competencias comportamentales según Resolución 0065",
+                "peso_calificacion": 20,
+                "es_eliminatorio": false
+            },
+            "integridad": {
+                "porcentaje": 10,
+                "cantidad_aproximada": 12,
+                "descripcion": "Valores éticos y Código de Ética DIAN",
+                "peso_calificacion": 20,
+                "es_eliminatorio": false,
+                "metodologia": "Escala Likert"
+            }
+        },
+        "metodologia_evaluacion": {
+            "funcional": "Juicio Situacional - Casos prácticos con 3 opciones (A, B, C)",
+            "comportamental": "Juicio Situacional - Situaciones laborales con 3 opciones",
+            "integridad": "Escala Likert - Afirmaciones con 5 niveles de acuerdo"
+        }
+    },
+    "recomendaciones_dia_examen": [
+        "Llegar con 1 hora de anticipación para evitar contratiempos",
+        "Desayunar adecuadamente antes del examen",
+        "Dormir bien la noche anterior (mínimo 7 horas)",
+        "Revisar la ubicación del sitio de aplicación con anticipación",
+        "Llevar varios lápices No. 2 de repuesto",
+        "Ir al baño antes de ingresar al salón",
+        "Leer cuidadosamente todas las instrucciones antes de comenzar",
+        "Administrar bien el tiempo: aproximadamente 2.5 minutos por pregunta",
+        "Marcar las respuestas con claridad en la hoja de respuestas",
+        "Revisar las respuestas si queda tiempo al final"
+    ],
+    "consecuencias_incumplimiento": {
+        "llegar_tarde": "No se permite el ingreso después de las 8:30 a.m. - Pérdida automática del derecho a presentar la prueba",
+        "material_prohibido": "Anulación inmediata del examen y posible inhabilitación del proceso",
+        "copia_fraude": "Anulación del examen, retiro del proceso y posible inhabilitación permanente",
+        "alteracion_orden": "Retiro inmediato del recinto y anulación de la prueba"
+    },
+    "alertas_importantes": [
+        "⚠️ El cierre de puertas a las 8:30 a.m. es ESTRICTO - Sin excepciones",
+        "⚠️ Solo se permite lápiz de mina negra No. 2 - Otros materiales invalidan el examen",
+        "⚠️ La prueba funcional es ELIMINATORIA - Debe obtener mínimo 70% de aciertos",
+        "⚠️ No hay descansos programados durante las 5 horas",
+        "⚠️ Los celulares deben estar apagados y guardados - Tenerlo encendido anula el examen"
+    ],
+    "distribucion_tiempo_sugerida": {
+        "lectura_instrucciones": "10 minutos",
+        "preguntas_funcionales": "210 minutos (2.5 min/pregunta)",
+        "preguntas_comportamentales": "60 minutos (2.5 min/pregunta)",
+        "preguntas_integridad": "30 minutos (2.5 min/pregunta)",
+        "revision_final": "30 minutos",
+        "total": "300 minutos (5 horas)"
+    }
+}

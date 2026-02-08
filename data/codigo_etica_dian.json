@@ -1,0 +1,125 @@
+{
+  "valores_institucionales": [
+    "Honestidad",
+    "Respeto",
+    "Compromiso",
+    "Diligencia",
+    "Justicia",
+    "Transparencia"
+  ],
+  "principios_eticos": {
+    "integridad": {
+      "nombre": "Integridad",
+      "descripcion": "Actuar con rectitud, honradez y coherencia entre el pensar, el decir y el actuar",
+      "conductas_esperadas": [
+        "Rechazar cualquier tipo de dádiva, regalo o beneficio",
+        "Declarar conflictos de interés",
+        "No usar información privilegiada para beneficio personal",
+        "Actuar con imparcialidad en todas las decisiones"
+      ]
+    },
+    "transparencia": {
+      "nombre": "Transparencia",
+      "descripcion": "Hacer visible la gestión pública y rendir cuentas de manera clara y oportuna",
+      "conductas_esperadas": [
+        "Documentar todas las actuaciones administrativas",
+        "Facilitar el acceso a la información pública",
+        "Comunicar decisiones de manera clara y fundamentada",
+        "Evitar el uso de información reservada para fines distintos"
+      ]
+    },
+    "responsabilidad": {
+      "nombre": "Responsabilidad",
+      "descripcion": "Cumplir las obligaciones y asumir las consecuencias de las decisiones y acciones",
+      "conductas_esperadas": [
+        "Cumplir con los deberes del cargo",
+        "Responder oportunamente a requerimientos",
+        "Asumir las consecuencias de errores",
+        "Proteger los recursos públicos"
+      ]
+    },
+    "respeto": {
+      "nombre": "Respeto",
+      "descripcion": "Reconocer y valorar la dignidad de todas las personas",
+      "conductas_esperadas": [
+        "Tratar con cortesía a usuarios y compañeros",
+        "Respetar la diversidad y las diferencias",
+        "No discriminar por ningún motivo",
+        "Mantener un ambiente laboral sano"
+      ]
+    }
+  },
+  "situaciones_eticas_comunes": [
+    {
+      "categoria": "Conflicto de Intereses",
+      "afirmaciones": [
+        "Es aceptable tramitar la declaración de renta de un familiar directo si se hace fuera del horario laboral",
+        "Un funcionario puede asesorar a su cónyuge sobre cómo reducir legalmente sus impuestos usando información de su cargo",
+        "Si un amigo cercano tiene un proceso tributario, debo abstenerme de participar en cualquier decisión relacionada",
+        "Es válido recomendar a un familiar para un cargo en la DIAN si cumple con todos los requisitos",
+        "Puedo usar mi conocimiento del sistema tributario para ayudar a mi familia a evitar sanciones"
+      ]
+    },
+    {
+      "categoria": "Uso de Información Privilegiada",
+      "afirmaciones": [
+        "La información tributaria de los contribuyentes puede compartirse con otros funcionarios si es para agilizar trámites",
+        "Es aceptable comentar con colegas sobre casos tributarios de personas conocidas si no se revelan detalles sensibles",
+        "Un funcionario puede usar información de fiscalizaciones para tomar decisiones de inversión personal",
+        "La información reservada solo debe usarse para los fines institucionales establecidos",
+        "Puedo revelar información tributaria si un juez me lo solicita verbalmente"
+      ]
+    },
+    {
+      "categoria": "Regalos y Dádivas",
+      "afirmaciones": [
+        "Es aceptable recibir un regalo de bajo valor de un contribuyente agradecido después de resolver su caso",
+        "Un funcionario puede aceptar invitaciones a eventos sociales de empresas que fiscaliza",
+        "Rechazar cualquier tipo de obsequio de contribuyentes es la conducta correcta",
+        "Es válido aceptar descuentos especiales en establecimientos por ser funcionario de la DIAN",
+        "Un regalo de Navidad de un contribuyente habitual no representa un conflicto ético"
+      ]
+    },
+    {
+      "categoria": "Transparencia y Rendición de Cuentas",
+      "afirmaciones": [
+        "Es necesario documentar todas las actuaciones administrativas, incluso las rutinarias",
+        "Un funcionario puede tomar decisiones discrecionales sin documentarlas si son de bajo impacto",
+        "La información sobre procesos de fiscalización debe mantenerse reservada incluso después de concluidos",
+        "Es aceptable no responder solicitudes de información si el solicitante es insistente o conflictivo",
+        "Todas las decisiones administrativas deben estar debidamente motivadas y fundamentadas"
+      ]
+    },
+    {
+      "categoria": "Uso de Recursos Públicos",
+      "afirmaciones": [
+        "Es aceptable usar el computador de la oficina para asuntos personales durante el descanso",
+        "Un funcionario puede usar el vehículo oficial para diligencias personales si está cerca de su ruta",
+        "Los recursos públicos deben usarse exclusivamente para fines institucionales",
+        "Es válido usar papelería de la oficina para tareas escolares de los hijos si es en pequeñas cantidades",
+        "El tiempo laboral puede usarse ocasionalmente para resolver asuntos personales urgentes"
+      ]
+    },
+    {
+      "categoria": "Imparcialidad",
+      "afirmaciones": [
+        "Un funcionario debe tratar todos los casos con el mismo rigor, independientemente de quién sea el contribuyente",
+        "Es aceptable ser más flexible con contribuyentes que demuestran buena voluntad de pago",
+        "La aplicación de sanciones debe ser proporcional y considerar las circunstancias particulares de cada caso",
+        "Un funcionario puede priorizar casos de contribuyentes que conoce personalmente para agilizar su atención",
+        "Las decisiones deben basarse exclusivamente en criterios técnicos y legales, no en consideraciones personales"
+      ]
+    }
+  ],
+  "respuestas_correctas": {
+    "descripcion": "Guía de respuestas esperadas según el Código de Ética DIAN",
+    "criterios": {
+      "conflicto_intereses": "Siempre declarar y abstenerse. Nunca participar en decisiones que involucren familiares o amigos cercanos.",
+      "informacion_privilegiada": "Uso estrictamente institucional. Nunca compartir ni usar para beneficio personal o de terceros.",
+      "regalos_dadivas": "Rechazar cualquier obsequio, regalo o beneficio de contribuyentes, sin importar su valor.",
+      "transparencia": "Documentar todas las actuaciones. Facilitar acceso a información pública. Motivar todas las decisiones.",
+      "recursos_publicos": "Uso exclusivo para fines institucionales. Proteger y optimizar su uso.",
+      "imparcialidad": "Tratar todos los casos con el mismo rigor. Decisiones basadas solo en criterios técnicos y legales."
+    }
+  }
+}

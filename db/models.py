@@ -78,6 +78,7 @@ class Question(Base):
     macro_dominio: Mapped[Optional[str]] = mapped_column(String)
     micro_competencia: Mapped[Optional[str]] = mapped_column(String)
     difficulty: Mapped[int] = mapped_column(Integer)
+    question_type: Mapped[str] = mapped_column(String, default="SITUATIONAL")  # SITUATIONAL | LIKERT
     stem: Mapped[str] = mapped_column(Text)
     options_json: Mapped[dict] = mapped_column(JSON)
     correct_key: Mapped[Optional[str]] = mapped_column(String)
