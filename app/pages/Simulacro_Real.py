@@ -17,6 +17,7 @@ from db.session import get_db
 from db.models import CaseStudy, Question
 from ui_utils import load_css as inject_custom_css
 from services.stats_service import StatsService
+from core.auth import AuthManager
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -25,6 +26,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed" # Real exam usually hides distractions
 )
+
+# --- VERIFICACIÓN DE AUTENTICACIÓN ---
+if not AuthManager.check_auth():
+    st.warning("⚠️ Por favor inicia sesión en la página principal para acceder al Simulacro Real.")
+    st.info("El Simulacro Real requiere autenticación para guardar tu progreso y resultados.")
+    st.stop()
 
 inject_custom_css()
 
