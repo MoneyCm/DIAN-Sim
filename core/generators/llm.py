@@ -731,6 +731,14 @@ class LLMGenerator:
                     response_format={"type": "json_object"}
                 )
                  content = response.choices[0].message.content
+
+            elif self.provider == "mistral" and self.mistral_client:
+                 response = self.mistral_client.chat.complete(
+                    model=self.model_name if self.model_name else "mistral-large-latest",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                 content = response.choices[0].message.content
                  
             # Parse JSON
             data = repair_and_parse_json(content)
