@@ -12,6 +12,7 @@ from google.genai import types
 from core.normativa import NormativaManager
 from core.config import get_api_key
 from .utils import repair_and_parse_json
+# from mistralai import Mistral # Moved to lazy import
 
 
 class LLMGenerator:
@@ -24,7 +25,8 @@ class LLMGenerator:
         # Try to initialize both if possible (for fallbacks)
         self.openai_client = None
         self.gemini_client = None
-        
+        self.mistral_client = None
+
         # Primary Client
         if self.provider == "openai" and self.api_key:
             self.openai_client = openai.OpenAI(api_key=self.api_key)
@@ -35,6 +37,13 @@ class LLMGenerator:
                 api_key=self.api_key,
                 base_url="https://api.groq.com/openai/v1"
             )
+        elif self.provider == "mistral" and self.api_key:
+            try:
+                from mistralai import Mistral
+                self.mistral_client = Mistral(api_key=self.api_key)
+            except ImportError:
+                print("⚠️ MistralAI not installed.")
+                self.mistral_client = None
 
         # Fallback Clients (v44 Mikey: Universal Shield)
         if self.provider == "gemini":
@@ -152,6 +161,24 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error fetching normativa context: {e}")
 
+        # Fetch Behavioral Competencies (Res 65) - v48 Mikey
+        behavioral_context = ""
+        try:
+            res_65_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "res_65_competencias.json")
+            if os.path.exists(res_65_path):
+                with open(res_65_path, "r", encoding="utf-8") as f:
+                    comp_data = json.load(f)
+                    behavioral_context = "\nMARCO DE COMPETENCIAS COMPORTAMENTALES (Resolución 0065 DIAN):\n"
+                    # Add common competencies definitions
+                    for key, val in comp_data.get("common_competencies", {}).items():
+                        behavioral_context += f"- {val['name']}: {val['definition']}\n"
+                        # Add Level 3 indicators specifically for Gestor III
+                        if "3" in val.get("levels", {}):
+                            behavioral_context += f"  Conductas Nivel 3 (Profesional): {'; '.join(val['levels']['3'])}\n"
+                    print(f"DEBUG: Loaded Behavioral Context ({len(behavioral_context)} chars). Mikey v48")
+        except Exception as e:
+            print(f"DEBUG: Error loading Res 65 context: {e}")
+
         # GOA logic v46 Mikey
         goa_instr = ""
         if self.goa_mode:
@@ -186,6 +213,7 @@ class LLMGenerator:
         Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
         {opec_context}
         {normativa_context}
+        {behavioral_context}
         
         {goa_instr}
 
@@ -248,6 +276,20 @@ class LLMGenerator:
                     response_format={"type": "json_object"}
                 )
                 content = response.choices[0].message.content
+
+            elif self.provider == "mistral" and self.mistral_client:
+                # Mistral La Large
+                print(f"DEBUG: Enviando lote a Mistral ({self.model_name or 'mistral-large-latest'})...")
+                response = self.mistral_client.chat.complete(
+                    model=self.model_name if self.model_name else "mistral-large-latest",
+                    messages=[
+                        {"role": "system", "content": "Actúa como un generador de JSON. Responde únicamente con el objeto JSON solicitado."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                if response and response.choices:
+                    content = response.choices[0].message.content
                 
             elif self.provider == "gemini":
                 # v43 Mikey: New SDK candidates
@@ -445,6 +487,13 @@ class LLMGenerator:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 return response.choices[0].message.content
+
+            elif self.provider == "mistral" and self.mistral_client:
+                response = self.mistral_client.chat.complete(
+                    model="mistral-large-latest",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
                 
             elif self.provider == "gemini":
                 candidates = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
@@ -519,6 +568,15 @@ class LLMGenerator:
                     response_format={"type": "json_object"}
                 )
                 content = response.choices[0].message.content
+            elif self.provider == "mistral" and self.mistral_client:
+                # v47.3 Audit Mistral
+                response = self.mistral_client.chat.complete(
+                    model="mistral-large-latest",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+
             elif self.provider == "gemini":
                 # v43 Mikey: Resiliency List with new SDK
                 candidates = [
