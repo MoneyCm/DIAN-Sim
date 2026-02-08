@@ -109,6 +109,7 @@ col1, col2 = st.columns([1, 1])
 with col1:
     
     # --- MODE SELECTION v5.0 ---
+    generate_btn = False
     gen_mode = st.radio("Modo de Generación", ["Preguntas desde Texto/PDF", "Caso de Estudio (Simulacro Real)"], horizontal=True)
     
     if gen_mode == "Preguntas desde Texto/PDF":
