@@ -26,7 +26,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Generador de Preguntas con IA v5.0", subtitle="Crea material de estudio a partir de documentos")
+render_header(title="Generador de Preguntas con IA v5.2 (Mistral Fix)", subtitle="Crea material de estudio a partir de documentos")
 
 st.markdown("""
 <div class="dian-card">
