@@ -26,7 +26,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Generador de Preguntas con IA v5.0", subtitle="Crea material de estudio a partir de documentos")
+render_header(title="Generador de Preguntas con IA", subtitle="Crea material de estudio a partir de documentos")
 
 st.markdown("""
 <div class="dian-card">
@@ -36,71 +36,45 @@ st.markdown("""
 
 with st.expander("🔐 Configuración de API Key", expanded=True):
     col_prov, col_model = st.columns(2)
-    col_prov, col_model = st.columns(2)
     with col_prov:
-        provider = st.selectbox("Proveedor", ["OpenAI", "Gemini", "Groq", "Mistral"])
+        provider = st.selectbox("Proveedor", ["OpenAI", "Gemini", "Groq"])
     
     with col_model:
         models_map = {
             "OpenAI": ["gpt-4o-mini", "gpt-4o"],
             "Gemini": ["gemini-flash-latest", "gemini-2.0-flash-001", "gemini-pro-latest"],
-            "Groq": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
-            "Mistral": ["mistral-large-latest", "mistral-small-latest"]
+            "Groq": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
         }
         model_name = st.selectbox("Modelo", models_map.get(provider, ["default"]))
         st.session_state["current_model"] = model_name
         st.session_state["current_provider"] = provider
 
     # Usar el nuevo sistema de carga persistente
-    # Usar el nuevo sistema de carga persistente v5 (User-Secure)
-    from core.user_keys import get_user_key, save_user_key
-    
-    current_user_id = st.session_state.get("user_id")
-    user_key_saved = get_user_key(current_user_id, provider) if current_user_id else None
-    system_key_saved = get_api_key(provider) # Fallback system key
-    
-    # Logic: If user key exists, use it. If not, use system key.
-    active_key_source = "Personal" if user_key_saved else ("Sistema" if system_key_saved else "Ninguna")
-    effective_key_val = user_key_saved if user_key_saved else system_key_saved
-    
+    api_key_saved = get_api_key(provider)
     col_key, col_save_btn = st.columns([0.8, 0.2])
     
     with col_key:
-        api_key_input = st.text_input(
-            f"API Key {provider}", 
-            value=effective_key_val if effective_key_val else "", 
-            type="password", 
-            help="Tu llave se guarda ENCRIPTADA en tu cuenta Personal."
-        )
-        
-        if active_key_source == "Personal":
-            st.success(f"✅ Llave PERSONAL de {provider} cargada y encriptada.")
-        elif active_key_source == "Sistema":
-            st.info(f"🌎 Usando llave del SISTEMA (Global). Puedes sobreescribirla con una personal.")
+        api_key = st.text_input(f"API Key {provider}", value=api_key_saved, type="password", help="Pega aquí tu llave de API")
+        if api_key_saved:
+            st.success(f"✅ Llave de {provider} cargada (Persistente)")
         else:
-            st.warning(f"⚠️ No hay llave configurada para {provider}.")
+            st.info(f"💡 Ingresa tu llave de {provider} y dale a Guardar")
     
     with col_save_btn:
         st.write("<br>", unsafe_allow_html=True)
-        if st.button("💾 Guardar", help="Guardar llave personal encriptada"):
-            if api_key_input:
-                if current_user_id:
-                    if save_user_key(current_user_id, provider, api_key_input):
-                        st.success("¡Encriptada y Guardada!")
-                        st.rerun()
-                    else:
-                        st.error("Error BD")
+        if st.button("💾 Guardar", help="Guardar esta llave permanentemente en la base de datos"):
+            if api_key:
+                if save_api_key_local(provider, api_key):
+                    st.success("¡Guardada!")
+                    st.rerun()
                 else:
-                    st.error("Debes iniciar sesión")
+                    st.error("Error al guardar")
             else:
-                st.warning("Escribe algo")
+                st.warning("Escribe una llave")
     
-    st.caption("🔒 **Seguridad v5:** Tus llaves se cifran (Fernet 256-bit) y solo tú puedes usarlas.")
+    st.caption("🔒 **Sincronización:** Las llaves se guardan en la base de datos central para que aparezcan automáticamente en tu móvil y PC. También se crea un respaldo local en `.env`.")
     if provider == "Groq":
-        st.warning("⚠️ **Nota Groq:** Límite gratuito diario muy estricto. Recomendamos Gemini.")
-        
-    # Ensure api_key is available for the generator logic below
-    api_key = api_key_input
+        st.warning("⚠️ **Nota sobre Groq:** El nivel gratuito de Groq tiene límites diarios estrictos (TPD). Si recibes un error, te recomendamos usar **Gemini** (Google), que es más estable y generoso en sus cuotas gratuitas.")
 
 st.divider()
 

@@ -7,7 +7,6 @@ from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
 # --- EL EXORCISMO TOTAL v19.0 - MIKEY ---
-# FORCE DEPLOY v20 - User reported Import Error, assuming stale cache.
 # Forzamos que la CLASE BASE sea un objeto único global en el proceso de Python.
 # Esto es más agresivo que solo compartir el registry.
 BASE_KEY = "_mikey_sqlalchemy_base_v19"
@@ -39,7 +38,6 @@ class User(Base):
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="user", cascade="all, delete-orphan")
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
-    api_keys: Mapped[List["UserAPIKey"]] = relationship("UserAPIKey", back_populates="user", cascade="all, delete-orphan")
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
@@ -56,22 +54,9 @@ class UserOPEC(Base):
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
 
-class CaseStudy(Base):
-    __tablename__ = "case_studies"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    title: Mapped[Optional[str]] = mapped_column(String)
-    text: Mapped[str] = mapped_column(Text)
-    difficulty: Mapped[int] = mapped_column(Integer, default=2)
-    topic: Mapped[str] = mapped_column(String)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
-    
-    questions: Mapped[List["Question"]] = relationship("Question", back_populates="case_study", cascade="all, delete-orphan")
-
-
 class Question(Base):
     __tablename__ = "questions"
     question_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    case_id: Mapped[Optional[str]] = mapped_column(ForeignKey("case_studies.id"))
     track: Mapped[str] = mapped_column(String)
     competency: Mapped[str] = mapped_column(String)
     topic: Mapped[str] = mapped_column(String)
@@ -92,7 +77,6 @@ class Question(Base):
     global_hits: Mapped[int] = mapped_column(Integer, default=0)
     global_misses: Mapped[int] = mapped_column(Integer, default=0)
 
-    case_study: Mapped[Optional["CaseStudy"]] = relationship("CaseStudy", back_populates="questions")
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
 
@@ -175,16 +159,6 @@ class NormativaChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     hash_content: Mapped[str] = mapped_column(String, unique=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
-
-class UserAPIKey(Base):
-    __tablename__ = "user_api_keys"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    provider: Mapped[str] = mapped_column(String)
-    encrypted_key: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
-
-    user: Mapped["User"] = relationship("User", back_populates="api_keys")
 
 print("✅ [DB_MODELS] Modelos exorcizados y registrados en v19. Mikey.", file=sys.stderr)
 # Forzamos configuración inmediata para detectar errores de resolución de nombres

@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from db.models import Base, Question, Skill, UserStats, Achievement
+from db.models import Base, Question, CaseStudy, Skill, UserStats, Achievement
 
 def sync():
     # 1. Setup Destination (Local SQLite)
@@ -69,7 +69,42 @@ def sync():
     local_db.commit()
     print(f"Synced {count_q} new questions to local database.")
 
-    # 5. Optional: Sync other tables? 
+    # 5. Sync CaseStudy
+    print("Syncing Case Studies from Cloud to Local...")
+    cloud_cases = cloud_db.query(CaseStudy).all()
+    count_c = 0
+    for c in cloud_cases:
+        exists = local_db.query(CaseStudy).filter_by(id=c.id).first()
+        if not exists:
+            # Create a new instance for local
+            new_c = CaseStudy(
+                id=c.id,
+                title=c.title,
+                text=c.text,
+                difficulty=c.difficulty,
+                topic=c.topic,
+                created_at=c.created_at
+            )
+            local_db.add(new_c)
+            count_c += 1
+    
+    local_db.commit()
+    print(f"Synced {count_c} new case studies to local database.")
+
+    # 6. Update Questions with case_id
+    print("Updating questions with case_id references...")
+    cloud_questions_with_cases = cloud_db.query(Question).filter(Question.case_id.isnot(None)).all()
+    count_updated = 0
+    for cq in cloud_questions_with_cases:
+        local_q = local_db.query(Question).filter_by(question_id=cq.question_id).first()
+        if local_q and local_q.case_id != cq.case_id:
+            local_q.case_id = cq.case_id
+            count_updated += 1
+    
+    local_db.commit()
+    print(f"Updated {count_updated} questions with case_id references.")
+
+    # 7. Optional: Sync other tables? 
     # For now, let's keep it to questions as requested.
 
     local_db.close()

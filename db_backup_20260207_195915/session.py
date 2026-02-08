@@ -30,7 +30,7 @@ engine = create_engine(
 )
 
 # IMPORTANTE: Importamos modelos DESPUÉS de definir el motor
-from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question, CaseStudy
+from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question
 
 try:
     # 1. Asegurar tablas
@@ -48,8 +48,7 @@ try:
                 ("is_verified", "BOOLEAN DEFAULT FALSE"),
                 ("quality_report", "JSON"),
                 ("global_hits", "INTEGER DEFAULT 0"),
-                ("global_misses", "INTEGER DEFAULT 0"),
-                ("case_id", "VARCHAR")
+                ("global_misses", "INTEGER DEFAULT 0")
             ],
             "skills": [
                 ("macro_dominio", "VARCHAR"), 

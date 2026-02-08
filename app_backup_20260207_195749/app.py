@@ -96,16 +96,8 @@ u_id = st.session_state.get("user_id")
 # Inject Global CSS
 load_css()
 
-try:
-    from app.components.NewsTicker import render_news_ticker
-except ImportError:
-    from components.NewsTicker import render_news_ticker
-
 # Render Custom Header
 render_header()
-
-# v6.3: Regulatory Flash Updates
-render_news_ticker()
 
 # Introduction / Hero Dashboard v6.0
 st.markdown(f"""
