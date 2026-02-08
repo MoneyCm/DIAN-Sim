@@ -677,6 +677,9 @@ class LLMGenerator:
         FORMATO DE SALIDA (JSON ÚNICAMENTE):
         {{
             "title": "Título del Caso",
+        FORMATO DE SALIDA (JSON ÚNICAMENTE):
+        {{
+            "title": "Título del Caso",
             "text": "Narrativa completa del caso...",
             "topic": "{topic}",
             "questions": [
@@ -694,6 +697,8 @@ class LLMGenerator:
                 }}
             ]
         }}
+        
+        IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON. NO uses bloques de código markdown (```json). SOlo el texto raw del JSON. Si es necesario, escapa las comillas dobles dentro del texto con \".
         """
         
         try:
@@ -741,12 +746,16 @@ class LLMGenerator:
                  content = response.choices[0].message.content
                  
             # Parse JSON
+            print(f"DEBUG: LLM Content ({len(content)} chars): {content[:200]}...") # Debug Mikey
             data = repair_and_parse_json(content)
             if not data:
-                raise Exception("Failed to parse Case Study JSON.")
+                raise Exception(f"Failed to parse Case Study JSON. Content preview: {content[:100]}...")
                 
             return data
             
         except Exception as e:
             print(f"ERROR generating Case Study: {e}")
+            # If content exists, print it all for deep debug
+            if 'content' in locals() and content:
+                print(f"DEBUG FULL CONTENT: {content}")
             raise e
