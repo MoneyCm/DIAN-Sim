@@ -437,10 +437,14 @@ with col2:
                 # 2. Create Questions linked to Case
                 count_q = 0
                 for q in case_data.get("questions", []):
+                    # Ensure competency is not null (DB Constraint)
+                    micro_comp = q.get('micro_competencia') or q.get('competency') or "General"
+                    macro_dom = q.get('macro_dominio') or "Transversal"
+                    
                     new_q = Question(
                         question_id=str(uuid.uuid4()),
                         case_id=new_case.id, # LINKED
-                        track="FUNCIONAL",
+                        track=q.get("track", "FUNCIONAL"),
                         stem=q.get("stem"),
                         options_json=q.get("options"),
                         correct_key=q.get("correct_key"),
@@ -448,6 +452,12 @@ with col2:
                         topic=case_data.get("topic"),
                         difficulty=2,
                         question_type="SITUATIONAL",
+                        
+                        # Fix NotNull Constraint (v5.3)
+                        competency=micro_comp, 
+                        micro_competencia=micro_comp,
+                        macro_dominio=macro_dom,
+                        
                         hash_norm=str(uuid.uuid4()) # Unique hash for these
                     )
                     db.add(new_q)
