@@ -40,6 +40,7 @@ class User(Base):
     achievements: Mapped[List["Achievement"]] = relationship("Achievement", back_populates="user", cascade="all, delete-orphan")
     skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user", cascade="all, delete-orphan")
     api_keys: Mapped[List["UserAPIKey"]] = relationship("UserAPIKey", back_populates="user", cascade="all, delete-orphan")
+    ethics_attempts: Mapped[List["EthicsAttempt"]] = relationship("EthicsAttempt", back_populates="user", cascade="all, delete-orphan")
 
 class UserOPEC(Base):
     __tablename__ = "user_opec"
@@ -186,6 +187,23 @@ class UserAPIKey(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped["User"] = relationship("User", back_populates="api_keys")
+
+class EthicsAttempt(Base):
+    """Almacena intentos del usuario en el módulo de Ética e Integridad"""
+    __tablename__ = "ethics_attempts"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    categoria: Mapped[str] = mapped_column(String)  # Conflicto de Intereses, etc.
+    afirmacion: Mapped[str] = mapped_column(Text)  # La afirmación presentada
+    respuesta_usuario: Mapped[int] = mapped_column(Integer)  # 1-5 Likert scale
+    respuesta_esperada: Mapped[Optional[int]] = mapped_column(Integer)  # 1-5 esperada
+    es_correcta: Mapped[Optional[bool]] = mapped_column(Boolean)  # Si la respuesta fue correcta
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)  # Si fue generada con IA
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+    
+    # Relación
+    user: Mapped["User"] = relationship("User", back_populates="ethics_attempts")
 
 print("✅ [DB_MODELS] Modelos exorcizados y registrados en v19. Mikey.", file=sys.stderr)
 # Forzamos configuración inmediata para detectar errores de resolución de nombres
