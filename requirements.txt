@@ -15,3 +15,4 @@ openpyxl
 mistralai>=1.0.0
 httpx>=0.25.0
 cryptography
+# Force rebuild v2
