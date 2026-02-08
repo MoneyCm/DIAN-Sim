@@ -49,7 +49,8 @@ try:
                 ("quality_report", "JSON"),
                 ("global_hits", "INTEGER DEFAULT 0"),
                 ("global_misses", "INTEGER DEFAULT 0"),
-                ("case_id", "VARCHAR")
+                ("case_id", "VARCHAR"),
+                ("question_type", "VARCHAR DEFAULT 'SITUATIONAL'")
             ],
             "skills": [
                 ("macro_dominio", "VARCHAR"), 
