@@ -149,4 +149,184 @@ with col2:
         st.error("⚠️ Has alcanzado el límite de 5 cargos. Elimina uno para agregar uno nuevo.")
     
 st.divider()
+
+# --- AUTO-SEED SECTION v5.4 ---
+st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
+st.markdown("""
+Si no quieres crear preguntas una por una, usa esta opción. El sistema leerá tu **Cargo y Funciones** y generará automáticamente:
+*   3 Casos Protagónicos completos.
+*   10 Preguntas Funcionales.
+*   5 Preguntas Comportamentales.
+*   5 Preguntas de Integridad/Valores.
+""")
+
+if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_container_width=True):
+    if not active_opec:
+        st.error("Primero debes guardar la configuración de tu OPEC arriba.")
+    else:
+        from core.generators.llm import LLMGenerator
+        from db.models import CaseStudy, Question
+        import uuid
+        import time
+        
+        # Init Generator (Use default provider from settings or fallback to Gemini/Mistral)
+        # Note: We need the API Key. For checking purposes we might need to look into settings or ENV.
+        # Assuming Global or Env Key is available if configured. 
+        # For robustness, we will try to instantiate with explicit checks if possible, 
+        # but LLMGenerator handles some defaults.
+        
+        # Retrieve settings from session or env? 
+        # In 4_Generador_IA we get it from UI inputs. Here we assume System Key or User saved key.
+        # For now, let's try to instantiate with placeholder and rely on .env if user hasn't set custom.
+        
+        try:
+            api_key = os.getenv("MISTRAL_API_KEY") or os.getenv("GEMINI_API_KEY")
+            provider = "mistral" if os.getenv("MISTRAL_API_KEY") else "gemini"
+            
+            # Simple fallback if keys missing (handled by LLMGenerator typically or errors out)
+            gen = LLMGenerator(provider=provider, api_key=api_key if api_key else "dummy")
+            
+            progress = st.progress(0, text="Analizando perfil OPEC...")
+            status = st.empty()
+            
+            db = SessionLocal()
+            
+            total_steps = 4
+            current_step = 0
+            
+            # 1. Generate Case Studies
+            status.info("Generando 3 Casos Protagónicos...")
+            for i in range(3):
+                try:
+                    case_data = gen.generate_case_study(
+                        topic=f"Caso {i+1}: {active_opec.job_title} - {active_opec.purpose}",
+                        num_questions=3,
+                        difficulty=2
+                    )
+                    
+                    # Save Case
+                    new_case = CaseStudy(
+                        id=str(uuid.uuid4()),
+                        title=case_data.get("title", "Caso Generado"),
+                        text=case_data.get("text"),
+                        topic=active_opec.job_title,
+                        difficulty=2
+                    )
+                    db.add(new_case)
+                    db.flush()
+                    
+                    # Save Questions for Case
+                    for q in case_data.get("questions", []):
+                        micro_comp = q.get('micro_competencia') or q.get('competency') or "General"
+                        macro_dom = q.get('macro_dominio') or "Transversal"
+                        new_q = Question(
+                            question_id=str(uuid.uuid4()),
+                            case_id=new_case.id,
+                            stem=q.get("stem"),
+                            options_json=q.get("options"),
+                            correct_key=q.get("correct_key"),
+                            rationale=q.get("rationale"),
+                            track=q.get("track", "FUNCIONAL"),
+                            competency=micro_comp,
+                            micro_competencia=micro_comp,
+                            macro_dominio=macro_dom,
+                            topic=active_opec.job_title,
+                            difficulty=2,
+                            hash_norm=str(uuid.uuid4())
+                        )
+                        db.add(new_q)
+                    
+                    db.commit()
+                except Exception as e:
+                    print(f"Error generating case {i}: {e}")
+                    status.warning(f"Error en caso {i+1}, reintentando...")
+            
+            current_step += 1
+            progress.progress(25, text="Casos generados. Iniciando preguntas funcionales...")
+            
+            # 2. Functional Questions
+            status.info("Generando preguntas funcionales...")
+            func_text = f"Cargo: {active_opec.job_title}\nFunciones:\n{str(active_opec.functions)}"
+            q_func = gen.generate_from_text(func_text, count=10, difficulty=2)
+            
+            for q in q_func:
+                new_q = Question(
+                    question_id=str(uuid.uuid4()),
+                    stem=q.get("stem"),
+                    options_json=q.get("options"),
+                    correct_key=q.get("correct_key"),
+                    rationale=q.get("rationale"),
+                    track="FUNCIONAL",
+                    topic=active_opec.job_title,
+                    competency="Funcional",
+                    micro_competencia="Conocimientos Técnicos",
+                    macro_dominio="Funcionamiento del Estado",
+                    difficulty=2,
+                    hash_norm=str(uuid.uuid4())
+                )
+                db.add(new_q)
+            db.commit()
+            
+            current_step += 1
+            progress.progress(50, text="Preguntas funcionales listas. Pasando a comportamentales...")
+            
+            # 3. Behavioral Questions
+            status.info("Generando preguntas comportamentales...")
+            behav_text = f"CONTEXTO COMPORTAMENTAL: Generar preguntas sobre Liderazgo, Trabajo en Equipo y Orientación al Resultado para el cargo {active_opec.job_title}."
+            q_behav = gen.generate_from_text(behav_text, count=5, difficulty=2)
+            
+            for q in q_behav:
+                new_q = Question(
+                    question_id=str(uuid.uuid4()),
+                    stem=q.get("stem"),
+                    options_json=q.get("options"),
+                    correct_key=q.get("correct_key"),
+                    rationale=q.get("rationale"),
+                    track="COMPORTAMENTAL",
+                    topic="Competencias Blandas",
+                    competency="Comportamental",
+                    micro_competencia="Liderazgo/Trabajo en Equipo",
+                    macro_dominio="Competencias Comunes",
+                    difficulty=2,
+                    hash_norm=str(uuid.uuid4())
+                )
+                db.add(new_q)
+            db.commit()
+            
+            current_step += 1
+            progress.progress(75, text="Ya casi... Generando integridad...")
+            
+            # 4. Integrity Questions
+            status.info("Generando preguntas de valores e integridad...")
+            int_text = f"CONTEXTO ÉTICO: Dilemas éticos, código de integridad y valores para funcionario público DIAN en el cargo {active_opec.job_title}."
+            q_int = gen.generate_from_text(int_text, count=5, difficulty=2)
+             
+            for q in q_int:
+                new_q = Question(
+                    question_id=str(uuid.uuid4()),
+                    stem=q.get("stem"),
+                    options_json=q.get("options"),
+                    correct_key=q.get("correct_key"),
+                    rationale=q.get("rationale"),
+                    track="COMPORTAMENTAL", # Integrity usually falls here or new track
+                    topic="Integridad y Valores",
+                    competency="Ética",
+                    micro_competencia="Integridad",
+                    macro_dominio="Valores DIAN",
+                    difficulty=2,
+                    hash_norm=str(uuid.uuid4())
+                )
+                db.add(new_q)
+            db.commit()
+            
+            progress.progress(100, text="¡Proceso Finalizado!")
+            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro Real!")
+            st.balloons()
+            
+            db.close()
+            
+        except Exception as e:
+            st.error(f"Error crítico en Auto-Seed: {e}")
+
+st.divider()
 st.caption("🔒 Los datos de tu OPEC se guardan de forma segura en tu base de datos para que la IA los use al generar simulacros.")
