@@ -79,19 +79,20 @@ try:
         }
         
         for table, cols in new_cols_map.items():
-            if db_type == "sqlite":
-                existing_cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
-            else:
-                existing_cols = [row[0] for row in conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}';")).fetchall()]
-            
             for col_info in cols:
                 col_name, col_type = col_info
-                if col_name not in existing_cols:
-                    print(f"🔨 [SESSION] Adding {col_name} to {table}...", file=sys.stderr)
-                    try:
-                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
-                    except Exception as col_err:
-                        print(f"⚠️ [SESSION] Fail adding {col_name}: {col_err}", file=sys.stderr)
+                try:
+                    if db_type == "sqlite":
+                        existing_cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
+                        if col_name not in existing_cols:
+                            print(f"🔨 [SESSION] Adding {col_name} to {table} (SQLite)...", file=sys.stderr)
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
+                    else:
+                        # Postgres v9.6+ supports IF NOT EXISTS for ADD COLUMN
+                        print(f"🔨 [SESSION] Syncing {col_name} in {table} (Postgres)...", file=sys.stderr)
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                except Exception as col_err:
+                    print(f"⚠️ [SESSION] Info/Fail syncing {col_name} in {table}: {col_err}", file=sys.stderr)
         
     print("✅ [SESSION] Sincronización v19 Completada con Éxito. Mikey", file=sys.stderr)
 
