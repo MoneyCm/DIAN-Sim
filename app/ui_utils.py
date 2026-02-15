@@ -162,3 +162,35 @@ def get_db_info():
         return count, db_type
     except Exception as e:
         return 0, f"Error: {e}"
+
+def render_favorite_button(question_id: str, user_id: int):
+    """Renderiza un botón para marcar/desmarcar favoritas. Mikey"""
+    from db.session import SessionLocal
+    from db.models import QuestionPerformance
+    
+    if not user_id:
+        return
+
+    db = SessionLocal()
+    try:
+        perf = db.query(QuestionPerformance).filter_by(user_id=user_id, question_id=question_id).first()
+        is_fav = perf.is_favorite if perf else False
+        
+        label = "⭐ Favorita" if is_fav else "☆ Favorita"
+        # Usamos un estilo de botón de streamlit transparente si fuera posible, 
+        # pero para mantener el diseño premium usaremos el estándar con un color distinto si es fav.
+        
+        if st.button(label, key=f"fav_{question_id}", use_container_width=False):
+            if not perf:
+                perf = QuestionPerformance(user_id=user_id, question_id=question_id, hits=0, misses=0, is_favorite=True)
+                db.add(perf)
+            else:
+                perf.is_favorite = not is_fav
+            
+            db.commit()
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"Error al guardar favorito: {e}")
+    finally:
+        db.close()

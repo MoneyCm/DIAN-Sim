@@ -76,7 +76,8 @@ with col_s2:
 with col_s3:
     st.metric("🏆 Puntos Totales", f"{stats.total_points} pts")
 with col_s4:
-    st.metric("🔝 Racha Máxima", f"{stats.max_streak} días")
+    fav_count = db.query(QuestionPerformance).filter_by(user_id=u_id, is_favorite=True).count()
+    st.metric("⭐ Favoritas", f"{fav_count} Qs", "Para repasar")
 
 # Quality Indicator Mikey
 st.markdown(f"""
@@ -91,26 +92,51 @@ st.markdown(f"""
 
 st.divider()
 
-# 2. Mapa de Calor / Progreso por Eje
-st.markdown('<div class="dian-card">', unsafe_allow_html=True)
-st.subheader("🎯 Nivel de Dominio por Eje (Metodología CNSC)")
-skills = db.query(Skill).filter_by(user_id=u_id).all()
-if skills:
-    df_skills = pd.DataFrame([{
-        'Eje': s.track,
-        'Macro-Dominio': getattr(s, 'macro_dominio', "Transversal") or "Transversal",
-        'Micro-Competencia': getattr(s, 'micro_competencia', s.topic) or s.topic,
-        'Dominio': s.mastery_score
-    } for s in skills])
+# 2. Balance Global y Progreso por Eje
+col_b1, col_b2 = st.columns([1, 2])
+
+with col_b1:
+    st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
+    st.subheader("📊 Balance Global")
+    total_hits = db.query(func.sum(QuestionPerformance.hits)).filter_by(user_id=u_id).scalar() or 0
+    total_misses = db.query(func.sum(QuestionPerformance.misses)).filter_by(user_id=u_id).scalar() or 0
     
-    fig = px.sunburst(df_skills, path=['Eje', 'Macro-Dominio', 'Micro-Competencia'], values='Dominio',
-                  color='Dominio', color_continuous_scale='RdYlGn',
-                  range_color=[0, 100])
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Aún no hay datos de progreso. ¡Realiza tu primer simulacro!")
-st.markdown('</div>', unsafe_allow_html=True)
+    if total_hits + total_misses > 0:
+        fig_pie = px.pie(
+            names=['Aciertos', 'Fallos'],
+            values=[total_hits, total_misses],
+            color=['Aciertos', 'Fallos'],
+            color_discrete_map={'Aciertos': '#10b981', 'Fallos': '#ef4444'},
+            hole=0.6
+        )
+        fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)')
+        fig_pie.add_annotation(text=f"{int((total_hits/(total_hits+total_misses))*100)}%", showarrow=False, font_size=20, font_weight="bold")
+        st.plotly_chart(fig_pie, use_container_width=True)
+        st.markdown(f"<p style='text-align:center; color:gray;'>{total_hits} Acertadas / {total_misses} Falladas</p>", unsafe_allow_html=True)
+    else:
+        st.info("No hay datos de intentos.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col_b2:
+    st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
+    st.subheader("🎯 Nivel de Dominio por Eje")
+    skills = db.query(Skill).filter_by(user_id=u_id).all()
+    if skills:
+        df_skills = pd.DataFrame([{
+            'Eje': s.track,
+            'Macro-Dominio': getattr(s, 'macro_dominio', "Transversal") or "Transversal",
+            'Micro-Competencia': getattr(s, 'micro_competencia', s.topic) or s.topic,
+            'Dominio': s.mastery_score
+        } for s in skills])
+        
+        fig = px.sunburst(df_skills, path=['Eje', 'Macro-Dominio', 'Micro-Competencia'], values='Dominio',
+                      color='Dominio', color_continuous_scale='RdYlGn',
+                      range_color=[0, 100])
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=0, b=0, l=0, r=0))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("¡Realiza tu primer simulacro!")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # 3. Rendimiento en el Tiempo
 st.markdown('<div class="dian-card">', unsafe_allow_html=True)

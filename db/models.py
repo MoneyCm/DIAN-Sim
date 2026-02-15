@@ -158,6 +158,7 @@ class QuestionPerformance(Base):
     misses: Mapped[int] = mapped_column(Integer, default=0)
     mastery_level: Mapped[float] = mapped_column(Float, default=0.0)
     is_mastered: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     last_attempt: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="performance")

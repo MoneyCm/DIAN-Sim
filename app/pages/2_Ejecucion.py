@@ -12,7 +12,7 @@ from core.adaptive import calculate_mastery_update, update_priority
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.generators.llm import LLMGenerator
-from ui_utils import load_css, render_header
+from ui_utils import load_css, render_header, render_favorite_button
 
 # --- v21: Safe Attribute Assignment Mikey ---
 def safe_setattr(obj, attr, value):
@@ -250,6 +250,7 @@ for k, v in options.items():
 existing_ans = st.session_state["answers"].get(current_q_id)
 index_ans = opts_keys.index(existing_ans) if existing_ans else None
 selected_val = st.radio("Selecciona la mejor respuesta:", opts_values, index=index_ans, key=f"q_{current_idx}")
+render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
 
 col1, col2, col3 = st.columns([1, 4, 1])

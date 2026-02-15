@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from db.session import SessionLocal
 from db.models import Question
-from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
+from ui_utils import load_css, render_header, metric_card, render_custom_sidebar, render_favorite_button
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
 from services.stats_service import StatsService
 
@@ -214,6 +214,7 @@ else:
                 st.caption(f"💡 **Explicación:** {q.rationale}")
                 
             st.caption(f"ID: {q.question_id} | Macro-Dominio: {q.macro_dominio} | Micro: {q.micro_competencia}")
+            render_favorite_button(qid, user_id)
             st.markdown("</div>", unsafe_allow_html=True)
 
     db.close()

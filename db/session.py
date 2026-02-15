@@ -60,7 +60,8 @@ try:
             ],
             "question_performance": [
                 ("mastery_level", "FLOAT"),
-                ("is_mastered", "BOOLEAN")
+                ("is_mastered", "BOOLEAN"),
+                ("is_favorite", "BOOLEAN DEFAULT FALSE")
             ],
             "attempts": [
                 ("user_id", "INTEGER")

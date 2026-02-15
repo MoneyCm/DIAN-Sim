@@ -15,7 +15,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 from db.session import get_db
 from db.models import CaseStudy, Question, UserOPEC
-from ui_utils import load_css as inject_custom_css
+from ui_utils import load_css as inject_custom_css, render_favorite_button
 from services.stats_service import StatsService
 from core.auth import AuthManager
 
@@ -241,6 +241,7 @@ if not st.session_state.exam_active:
                         st.markdown(f"Expected: {q.options_json.get(q.correct_key)}")
                     
                     st.info(f"💡 **Explicación:** {q.rationale}")
+                    render_favorite_button(q.question_id, user_id)
                     st.divider()
         
         # Cleanup score but keep review data until new exam starts
