@@ -37,6 +37,7 @@ try:
     Base.metadata.create_all(bind=engine)
     
     # 2. Lógica de Migración Automática v19
+    db_type = "postgres" if "postgres" in DATABASE_URL.lower() else "sqlite"
     print(f"🔍 [SESSION] Syncing {db_type.upper()} for v19... Mikey", file=sys.stderr)
     print(f"🔍 [SESSION] DB URL: {DATABASE_URL[:20]}...", file=sys.stderr)
     

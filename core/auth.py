@@ -118,24 +118,29 @@ class AuthManager:
         
         try:
             with SessionLocal() as db:
-                # Mikey v4.9: SELECT solo ID para evitar fallos si otras columnas no existen aún
-                from sqlalchemy import select
-                stmt = select(User).where(User.id == st.session_state["user_id"])
-                user = db.execute(stmt).scalars().first()
+                # Mikey v4.9.1: Solo pedimos campos que SABEMOS que existen siempre
+                # Si pedimos el objeto 'User' completo, SQLAlchemy intentará cargar 
+                # campos de suscripción que igual no existen aún en el motor DB.
+                from sqlalchemy import text
+                sql = text("SELECT subscription_tier, subscription_expiry FROM users WHERE id = :uid")
+                result = db.execute(sql, {"uid": st.session_state["user_id"]}).first()
                 
-                if not user:
+                if not result:
                     return False
                 
-                # Verificar de forma segura si las columnas existen en el objeto
-                tier = getattr(user, "subscription_tier", "free")
-                expiry = getattr(user, "subscription_expiry", None)
+                tier = result[0] # subscription_tier
+                expiry = result[1] # subscription_expiry
                 
                 if tier == "pro":
                     if expiry:
+                        if isinstance(expiry, str):
+                            expiry = datetime.fromisoformat(expiry)
                         return expiry > datetime.now()
                     return True # Pro vitalicio
         except Exception as e:
-            print(f"⚠️ [AUTH] is_pro fallback to Free: {e}")
+            # Fallback total: Si falla la consulta SQL (porque la tabla/columna no existe),
+            # devolvemos False (Free) sin romper la app.
+            print(f"⚠️ [AUTH] is_pro sql fallback: {e}")
             return False
                 
         return False
