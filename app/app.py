@@ -57,27 +57,46 @@ if not AuthManager.check_auth():
                         print(f"🔥 Mapper Configuration Error: {ce}")
 
         st.markdown("---")
-        # Integración con Google OAuth mikey v1.0
+        # Integración con Google OAuth mikey v2.0 (Compatible con Streamlit Cloud)
         try:
-            from streamlit_google_oauth import login_button
+            from streamlit_oauth import OAuth2Component
             
             client_id = st.secrets.get("google", {}).get("client_id") or os.getenv("GOOGLE_CLIENT_ID")
             client_secret = st.secrets.get("google", {}).get("client_secret") or os.getenv("GOOGLE_CLIENT_SECRET")
             
             if client_id and client_secret:
                 st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
-                login_info = login_button(client_id=client_id, client_secret=client_secret)
                 
-                if login_info:
-                    email = login_info.get("email")
-                    name = login_info.get("name")
+                AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+                TOKEN_URL = "https://oauth2.googleapis.com/token"
+                REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+                
+                oauth2 = OAuth2Component(client_id, client_secret, AUTHORIZE_URL, TOKEN_URL, TOKEN_URL, REVOKE_URL)
+                
+                result = oauth2.authorize_button(
+                    name="Continuar con Google",
+                    icon="https://www.google.com/favicon.ico",
+                    redirect_uri=st.secrets.get("google", {}).get("redirect_uri") or "http://localhost:8501",
+                    scope="openid email profile",
+                    key="google_auth",
+                    use_container_width=True
+                )
+                
+                if result and "token" in result:
+                    # El token contiene la info del id_token descifrado mikey
+                    import jwt
+                    id_token = result.get("token", {}).get("id_token")
+                    decoded = jwt.decode(id_token, options={"verify_signature": False})
+                    email = decoded.get("email")
+                    name = decoded.get("name")
+                    
                     if AuthManager.login_with_google(email, name):
                         st.success(f"¡Bienvenido, {name}!")
                         st.rerun()
             else:
                 st.info("💡 Pronto podrás usar Google Login (Faltan credenciales en secrets).")
         except ImportError:
-            st.caption("Módulo de Google OAuth no instalado.")
+            st.caption("Módulo OAuth no instalado. Revisando requirements...")
         except Exception as e:
             st.error(f"Error en Google Login: {e}")
 
