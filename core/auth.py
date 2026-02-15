@@ -105,7 +105,7 @@ class AuthManager:
     @staticmethod
     def is_pro():
         """Verifica si el usuario actual es PRO mikey v4.0"""
-        if "user_id" not in st.session_state:
+        if "user_id" not in st.session_state or not st.session_state["user_id"]:
             return False
         
         # Admin es siempre PRO
@@ -118,18 +118,24 @@ class AuthManager:
         
         try:
             with SessionLocal() as db:
-                user = db.query(User).filter_by(id=st.session_state["user_id"]).first()
+                # Mikey v4.9: SELECT solo ID para evitar fallos si otras columnas no existen aún
+                from sqlalchemy import select
+                stmt = select(User).where(User.id == st.session_state["user_id"])
+                user = db.execute(stmt).scalars().first()
+                
                 if not user:
                     return False
                 
-                # Verificar suscripción Pro activa (v4.0 columns) mikey
-                if hasattr(user, "subscription_tier") and user.subscription_tier == "pro":
-                    if user.subscription_expiry:
-                        return user.subscription_expiry > datetime.now()
+                # Verificar de forma segura si las columnas existen en el objeto
+                tier = getattr(user, "subscription_tier", "free")
+                expiry = getattr(user, "subscription_expiry", None)
+                
+                if tier == "pro":
+                    if expiry:
+                        return expiry > datetime.now()
                     return True # Pro vitalicio
         except Exception as e:
-            # Si hay un error (ej: columna no existe aún), devolvemos False (Free)
-            print(f"⚠️ [AUTH] is_pro error (likely migration in progress): {e}")
+            print(f"⚠️ [AUTH] is_pro fallback to Free: {e}")
             return False
                 
         return False
