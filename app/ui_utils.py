@@ -108,11 +108,27 @@ def render_custom_sidebar():
     
     try:
         if u_id:
-            stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
-            user_m = db_s.query(User).filter_by(id=u_id).first()
-            is_pro = AuthManager.is_pro()
+            from sqlalchemy import text
+            from core.auth import AuthManager
+            
+            # Mikey v5.0: RAW SQL Safety for Sidebar
+            with engine.connect() as conn:
+                # 1. Stats
+                sql_stats = text("SELECT current_streak, max_streak, total_points FROM user_stats WHERE user_id = :uid")
+                row_stats = conn.execute(sql_stats, {"uid": u_id}).first()
+                if row_stats:
+                    # Crear objeto dummy para mantener compatibilidad con el código de abajo
+                    class DummyStats: pass
+                    stats_s = DummyStats()
+                    stats_s.current_streak = row_stats[0]
+                    stats_s.max_streak = row_stats[1]
+                    stats_s.total_points = row_stats[2]
+                
+                # 2. Status Pro
+                is_pro = AuthManager.is_pro()
         
         if not stats_s and u_id:
+            # Si no existe, intentar crearlo con SessionLocal (ORM) - Si esto falla, el try global lo atrapa
             stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
             db_s.add(stats_s)
             db_s.commit()
