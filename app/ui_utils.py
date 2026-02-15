@@ -207,17 +207,21 @@ def render_favorite_button(question_id: str, user_id: int):
         db.close()
 
 def render_paywall_card(feature_name: str = "esta función"):
-    """Muestra un modal/banner invitando a suscribirse a PRO. mikey v4.0"""
+    """Muestra un modal/banner persuasivo invitando a suscribirse a PRO. mikey v4.2"""
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 30px; border-radius: 16px; border: 1px solid rgba(255, 215, 0, 0.3); text-align: center; margin: 20px 0;">
-        <h2 style="color: #FFD700; margin-bottom: 10px;">✨ Desbloquea el Acceso PRO</h2>
-        <p style="color: #cbd5e1; font-size: 1.1rem;">Lo sentimos, <b>{feature_name}</b> es exclusivo para miembros PRO.</p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left; margin: 25px auto; max-width: 400px;">
-            <div style="color: #94a3b8; font-size: 0.9rem;">✅ IA Ilimitada</div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Banco de Errores</div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Simulacros 100 Qs</div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Estadísticas Avanzadas</div>
+    <div style="background: linear-gradient(135deg, #0f172a, #1ecc3b0a); padding: 40px; border-radius: 20px; border: 1px solid rgba(255, 215, 0, 0.4); text-align: center; margin: 25px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <div style="font-size: 3.5rem; margin-bottom: 15px;">🏆</div>
+        <h2 style="color: #FFD700; margin-bottom: 10px; font-size: 2rem;">¡Asegura tu vacante en la DIAN!</h2>
+        <p style="color: #cbd5e1; font-size: 1.15rem; max-width: 600px; margin: 0 auto 20px auto;">
+            Has intentado acceder a <b>{feature_name}</b>. Esta herramienta está diseñada específicamente para darte la ventaja competitiva que necesitas para superar el examen.
+        </p>
+        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; display: inline-block; text-align: left; margin-bottom: 25px; border-left: 4px solid #FFD700;">
+            <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">✨ <b>IA Ilimitada:</b> Genera miles de preguntas de cualquier ley.</div>
+            <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">🎯 <b>Simulacros Reales:</b> Entrena con el tiempo y presión real (100 Qs).</div>
+            <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">🧠 <b>Banco de Errores:</b> La app aprende de tus fallos para que no los repitas.</div>
+            <div style="color: #e2e8f0; font-size: 1rem;">📊 <b>Rendimiento Pro:</b> Analiza tus debilidades por cada tema técnico.</div>
         </div>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;">Únete a los aspirantes que ya están estudiando al siguiente nivel.</p>
     </div>
     """, unsafe_allow_html=True)
     
