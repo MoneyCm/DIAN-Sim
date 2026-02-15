@@ -88,21 +88,21 @@ if not AuthManager.check_auth():
                 elif new_pass != confirm_pass:
                     st.error("Las contraseñas no coinciden")
                 else:
-                    db = SessionLocal()
-                    if db.query(User).filter_by(username=new_user).first():
-                        st.error("El usuario ya existe")
-                        db.close()
-                    else:
-                        try:
-                            hashed = AuthManager.hash_password(new_pass)
-                            user = User(username=new_user, password_hash=hashed)
-                            db.add(user)
-                            db.commit()
-                            st.success("Cuenta creada. ¡Ya puedes entrar!")
-                        except Exception as e:
-                            st.error(f"Error al registrar: {e}")
-                        finally:
-                            db.close()
+                    from sqlalchemy import text
+                    from db.session import engine
+                    with engine.connect() as check_conn:
+                        sql_up = text("SELECT id FROM users WHERE username = :u")
+                        if check_conn.execute(sql_up, {"u": new_user}).first():
+                            st.error("El usuario ya existe")
+                        else:
+                            try:
+                                hashed = AuthManager.hash_password(new_pass)
+                                with engine.begin() as ins_conn:
+                                    sql_ins = text("INSERT INTO users (username, password_hash) VALUES (:u, :p)")
+                                    ins_conn.execute(sql_ins, {"u": new_user, "p": hashed})
+                                st.success("Cuenta creada. ¡Ya puedes entrar!")
+                            except Exception as e:
+                                st.error(f"Error al registrar: {e}")
     st.stop() # Stop execution here if not logged in
 
 # --- v2.0 NEW: Sidebar Gamification Info ---

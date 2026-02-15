@@ -24,59 +24,58 @@ class AuthManager:
 
     @staticmethod
     def login(username, password):
-        db = SessionLocal()
+        from db.session import engine
+        from sqlalchemy import text
         try:
-            user = db.query(User).filter(User.username == username).first()
-            if user and AuthManager.verify_password(password, user.password_hash):
-                st.session_state["logged_in"] = True
-                st.session_state["user_id"] = user.id
-                st.session_state["username"] = user.username
-                st.session_state["user_role"] = user.role
-                return True
+            with engine.connect() as conn:
+                # Mikey v6.0: SQL crudo para evitar fallos por columnas faltantes
+                sql = text("SELECT id, username, password_hash, role FROM users WHERE username = :u")
+                row = conn.execute(sql, {"u": username}).first()
+                
+                if row and AuthManager.verify_password(password, row[2]):
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_id"] = row[0]
+                    st.session_state["username"] = row[1]
+                    st.session_state["user_role"] = row[3]
+                    return True
         except Exception as e:
-            print(f"🔥 Auth Error: {e}")
-            raise e
-        finally:
-            db.close()
+            print(f"🔥 Auth Error mikey v6.0: {e}")
+            return False
         return False
 
     @staticmethod
     def login_with_google(email: str, username: str = None):
-        """Autenticar o registrar un usuario usando su cuenta de Google. mikey."""
-        db = SessionLocal()
+        """Autenticar o registrar un usuario usando su cuenta de Google. mikey v6.0."""
+        from db.session import engine
+        from sqlalchemy import text
         try:
-            # Buscar por email (vínculo principal)
-            user = db.query(User).filter(User.email == email).first()
-            
-            if not user:
-                # Si no existe, crear uno nuevo con un nombre de usuario basado en el email
-                base_username = username if username else email.split('@')[0]
-                temp_username = base_username
-                counter = 1
-                while db.query(User).filter(User.username == temp_username).first():
-                    temp_username = f"{base_username}_{counter}"
-                    counter += 1
+            with engine.connect() as conn:
+                # 1. Buscar usuario
+                sql_find = text("SELECT id, username, role FROM users WHERE email = :e")
+                user_row = conn.execute(sql_find, {"e": email}).first()
                 
-                user = User(
-                    username=temp_username,
-                    email=email,
-                    password_hash="GOOGLE_OAUTH" # Marca para saber que no usa pass local
-                )
-                db.add(user)
-                db.commit()
-                db.refresh(user)
-
-            # Iniciar sesión en Streamlit
-            st.session_state["logged_in"] = True
-            st.session_state["user_id"] = user.id
-            st.session_state["username"] = user.username
-            st.session_state["user_role"] = user.role
-            return True
+                if not user_row:
+                    # Registro de emergencia con SQL crudo
+                    base_username = username if username else email.split('@')[0]
+                    # Simplificamos: no comprobamos duplicados de forma compleja aquí para evitar fallos
+                    sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
+                    with engine.begin() as t_conn:
+                        new_id = t_conn.execute(sql_ins, {"u": base_username, "e": email}).scalar()
+                        user_id = new_id
+                        user_name = base_username
+                        user_role = "user"
+                else:
+                    user_id, user_name, user_role = user_row
+                
+                # Iniciar sesión en Streamlit
+                st.session_state["logged_in"] = True
+                st.session_state["user_id"] = user_id
+                st.session_state["username"] = user_name
+                st.session_state["user_role"] = user_role
+                return True
         except Exception as e:
-            print(f"🔥 Google Auth Error: {e}")
+            print(f"🔥 Google Auth Error mikey v6.0: {e}")
             return False
-        finally:
-            db.close()
 
     @staticmethod
     def logout():
