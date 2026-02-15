@@ -101,6 +101,7 @@ def render_custom_sidebar():
     db_s = SessionLocal()
     u_id = st.session_state.get("user_id")
     stats_s = None
+    is_pro = False # Mikey v4.4 Fix: Inicialización segura
     rank = {"name": "Aspirante", "icon": "🎓", "color": "#475569", "threshold": 0}
     next_rank = None
     pct = 0
