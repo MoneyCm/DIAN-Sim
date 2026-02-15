@@ -14,7 +14,7 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 from db.session import get_db
-from db.models import CaseStudy, Question
+from db.models import CaseStudy, Question, UserOPEC
 from ui_utils import load_css as inject_custom_css
 from services.stats_service import StatsService
 from core.auth import AuthManager
@@ -89,6 +89,21 @@ def load_exam_cases():
     user_id = st.session_state.get("user_id")
     
     # v5.0 SMART MIX LOGIC
+    # 1. Detectar Nivel del Usuario (OPEC)
+    user_level_int = 3 # Default Profesional
+    try:
+        if user_id:
+            user_opec = db.query(UserOPEC).filter_by(user_id=user_id).first()
+            if user_opec and user_opec.level:
+                lvl = user_opec.level.upper()
+                if "ASISTENCIAL" in lvl: user_level_int = 1
+                elif "TECNICO" in lvl: user_level_int = 2
+                elif "PROFESIONAL" in lvl: user_level_int = 3
+                elif "ASESOR" in lvl: user_level_int = 4
+                elif "DIRECTIVO" in lvl: user_level_int = 5
+    except Exception as e:
+        print(f"Error checking user level: {e}")
+
     smart_topics = []
     if user_id:
         smart_topics = StatsService.get_smart_mix_topics(user_id, count=2) # 2 targeted, 1 random
@@ -96,19 +111,25 @@ def load_exam_cases():
     final_cases = []
     
     try:
+        # A. SMART TOPICS (Filtered by Difficulty if possible, but topics are usually level-agnostic)
         if smart_topics:
-            # Try to find cases matching these topics
             for t in smart_topics:
-                # Find a case that has at least one question with this topic
-                # This is a bit complex in SQL, for speed we might do a loose LIKE
-                c = db.query(CaseStudy).join(Question).filter(Question.topic == t).first()
+                # Find case with matching topic AND difficulty
+                c = db.query(CaseStudy).join(Question).filter(
+                    Question.topic == t,
+                    Question.difficulty == user_level_int 
+                ).first()
                 if c and c not in final_cases:
                     final_cases.append(c)
         
-        # Fill the rest with random cases
+        # B. RANDOM FILL (Filtered by Difficulty)
         needed = 3 - len(final_cases)
         if needed > 0:
-            random_cases = db.query(CaseStudy).options(joinedload(CaseStudy.questions)).order_by(func.random()).limit(needed * 2).all()
+            # Seleccionar casos que tengan preguntas del nivel correcto
+            random_cases = db.query(CaseStudy).join(Question).filter(
+                Question.difficulty == user_level_int
+            ).group_by(CaseStudy.id).order_by(func.random()).limit(needed * 2).all()
+            
             for rc in random_cases:
                 if len(final_cases) >= 3: break
                 if rc not in final_cases and rc.questions:
