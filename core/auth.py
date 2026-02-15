@@ -84,6 +84,7 @@ class AuthManager:
         st.session_state["user_id"] = None
         st.session_state["username"] = None
         st.session_state["user_role"] = None
+        # En versiones recientes de Streamlit, no es necesario llamar a rerun dentro de un botón
         st.rerun()
 
     @staticmethod

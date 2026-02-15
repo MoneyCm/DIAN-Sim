@@ -88,11 +88,20 @@ try:
                             print(f"🔨 [SESSION] Adding {col_name} to {table} (SQLite)...", file=sys.stderr)
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
                     else:
-                        # Postgres v9.6+ supports IF NOT EXISTS for ADD COLUMN
+                        # Postgres: Use DO block for idempotent ADD COLUMN
                         print(f"🔨 [SESSION] Syncing {col_name} in {table} (Postgres)...", file=sys.stderr)
-                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                        sql = f"""
+                        DO $$ 
+                        BEGIN 
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                           WHERE table_name='{table}' AND column_name='{col_name}') THEN 
+                                ALTER TABLE {table} ADD COLUMN {col_name} {col_type}; 
+                            END IF; 
+                        END $$;
+                        """
+                        conn.execute(text(sql))
                 except Exception as col_err:
-                    print(f"⚠️ [SESSION] Info/Fail syncing {col_name} in {table}: {col_err}", file=sys.stderr)
+                    print(f"⚠️ [SESSION] Fail syncing {col_name} in {table}: {col_err}", file=sys.stderr)
         
     print("✅ [SESSION] Sincronización v19 Completada con Éxito. Mikey", file=sys.stderr)
 
