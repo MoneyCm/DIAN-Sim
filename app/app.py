@@ -194,17 +194,22 @@ with col_left:
 
 with col_right:
     st.markdown("### 📋 Meta Activa")
-    # Fetch active OPEC info
-    db = SessionLocal()
-    u_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
-    db.close()
+    # Fetch active OPEC info - Mikey v5.0 Safety
+    u_opec = None
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            sql = text("SELECT opec_number, job_title, level FROM user_opec WHERE user_id = :uid AND is_active = True LIMIT 1")
+            u_opec = conn.execute(sql, {"uid": u_id}).first()
+    except Exception as opec_err:
+        print(f"⚠️ [APP] OPEC Fetch Error: {opec_err}")
     
     if u_opec:
         st.markdown(f"""
         <div class="dian-card" style="padding: 1.5rem; border-left: 5px solid var(--dian-red);">
-            <div style="font-weight: 800; color: var(--dian-red); font-size: 0.8rem; text-transform: uppercase;">{u_opec.opec_number}</div>
-            <div style="font-size: 1.2rem; font-weight: 700; margin: 5px 0;">{u_opec.job_title}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">{u_opec.level}</div>
+            <div style="font-weight: 800; color: var(--dian-red); font-size: 0.8rem; text-transform: uppercase;">{u_opec[0]}</div>
+            <div style="font-size: 1.2rem; font-weight: 700; margin: 5px 0;">{u_opec[1]}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">{u_opec[2]}</div>
             <hr style="opacity: 0.1; margin: 15px 0;">
             <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Maestría del Cargo</div>
             <div style="background: rgba(0,0,0,0.05); height: 10px; border-radius: 5px; overflow: hidden;">

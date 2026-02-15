@@ -116,30 +116,27 @@ class AuthManager:
         from datetime import datetime
         
         try:
-            with SessionLocal() as db:
-                # Mikey v4.9.1: Solo pedimos campos que SABEMOS que existen siempre
-                # Si pedimos el objeto 'User' completo, SQLAlchemy intentará cargar 
-                # campos de suscripción que igual no existen aún en el motor DB.
-                from sqlalchemy import text
+            from db.session import engine
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                # Mikey v5.0: RAW SQL total para evitar problemas de caché ORM
                 sql = text("SELECT subscription_tier, subscription_expiry FROM users WHERE id = :uid")
-                result = db.execute(sql, {"uid": st.session_state["user_id"]}).first()
-                
-                if not result:
-                    return False
-                
-                tier = result[0] # subscription_tier
-                expiry = result[1] # subscription_expiry
-                
-                if tier == "pro":
-                    if expiry:
-                        if isinstance(expiry, str):
-                            expiry = datetime.fromisoformat(expiry)
-                        return expiry > datetime.now()
-                    return True # Pro vitalicio
+                row = conn.execute(sql, {"uid": st.session_state["user_id"]}).first()
+                if row:
+                    tier, expiry = row[0], row[1]
+                    if tier == "pro":
+                        if expiry:
+                            if isinstance(expiry, str):
+                                from datetime import datetime
+                                expiry = datetime.fromisoformat(expiry)
+                            from datetime import datetime
+                            return expiry > datetime.now()
+                        return True
         except Exception as e:
-            # Fallback total: Si falla la consulta SQL (porque la tabla/columna no existe),
-            # devolvemos False (Free) sin romper la app.
-            print(f"⚠️ [AUTH] is_pro sql fallback: {e}")
+            # Fallback total: Ante la duda, es usuario FREE (pero no crashea la app)
+            print(f"⚠️ [AUTH] is_pro critical fallback: {e}")
             return False
+                
+        return False
                 
         return False
