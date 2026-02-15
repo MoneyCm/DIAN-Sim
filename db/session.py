@@ -33,81 +33,72 @@ engine = create_engine(
 from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question, CaseStudy
 
 try:
-    # 1. Asegurar tablas
+    # 1. Asegurar tablas básicas (silencioso)
     Base.metadata.create_all(bind=engine)
     
-    # 2. Lógica de Migración Automática v19
+    # 2. Lógica de Migración Automática v5.0 Mikey
     db_type = "postgres" if "postgres" in DATABASE_URL.lower() else "sqlite"
-    print(f"🔍 [SESSION] Syncing {db_type.upper()} for v19... Mikey", file=sys.stderr)
-    print(f"🔍 [SESSION] DB URL: {DATABASE_URL[:20]}...", file=sys.stderr)
+    print(f"🔍 [SESSION] Syncing {db_type.upper()} for v5.0... Mikey", file=sys.stderr)
+    
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    
+    new_cols_map = {
+        "questions": [
+            ("macro_dominio", "VARCHAR"), 
+            ("micro_competencia", "VARCHAR"),
+            ("is_verified", "BOOLEAN DEFAULT FALSE"),
+            ("quality_report", "JSON"),
+            ("global_hits", "INTEGER DEFAULT 0"),
+            ("global_misses", "INTEGER DEFAULT 0"),
+            ("case_id", "VARCHAR"),
+            ("question_type", "VARCHAR DEFAULT 'SITUATIONAL'")
+        ],
+        "skills": [
+            ("macro_dominio", "VARCHAR"), 
+            ("micro_competencia", "VARCHAR"), 
+            ("priority_weight", "FLOAT"),
+            ("last_seen", "TIMESTAMP")
+        ],
+        "question_performance": [
+            ("mastery_level", "FLOAT"),
+            ("is_mastered", "BOOLEAN"),
+            ("is_favorite", "BOOLEAN DEFAULT FALSE")
+        ],
+        "attempts": [
+            ("user_id", "INTEGER")
+        ],
+        "users": [
+            ("subscription_tier", "VARCHAR DEFAULT 'free'"),
+            ("subscription_expiry", "TIMESTAMP"),
+            ("stripe_customer_id", "VARCHAR")
+        ],
+        "user_stats": [
+            ("last_ia_date", "TIMESTAMP"),
+            ("ia_count_today", "INTEGER DEFAULT 0")
+        ]
+    }
     
     with engine.begin() as conn:
-        new_cols_map = {
-            "questions": [
-                ("macro_dominio", "VARCHAR"), 
-                ("micro_competencia", "VARCHAR"),
-                ("is_verified", "BOOLEAN DEFAULT FALSE"),
-                ("quality_report", "JSON"),
-                ("global_hits", "INTEGER DEFAULT 0"),
-                ("global_misses", "INTEGER DEFAULT 0"),
-                ("case_id", "VARCHAR"),
-                ("question_type", "VARCHAR DEFAULT 'SITUATIONAL'")
-            ],
-            "skills": [
-                ("macro_dominio", "VARCHAR"), 
-                ("micro_competencia", "VARCHAR"), 
-                ("priority_weight", "FLOAT"),
-                ("last_seen", "TIMESTAMP")
-            ],
-            "question_performance": [
-                ("mastery_level", "FLOAT"),
-                ("is_mastered", "BOOLEAN"),
-                ("is_favorite", "BOOLEAN DEFAULT FALSE")
-            ],
-            "attempts": [
-                ("user_id", "INTEGER")
-            ],
-            # --- v40: Monetization Mikey ---
-            "users": [
-                ("subscription_tier", "VARCHAR DEFAULT 'free'"),
-                ("subscription_expiry", "TIMESTAMP"),
-                ("stripe_customer_id", "VARCHAR")
-            ],
-            "user_stats": [
-                ("last_ia_date", "TIMESTAMP"),
-                ("ia_count_today", "INTEGER DEFAULT 0")
-            ]
-        }
-        
         for table, cols in new_cols_map.items():
-            for col_info in cols:
-                col_name, col_type = col_info
-                try:
-                    if db_type == "sqlite":
-                        existing_cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
-                        if col_name not in existing_cols:
-                            print(f"🔨 [SESSION] Adding {col_name} to {table} (SQLite)...", file=sys.stderr)
+            # Obtener columnas actuales usando inspector (seguro)
+            try:
+                existing_cols = [c["name"] for c in inspector.get_columns(table)]
+                for col_name, col_type in cols:
+                    if col_name not in existing_cols:
+                        print(f"🔨 [SESSION] Adding {col_name} to {table}...", file=sys.stderr)
+                        if db_type == "sqlite":
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
-                    else:
-                        # Postgres: Use DO block for idempotent ADD COLUMN
-                        print(f"🔨 [SESSION] Syncing {col_name} in {table} (Postgres)...", file=sys.stderr)
-                        sql = f"""
-                        DO $$ 
-                        BEGIN 
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                                           WHERE table_name='{table}' AND column_name='{col_name}') THEN 
-                                ALTER TABLE {table} ADD COLUMN {col_name} {col_type}; 
-                            END IF; 
-                        END $$;
-                        """
-                        conn.execute(text(sql))
-                except Exception as col_err:
-                    print(f"⚠️ [SESSION] Fail syncing {col_name} in {table}: {col_err}", file=sys.stderr)
-        
-    print("✅ [SESSION] Sincronización v19 Completada con Éxito. Mikey", file=sys.stderr)
+                        else:
+                            # Postgres robusto con IF NOT EXISTS
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+            except Exception as table_err:
+                print(f"⚠️ [SESSION] Table {table} skipped or not ready: {table_err}", file=sys.stderr)
+                
+    print("✅ [SESSION] Sincronización v5.0 Completada. Mikey", file=sys.stderr)
 
 except Exception as e:
-    print(f"❌ [SESSION] Error de DB en v19: {e}", file=sys.stderr)
+    print(f"❌ [SESSION] Critical Import Error (Handled): {e}", file=sys.stderr)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
