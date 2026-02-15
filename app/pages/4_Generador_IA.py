@@ -25,6 +25,30 @@ if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión.")
     st.stop()
 
+# --- v40: IA Limits Setup Mikey ---
+from datetime import date
+from core.auth import AuthManager
+from services.stripe_service import StripeService
+from db.models import UserStats
+
+is_pro = AuthManager.is_pro()
+can_generate = True
+user_stats = None
+
+if not is_pro:
+    with SessionLocal() as db:
+        user_stats = db.query(UserStats).filter_by(user_id=st.session_state["user_id"]).first()
+        if user_stats:
+            today = date.today()
+            # Reset counter if new day
+            if not user_stats.last_ia_date or user_stats.last_ia_date.date() < today:
+                user_stats.ia_count_today = 0
+                user_stats.last_ia_date = today
+                db.commit()
+            
+            if user_stats.ia_count_today >= 3:
+                can_generate = False
+
 load_css()
 render_header(title="Generador de Preguntas con IA v5.2 (Mistral Fix)", subtitle="Crea material de estudio a partir de documentos")
 
@@ -170,12 +194,17 @@ with col1:
                              pass 
                     except: pass
 
-        # ... (Context Coverage Logic) ...
-        source_text = st.session_state.get("ai_source_text", "")
-        char_count = len(source_text)
         # ... logic ...
         
-        generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
+        if not can_generate:
+            from ui_utils import render_paywall_card
+            render_paywall_card("Generación de IA Ilimitada")
+            st.warning(f"⚠️ Has agotado tus 3 generaciones gratuitas de hoy ({user_stats.ia_count_today}/3).")
+            generate_btn = False
+        else:
+            if not is_pro:
+                st.caption(f"🎁 Te quedan **{3 - user_stats.ia_count_today}** generaciones gratuitas hoy.")
+            generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 
     else:
         # --- CASE STUDY MODE ---
@@ -260,6 +289,14 @@ if generate_btn:
                 if not results:
                     st.error("No se pudieron generar preguntas. Revisa tu API Key o el formato del texto.")
                 else:
+                    # Incrementar contador mikey v4.0
+                    if not is_pro and user_stats:
+                        with SessionLocal() as db_upd:
+                            # Re-fetch to avoid detached instance issues in some envs
+                            st_upd = db_upd.query(UserStats).filter_by(id=user_stats.id).first()
+                            st_upd.ia_count_today += 1
+                            db_upd.commit()
+                            
                     st.success(f"¡{len(results)} preguntas generadas!")
                     print(f"DEBUG: Generated {len(results)} questions for review.")
             except Exception as e:

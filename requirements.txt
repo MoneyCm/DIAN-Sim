@@ -16,4 +16,5 @@ mistralai>=1.0.0
 httpx>=0.25.0
 cryptography
 Authlib
-# Force rebuild v4
+stripe
+# Force rebuild v5

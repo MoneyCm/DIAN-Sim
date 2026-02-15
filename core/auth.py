@@ -99,5 +99,32 @@ class AuthManager:
             # Sincronizar login nativo con sesión local mikey
             AuthManager.login_with_google(st.user.email, st.user.name)
             return True
-            
         return manual_login
+
+    @staticmethod
+    def is_pro():
+        """Verifica si el usuario actual es PRO mikey v4.0"""
+        if "user_id" not in st.session_state:
+            return False
+        
+        # Admin es siempre PRO
+        if st.session_state.get("user_role") == "admin":
+            return True
+            
+        from db.session import SessionLocal
+        from db.models import User
+        from datetime import datetime
+        
+        with SessionLocal() as db:
+            user = db.query(User).filter_by(id=st.session_state["user_id"]).first()
+            if not user:
+                return False
+            
+            # Verificar suscripción Pro activa
+            if user.subscription_tier == "pro":
+                # Si tiene fecha de expiración, verificarla
+                if user.subscription_expiry:
+                    return user.subscription_expiry > datetime.now()
+                return True # Pro vitalicio o sin fecha fija
+                
+        return False

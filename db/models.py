@@ -31,6 +31,12 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(String, unique=True)
     password_hash: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String, default="user")
+    
+    # --- Suscripciones mikey v4.0 ---
+    subscription_tier: Mapped[str] = mapped_column(String, default="free")  # free | pro
+    subscription_expiry: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String)
+    
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     opecs: Mapped[List["UserOPEC"]] = relationship("UserOPEC", back_populates="user", cascade="all, delete-orphan")
@@ -118,6 +124,11 @@ class UserStats(Base):
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     max_streak: Mapped[int] = mapped_column(Integer, default=0)
     total_points: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # --- Límites IA mikey v4.0 ---
+    last_ia_date: Mapped[Optional[datetime.date]] = mapped_column(DateTime) # Store as date part
+    ia_count_today: Mapped[int] = mapped_column(Integer, default=0)
+    
     last_activity: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
     user: Mapped["User"] = relationship("User", back_populates="stats")

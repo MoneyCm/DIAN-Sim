@@ -123,7 +123,10 @@ def load_exam_cases():
                     final_cases.append(c)
         
         # B. RANDOM FILL (Filtered by Difficulty)
-        needed = 3 - len(final_cases)
+        is_pro = AuthManager.is_pro()
+        target_case_count = 3 if is_pro else 2 # 2 casos aprox 6-10 Qs para Free mikey
+        
+        needed = target_case_count - len(final_cases)
         if needed > 0:
             # Seleccionar casos que tengan preguntas del nivel correcto
             random_cases = db.query(CaseStudy).join(Question).filter(
@@ -131,7 +134,7 @@ def load_exam_cases():
             ).group_by(CaseStudy.id).order_by(func.random()).limit(needed * 2).all()
             
             for rc in random_cases:
-                if len(final_cases) >= 3: break
+                if len(final_cases) >= target_case_count: break
                 if rc not in final_cases and rc.questions:
                     final_cases.append(rc)
                     
@@ -212,6 +215,12 @@ if not st.session_state.exam_active:
     
     **¿Estás listo para probar tu nivel real?**
     """)
+    
+    if not AuthManager.is_pro():
+        st.info("💡 Como usuario **Free**, tu simulacro será una versión breve (máximo 2 casos).")
+        if st.button("🚀 Desbloquear Simulacro Completo (100 Qs) con PRO", use_container_width=True):
+            st.session_state["show_paywall"] = True
+            st.rerun()
     
     if "exam_score" in st.session_state:
         c, t = st.session_state.exam_score

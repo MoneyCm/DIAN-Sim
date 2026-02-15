@@ -59,9 +59,17 @@ if not AuthManager.check_auth():
         st.markdown("---")
         # Integración NATIVA Google OAuth mikey v3.0 (Streamlit 1.42+)
         try:
-            st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
-            if st.button("🚀 Continuar con Google", use_container_width=True, type="secondary"):
-                st.login("google")
+            # Verificar si existen los secretos antes de intentar st.login()
+            has_google = "auth" in st.secrets and "google" in st.secrets.auth
+            
+            if has_google:
+                st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
+                if st.button("🚀 Continuar con Google", use_container_width=True, type="secondary"):
+                    st.login("google")
+            else:
+                with st.expander("ℹ️ ¿Cómo activar el login con Google?"):
+                    st.info("Para activar esta función, debes configurar los 'Secrets' en Streamlit Cloud.")
+                    st.code("[auth]\nredirect_uri = \"...\"\ncookie_secret = \"...\"\n\n[auth.google]\nclient_id = \"...\"\nclient_secret = \"...\"", language="toml")
         except Exception as e:
             st.error(f"Error en Google Login Nativo: {e}")
 
@@ -113,6 +121,15 @@ except ImportError:
 # Render Custom Header
 render_header()
 
+# --- Paywall Global Mikey v4.0 ---
+if st.session_state.get("show_paywall"):
+    from ui_utils import render_paywall_card
+    if st.button("⬅️ Cerrar e Ir Atrás", use_container_width=False):
+        st.session_state["show_paywall"] = False
+        st.rerun()
+    render_paywall_card("Acceso Pro Ilimitado")
+    st.stop()
+
 # v6.3: Regulatory Flash Updates
 render_news_ticker()
 
@@ -127,6 +144,7 @@ st.markdown(f"""
         <div style="text-align: right;">
             <span style="font-size: 2.5rem;">{rank["icon"] if rank else '🎓'}</span>
             <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if rank else 'Estudiante'}</div>
+            {'<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if AuthManager.is_pro() else ""}
         </div>
     </div>
 </div>

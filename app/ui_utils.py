@@ -108,6 +108,8 @@ def render_custom_sidebar():
     try:
         if u_id:
             stats_s = db_s.query(UserStats).filter_by(user_id=u_id).first()
+            user_m = db_s.query(User).filter_by(id=u_id).first()
+            is_pro = AuthManager.is_pro()
         
         if not stats_s and u_id:
             stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
@@ -123,12 +125,16 @@ def render_custom_sidebar():
                 pct = min(100, int((current_progress / total_needed) * 100))
             else:
                 pct = 100
+            
+            # Badge de Pro mikey v4.0
+            pro_badge = '<div style="background: linear-gradient(90deg, #FFD700, #FFA500); color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px; display: inline-block;">✨ USUARIO PRO</div>' if is_pro else ""
                 
             st.sidebar.markdown(f"""
             <div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 5px; border-top: 3px solid {rank["color"]};'>
                 <div style='font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;'>Rango Actual</div>
                 <div style='font-size: 2.5rem; margin: 5px 0;'>{rank["icon"]}</div>
                 <div style='font-size: 1.1rem; font-weight: 800; color: {rank["color"]}; margin-bottom: 5px;'>{rank["name"]}</div>
+                {pro_badge}
                 <div style='background: rgba(0,0,0,0.05); height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden;'>
                     <div style='background: {rank["color"]}; width: {pct}%; height: 100%; transition: width 0.5s ease;'></div>
                 </div>
@@ -137,6 +143,11 @@ def render_custom_sidebar():
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+        if not is_pro:
+            if st.sidebar.button("🚀 ¡Pasar a PRO!", use_container_width=True, type="primary"):
+                st.session_state["show_paywall"] = True
+                st.rerun()
 
         st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
         st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
@@ -194,3 +205,38 @@ def render_favorite_button(question_id: str, user_id: int):
         st.error(f"Error al guardar favorito: {e}")
     finally:
         db.close()
+
+def render_paywall_card(feature_name: str = "esta función"):
+    """Muestra un modal/banner invitando a suscribirse a PRO. mikey v4.0"""
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 30px; border-radius: 16px; border: 1px solid rgba(255, 215, 0, 0.3); text-align: center; margin: 20px 0;">
+        <h2 style="color: #FFD700; margin-bottom: 10px;">✨ Desbloquea el Acceso PRO</h2>
+        <p style="color: #cbd5e1; font-size: 1.1rem;">Lo sentimos, <b>{feature_name}</b> es exclusivo para miembros PRO.</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left; margin: 25px auto; max-width: 400px;">
+            <div style="color: #94a3b8; font-size: 0.9rem;">✅ IA Ilimitada</div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Banco de Errores</div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Simulacros 100 Qs</div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">✅ Estadísticas Avanzadas</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    from services.stripe_service import StripeService
+    user_email = st.session_state.get("user_email")
+    user_id = st.session_state.get("user_id")
+    
+    if st.button("🌟 SUSCRIBIRME AHORA (Obtener Acceso Total)", use_container_width=True, type="primary"):
+        checkout_url = StripeService.create_checkout_session(user_email, user_id)
+        if checkout_url:
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_url}">', unsafe_allow_html=True)
+            st.info("Redirigiendo a Stripe seguro...")
+        else:
+            st.error("Error al conectar con la pasarela de pago. Intenta más tarde.")
+
+def check_feature_access(feature: str, is_pro_required: bool = True):
+    """Helper para verificar acceso y mostrar el paywall si es necesario. mikey"""
+    from core.auth import AuthManager
+    if is_pro_required and not AuthManager.is_pro():
+        render_paywall_card(feature)
+        return False
+    return True
