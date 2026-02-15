@@ -65,6 +65,16 @@ try:
             ],
             "attempts": [
                 ("user_id", "INTEGER")
+            ],
+            # --- v40: Monetization Mikey ---
+            "users": [
+                ("subscription_tier", "VARCHAR DEFAULT 'free'"),
+                ("subscription_expiry", "TIMESTAMP"),
+                ("stripe_customer_id", "VARCHAR")
+            ],
+            "user_stats": [
+                ("last_ia_date", "TIMESTAMP"),
+                ("ia_count_today", "INTEGER DEFAULT 0")
             ]
         }
         
