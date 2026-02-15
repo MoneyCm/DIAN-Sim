@@ -41,6 +41,44 @@ class AuthManager:
         return False
 
     @staticmethod
+    def login_with_google(email: str, username: str = None):
+        """Autenticar o registrar un usuario usando su cuenta de Google. mikey."""
+        db = SessionLocal()
+        try:
+            # Buscar por email (vínculo principal)
+            user = db.query(User).filter(User.email == email).first()
+            
+            if not user:
+                # Si no existe, crear uno nuevo con un nombre de usuario basado en el email
+                base_username = username if username else email.split('@')[0]
+                temp_username = base_username
+                counter = 1
+                while db.query(User).filter(User.username == temp_username).first():
+                    temp_username = f"{base_username}_{counter}"
+                    counter += 1
+                
+                user = User(
+                    username=temp_username,
+                    email=email,
+                    password_hash="GOOGLE_OAUTH" # Marca para saber que no usa pass local
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+
+            # Iniciar sesión en Streamlit
+            st.session_state["logged_in"] = True
+            st.session_state["user_id"] = user.id
+            st.session_state["username"] = user.username
+            st.session_state["user_role"] = user.role
+            return True
+        except Exception as e:
+            print(f"🔥 Google Auth Error: {e}")
+            return False
+        finally:
+            db.close()
+
+    @staticmethod
     def logout():
         st.session_state["logged_in"] = False
         st.session_state["user_id"] = None

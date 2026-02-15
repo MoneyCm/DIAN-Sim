@@ -56,6 +56,31 @@ if not AuthManager.check_auth():
                     except Exception as ce:
                         print(f"🔥 Mapper Configuration Error: {ce}")
 
+        st.markdown("---")
+        # Integración con Google OAuth mikey v1.0
+        try:
+            from streamlit_google_oauth import login_button
+            
+            client_id = st.secrets.get("google", {}).get("client_id") or os.getenv("GOOGLE_CLIENT_ID")
+            client_secret = st.secrets.get("google", {}).get("client_secret") or os.getenv("GOOGLE_CLIENT_SECRET")
+            
+            if client_id and client_secret:
+                st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
+                login_info = login_button(client_id=client_id, client_secret=client_secret)
+                
+                if login_info:
+                    email = login_info.get("email")
+                    name = login_info.get("name")
+                    if AuthManager.login_with_google(email, name):
+                        st.success(f"¡Bienvenido, {name}!")
+                        st.rerun()
+            else:
+                st.info("💡 Pronto podrás usar Google Login (Faltan credenciales en secrets).")
+        except ImportError:
+            st.caption("Módulo de Google OAuth no instalado.")
+        except Exception as e:
+            st.error(f"Error en Google Login: {e}")
+
     with col_l2:
         st.subheader("📝 Registrarse")
         st.info("¿Aún no tienes cuenta? Crea una para guardar tus 5 cargos (OPECs).")
