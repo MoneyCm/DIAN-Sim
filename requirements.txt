@@ -15,6 +15,5 @@ openpyxl
 mistralai>=1.0.0
 httpx>=0.25.0
 cryptography
-streamlit-oauth
-PyJWT
-# Force rebuild v3
+Authlib
+# Force rebuild v4

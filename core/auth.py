@@ -88,6 +88,16 @@ class AuthManager:
 
     @staticmethod
     def check_auth():
-        if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
-            return False
-        return True
+        # 1. Login Manual (session_state)
+        manual_login = "logged_in" in st.session_state and st.session_state["logged_in"]
+        
+        # 2. Login Nativo (Streamlit OIDC) mikey v3.0
+        native_user = getattr(st, "user", None)
+        native_login = native_user.is_logged_in if native_user else False
+        
+        if native_login and not manual_login:
+            # Sincronizar login nativo con sesión local mikey
+            AuthManager.login_with_google(st.user.email, st.user.name)
+            return True
+            
+        return manual_login
