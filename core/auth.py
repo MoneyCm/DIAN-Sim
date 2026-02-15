@@ -115,16 +115,20 @@ class AuthManager:
         from db.models import User
         from datetime import datetime
         
-        with SessionLocal() as db:
-            user = db.query(User).filter_by(id=st.session_state["user_id"]).first()
-            if not user:
-                return False
-            
-            # Verificar suscripción Pro activa
-            if user.subscription_tier == "pro":
-                # Si tiene fecha de expiración, verificarla
-                if user.subscription_expiry:
-                    return user.subscription_expiry > datetime.now()
-                return True # Pro vitalicio o sin fecha fija
+        try:
+            with SessionLocal() as db:
+                user = db.query(User).filter_by(id=st.session_state["user_id"]).first()
+                if not user:
+                    return False
+                
+                # Verificar suscripción Pro activa (v4.0 columns) mikey
+                if hasattr(user, "subscription_tier") and user.subscription_tier == "pro":
+                    if user.subscription_expiry:
+                        return user.subscription_expiry > datetime.now()
+                    return True # Pro vitalicio
+        except Exception as e:
+            # Si hay un error (ej: columna no existe aún), devolvemos False (Free)
+            print(f"⚠️ [AUTH] is_pro error (likely migration in progress): {e}")
+            return False
                 
         return False
