@@ -88,27 +88,25 @@ class AuthManager:
                             t_conn.execute(sql_up_name, {"u": user_name, "uid": user_id})
                         print(f"🛠️ [AUTH] Nombre 'None' de {email} corregido a {user_name}. Mikey.", file=sys.stderr)
                     
-                    # mikey v7.1: Si ya existe cuenta Gmail pero está VACÍA (sin OPEC), ver si 'cesar' tiene la OPEC
-                    sql_check_opec = text("SELECT id FROM user_opec WHERE user_id = :uid LIMIT 1")
-                    if not conn.execute(sql_check_opec, {"uid": user_id}).first():
-                        # Cuenta Gmail actual no tiene OPEC. ¿La tiene 'cesar'?
-                        sql_legacy = text("SELECT id FROM users WHERE username = 'cesar' AND (email IS NULL OR email = '')")
-                        legacy_id = conn.execute(sql_legacy).scalar()
-                        if legacy_id:
-                            # mikey v7.11: Evitar conflictos de duplicados en la fusión
+                            # mikey v7.14: Fusión Atómica Definitiva (OPEC + Stats)
                             sql_del_empty_opec = text("DELETE FROM user_opec WHERE user_id = :new_uid")
                             sql_del_empty_stats = text("DELETE FROM user_stats WHERE user_id = :new_uid")
-                            sql_transfer = text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid")
+                            sql_transfer_opec = text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid")
                             sql_transfer_stats = text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid")
+                            sql_update_name = text("UPDATE users SET username = 'cesar' WHERE id = :new_uid")
                             
                             with engine.begin() as t_conn:
-                                # Limpiar la cuenta Gmail actual por si tiene stats vacíos
+                                # 1. Limpiar rastro de la cuenta Gmail nueva (que está vacía)
                                 t_conn.execute(sql_del_empty_opec, {"new_uid": user_id})
                                 t_conn.execute(sql_del_empty_stats, {"new_uid": user_id})
-                                # Transferir lo de 'cesar'
-                                t_conn.execute(sql_transfer, {"new_uid": user_id, "old_uid": legacy_id})
+                                # 2. Transferir datos de la cuenta legacy
+                                t_conn.execute(sql_transfer_opec, {"new_uid": user_id, "old_uid": legacy_id})
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
-                            print(f"🚛 [AUTH] Fusión atómica: Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
+                                # 3. Asegurar nombre 'cesar' en la cuenta vinculada
+                                t_conn.execute(sql_update_name, {"new_uid": user_id})
+                                user_name = "cesar"
+                            
+                            print(f"🚛 [AUTH] Fusión v7.14: 'cesar' -> {email}. Nombre fijado. Mikey.", file=sys.stderr)
                 
                 # mikey v7.13: Limpiar ABSOLUTAMENTE TODO rastro de logout al entrar con éxito
                 if "logout" in st.query_params:
@@ -132,22 +130,24 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión de hierro mikey v7.13"""
-        # 1. Fijar parámetro persistente en la URL (sobrevive a F5 y refrescos)
+        """Cierre de sesión definitivo vía navegador mikey v7.14"""
+        # 1. Parámetro persistente en URL
         st.query_params["logout"] = "1"
         
-        # 2. Marcar flag interno antes de borrar nada
+        # 2. Limpieza de sesión
+        st.session_state.clear()
         st.session_state["logout_manual_flag"] = True
         
-        # 3. Intentar logout nativo de Streamlit (esto suele forzar un rerun)
+        # 3. Forzar salida nativa y REFRESO DE NAVEGADOR
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
-
-        # 4. Asegurar rerun
-        st.rerun()
+        
+        # Mikey v7.14: La bala de plata. Refresco por HTML para romper el bucle OIDC.
+        st.markdown('<meta http-equiv="refresh" content="0; url=/?logout=1">', unsafe_allow_html=True)
+        st.stop()
 
     @staticmethod
     def check_auth():
