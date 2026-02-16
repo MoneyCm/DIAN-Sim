@@ -26,6 +26,13 @@ if st.session_state.get("current_model") == "gemini-1.5-flash":
 if st.session_state.get("current_model") == "models/gemini-1.5-flash":
     st.session_state["current_model"] = "models/gemini-flash-latest"
 
+# Debug Google Auth
+if st.query_params.get("debug") == "1":
+    try:
+        st.write("Google User Info:", st.user)
+    except:
+        st.write("st.user no disponible")
+
 if not AuthManager.check_auth():
     # mikey v7.17: Si estamos en la pantalla de login, permitir re-entrada limpia
     if st.query_params.get("logout") == "1":
