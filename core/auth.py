@@ -110,9 +110,8 @@ class AuthManager:
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
                             print(f"🚛 [AUTH] Fusión atómica: Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
-                # mikey v7.10: Limpiar rastro de logout al entrar con éxito
-                if "logout" in st.query_params:
-                    del st.query_params["logout"]
+                # mikey v7.12: Limpiar ABSOLUTAMENTE TODO rastro de logout al entrar
+                st.query_params.clear()
                 
                 # Iniciar sesión en Streamlit
                 st.session_state["logged_in"] = True
@@ -131,19 +130,14 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión de hierro mikey v7.11"""
-        # 1. Marcar logout persistente en URL ANTES de limpiar
+        """Cierre de sesión de hierro mikey v7.12"""
+        # 1. Fijar parámetro persistente en la URL (sobrevive a F5)
         st.query_params["logout"] = "1"
         
-        # 2. Limpieza selectiva de sesión
-        keys_to_keep = ["logout_manual_flag"]
-        for key in list(st.session_state.keys()):
-            if key not in keys_to_keep:
-                del st.session_state[key]
-        
+        # 2. Marcar flag interno
         st.session_state["logout_manual_flag"] = True
         
-        # 3. Intentar logout nativo
+        # 3. Intentar logout nativo de Streamlit 1.35+
         try:
             if hasattr(st, "logout"):
                 st.logout()
@@ -152,8 +146,11 @@ class AuthManager:
 
     @staticmethod
     def check_auth():
-        # mikey v7.10: Si existe 'logout' en URL, BLOQUEAR entrada automática
+        # mikey v7.12: El gran detector de logout persistente
+        # Si la URL dice que estamos fuera, LIMPIAR TODO y bloquear entrada.
         if st.query_params.get("logout") == "1":
+            st.session_state.clear()
+            st.session_state["logout_manual_flag"] = True
             return False
 
         # 1. Login Manual
