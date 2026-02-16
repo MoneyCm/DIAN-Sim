@@ -124,6 +124,9 @@ class AuthManager:
     @staticmethod
     def logout():
         """Cierre de sesión con persistencia en URL mikey v7.9"""
+        import sys
+        print("🚪 [AUTH] Iniciando Logout v7.9...", file=sys.stderr)
+        
         # 1. Marcar el flag en el estado actual
         st.session_state["logout_manual_flag"] = True
         
@@ -135,16 +138,21 @@ class AuthManager:
             if key != "logout_manual_flag":
                 del st.session_state[key]
         
+        print("🧹 [AUTH] Sesión limpia. Parámetro 'logout' fijado.", file=sys.stderr)
+        
         try:
             if hasattr(st, "logout"):
+                print("🔒 [AUTH] Intentando st.logout() nativo...", file=sys.stderr)
                 st.logout()
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ [AUTH] st.logout() nativo falló: {e}", file=sys.stderr)
 
     @staticmethod
     def check_auth():
+        import sys
         # mikey v7.9: Si existe el parámetro logout en la URL, NO dejar entrar solo.
         if st.query_params.get("logout") == "true":
+            # print("⛔ [AUTH] Logout detectado en URL. Bloqueando auto-login.", file=sys.stderr)
             return False
 
         # 1. Login Manual (session_state)
