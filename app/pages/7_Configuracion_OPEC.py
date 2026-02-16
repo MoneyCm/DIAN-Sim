@@ -40,6 +40,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Debug session
+if st.session_state.get("debug_mode") or True: # Force debug for now
+    st.caption(f"🔧 Debug: User ID: {u_id} | Active OPEC: {active_opec.id if active_opec else 'None'}")
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -104,9 +108,10 @@ with col1:
                             is_active=True
                         )
                         db.add(new_opec)
+                        print(f"✅ Created new OPEC for user {u_id}")
                     
                     db.commit()
-                    st.success(f"¡Configuración de OPEC {opec_number} guardada!")
+                    st.success(f"¡Configuración de OPEC {opec_number} guardada para usuario {u_id}!")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -330,10 +335,16 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro Real!")
             st.balloons()
             
-            db.close()
+            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro Real!")
+            st.balloons()
             
         except Exception as e:
             st.error(f"Error crítico en Auto-Seed: {e}")
+            if 'db' in locals():
+                db.rollback()
+        finally:
+            if 'db' in locals():
+                db.close()
 
 st.divider()
 st.caption("🔒 Los datos de tu OPEC se guardan de forma segura en tu base de datos para que la IA los use al generar simulacros.")

@@ -240,10 +240,16 @@ with col_right:
     # Fetch active OPEC info - Mikey v5.0 Safety
     u_opec = None
     try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            sql = text("SELECT opec_number, job_title, level FROM user_opec WHERE user_id = :uid AND is_active = True LIMIT 1")
-            u_opec = conn.execute(sql, {"uid": u_id}).first()
+        from db.session import SessionLocal
+        from db.models import UserOPEC
+        
+        with SessionLocal() as db:
+            active_opec_orm = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
+            if active_opec_orm:
+                # Tuple simulation for backward compatibility with existing code
+                u_opec = (active_opec_orm.opec_number, active_opec_orm.job_title, active_opec_orm.level)
+            else:
+                u_opec = None
     except Exception as opec_err:
         print(f"⚠️ [APP] OPEC Fetch Error: {opec_err}")
     
