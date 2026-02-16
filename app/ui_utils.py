@@ -178,25 +178,9 @@ def render_custom_sidebar():
         if "RerunException" not in str(type(e)):
             st.sidebar.error(f"⚠️ Sidebar Error: {e}")
     
-    # Botón de logout de ALERTA mikey v7.20 (HTML Link Puro)
+    # Botón de logout de ALERTA mikey v7.20 (Native Streamlit Button with Callback)
     st.sidebar.divider()
-    logout_link_html = """
-    <a href="?logout=1" target="_top" style="
-        display: block;
-        width: 100%;
-        padding: 0.5rem 1rem;
-        background-color: #ff4b4b;
-        color: white;
-        text-align: center;
-        text-decoration: none;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        margin-top: 1rem;
-    ">
-        🚨 Cerrar Sesión
-    </a>
-    """
-    st.sidebar.markdown(logout_link_html, unsafe_allow_html=True)
+    st.sidebar.button("🚨 Cerrar Sesión", on_click=AuthManager.logout, use_container_width=True, type="primary")
     
     return stats_s, rank
 def get_db_info():

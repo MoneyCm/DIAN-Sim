@@ -103,33 +103,25 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Bala de Plata v7.19: Logout con Delay y Ruptura de Iframe mikey"""
-        # 1. Limpieza de estado local
-        st.session_state["logged_in"] = False
-        st.session_state["logout_manual_flag"] = True
-        st.session_state.clear()
-        st.session_state["logout_manual_flag"] = True
+        """Bala de Plata v7.21: Logout Nativo Streamlit (Sin JS Hacks)"""
+        # 1. Limpieza de estado local (Borrar todo PRIMERO)
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         
-        # 2. Intentar logout nativo OIDC
+        # 2. Establecer banderas post-limpieza
+        st.session_state["logout_manual_flag"] = True
+        st.session_state["logged_in"] = False
+        
+        # 2. Intentar logout nativo OIDC (opcional, por si acaso)
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
             
-        # 3. JS Nuclear con Delay (Asegura que el navegador procese la orden)
-        st.markdown("""
-            <script>
-                setTimeout(function() {
-                    var root = window.top.location.origin + window.top.location.pathname;
-                    window.top.location.href = root + "?logout=1";
-                }, 200);
-            </script>
-        """, unsafe_allow_html=True)
-        
-        # 4. Mensaje de despedida visual
-        st.warning("Cerrando sesión de forma segura... mikey.")
-        st.stop()
+        # 3. Redirección Nativa via Query Params + Rerun
+        st.query_params["logout"] = "1"
+        st.rerun()
 
     @staticmethod
     def check_auth():
