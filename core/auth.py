@@ -84,7 +84,10 @@ class AuthManager:
                             t_conn.execute(text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
 
                 # 5. Iniciar Sesión en Streamlit
-                st.query_params.clear()
+                # mikey v7.16: Solo limpiar el flag de logout, no todos los params
+                if "logout" in st.query_params:
+                    del st.query_params["logout"]
+                
                 st.session_state["logged_in"] = True
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
@@ -97,29 +100,37 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Bala de Plata: Logout con Triple Bloqueo v7.15"""
-        # A. Marcar URL
+        """Bala de Plata v7.16: Logout con Refresco de Navegador"""
+        # 1. Marcar URL (Persistencia extrema)
         st.query_params["logout"] = "1"
-        # B. Limpiar TODO
-        st.session_state.clear()
+        
+        # 2. Limpiar sesión local
+        st.session_state["logged_in"] = False
         st.session_state["logout_manual_flag"] = True
-        # C. Forzar salida nativa
+        
+        # 3. Borrar llaves excepto el flag
+        for key in list(st.session_state.keys()):
+            if key != "logout_manual_flag":
+                del st.session_state[key]
+        
+        # 4. Intentar logout nativo
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
-        # D. Redirección forzada por Meta-tag
-        st.markdown('<meta http-equiv="refresh" content="0; url=/?logout=1">', unsafe_allow_html=True)
-        st.stop()
+
+        # 5. LA CLAVE: Forzar refresco visual antes del stop
+        st.markdown('<meta http-equiv="refresh" content="0; url=./?logout=1">', unsafe_allow_html=True)
+        st.rerun()
 
     @staticmethod
     def check_auth():
-        """Guardián de Acceso mikey v7.15"""
-        # 0. El Muro del Logout
+        """Guardián de Acceso v7.16"""
+        # 0. El Muro del Logout (Si el parámetro está en la URL, BLOQUEO TOTAL)
         if st.query_params.get("logout") == "1":
-            if st.session_state.get("logged_in"):
-                st.session_state.clear()
+            # Si entramos aquí, forzamos un estado de 'fuera'
+            st.session_state["logged_in"] = False
             st.session_state["logout_manual_flag"] = True
             return False
 
