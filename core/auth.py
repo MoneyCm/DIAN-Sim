@@ -61,15 +61,27 @@ class AuthManager:
                 user_row = conn.execute(sql_find, {"e": email}).first()
                 
                 if not user_row:
-                    # Registro de emergencia con SQL crudo
-                    base_username = username if username else email.split('@')[0]
-                    # Simplificamos: no comprobamos duplicados de forma compleja aquí para evitar fallos
-                    sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
-                    with engine.begin() as t_conn:
-                        new_id = t_conn.execute(sql_ins, {"u": base_username, "e": email}).scalar()
-                        user_id = new_id
-                        user_name = base_username
-                        user_role = "user"
+                    # mikey v7.0: Buscar si existe un usuario 'cesar' (el reportado por el user) 
+                    # que NO tenga email vinculado aún.
+                    sql_legacy = text("SELECT id, username, role FROM users WHERE username = 'cesar' AND (email IS NULL OR email = '')")
+                    legacy_row = conn.execute(sql_legacy).first()
+                    
+                    if legacy_row:
+                        # ¡VINCULACIÓN ATÓMICA! mikey v7.0
+                        user_id, user_name, user_role = legacy_row
+                        sql_update = text("UPDATE users SET email = :e, password_hash = 'GOOGLE_OAUTH' WHERE id = :uid")
+                        with engine.begin() as t_conn:
+                            t_conn.execute(sql_update, {"e": email, "uid": user_id})
+                        print(f"🔗 [AUTH] Cuenta 'cesar' vinculada a {email} exitosamente. Mikey.", file=sys.stderr)
+                    else:
+                        # Registro de emergencia normal si no hay cuenta legacy 'cesar'
+                        base_username = username if username else email.split('@')[0]
+                        sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
+                        with engine.begin() as t_conn:
+                            new_id = t_conn.execute(sql_ins, {"u": base_username, "e": email}).scalar()
+                            user_id = new_id
+                            user_name = base_username
+                            user_role = "user"
                 else:
                     user_id, user_name, user_role = user_row
                 
