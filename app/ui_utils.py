@@ -177,8 +177,6 @@ def render_custom_sidebar():
         
     except Exception as e:
         st.sidebar.error(f"⚠️ Sidebar Error: {e}")
-    finally:
-        db_s.close()
     
     return stats_s, rank
 def get_db_info():
