@@ -173,12 +173,17 @@ def render_custom_sidebar():
         st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
         st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
         
-        if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn"):
-            AuthManager.logout()
-            st.rerun()
-        
     except Exception as e:
-        st.sidebar.error(f"⚠️ Sidebar Error: {e}")
+        # No capturar RerunException mikey v7.7
+        if "RerunException" not in str(type(e)):
+            st.sidebar.error(f"⚠️ Sidebar Error: {e}")
+    
+    # Botón de logout FUERA del try para que st.rerun() funcione mikey v7.7
+    st.sidebar.divider()
+    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn"):
+        from core.auth import AuthManager
+        AuthManager.logout()
+        st.rerun()
     
     return stats_s, rank
 def get_db_info():
