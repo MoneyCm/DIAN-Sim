@@ -72,13 +72,22 @@ class AuthManager:
                         with engine.begin() as t_conn:
                             t_conn.execute(sql_update, {"e": email, "uid": user_id})
                     else:
-                        base_username = username if username else email.split('@')[0]
+                        # mikey v7.8: Asegurar que el username nunca sea 'None'
+                        base_username = username if (username and username != "None") else email.split('@')[0]
                         sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
                         with engine.begin() as t_conn:
                             new_id = t_conn.execute(sql_ins, {"u": base_username, "e": email}).scalar()
                             user_id, user_name, user_role = new_id, base_username, "user"
                 else:
                     user_id, user_name, user_role = user_row
+                    # mikey v7.8: Corregir nombres 'None' en caliente
+                    if not user_name or user_name == "None":
+                        user_name = email.split('@')[0]
+                        sql_up_name = text("UPDATE users SET username = :u WHERE id = :uid")
+                        with engine.begin() as t_conn:
+                            t_conn.execute(sql_up_name, {"u": user_name, "uid": user_id})
+                        print(f"🛠️ [AUTH] Nombre 'None' de {email} corregido a {user_name}. Mikey.", file=sys.stderr)
+                    
                     # mikey v7.1: Si ya existe cuenta Gmail pero está VACÍA (sin OPEC), ver si 'cesar' tiene la OPEC
                     sql_check_opec = text("SELECT id FROM user_opec WHERE user_id = :uid LIMIT 1")
                     if not conn.execute(sql_check_opec, {"uid": user_id}).first():
@@ -111,12 +120,21 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        st.session_state["logged_in"] = False
-        st.session_state["user_id"] = None
-        st.session_state["username"] = None
-        st.session_state["user_role"] = None
-        # Nueva marca para evitar el re-login automático tras el logout mikey v6.3
+        """Cierre de sesión con limpieza profunda mikey v7.8"""
+        # 1. Marcar el flag antes de limpiar
         st.session_state["logout_manual_flag"] = True
+        
+        # 2. Limpiar TODA la sesión para evitar fantasmas (como el 'None')
+        for key in list(st.session_state.keys()):
+            if key != "logout_manual_flag":
+                del st.session_state[key]
+        
+        # 3. Forzar logout nativo si disponible (Streamlit 1.35+)
+        try:
+            if hasattr(st, "logout"):
+                st.logout()
+        except:
+            pass
 
     @staticmethod
     def check_auth():

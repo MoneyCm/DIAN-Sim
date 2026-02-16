@@ -144,7 +144,7 @@ st.markdown(f"""
 <div class="hero-welcome">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin: 0;">¡Hola, {st.session_state.get('username', 'Aspirante')}! 👋</h1>
+            <h1 style="margin: 0;">¡Hola, {st.session_state.get('username') or 'Aspirante'}! 👋</h1>
             <p style="font-size: 1.1rem; color: var(--text-muted); margin-top: 5px;">Bienvenido a tu Centro de Control de Preparación para la DIAN.</p>
         </div>
         <div style="text-align: right;">
