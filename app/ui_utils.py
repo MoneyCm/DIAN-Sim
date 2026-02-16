@@ -98,42 +98,45 @@ def render_custom_sidebar():
     from core.rank_system import get_rank_info
     from core.auth import AuthManager
     
-    db_s = SessionLocal()
     u_id = st.session_state.get("user_id")
     stats_s = None
-    is_pro = False # Mikey v4.4 Fix: Inicialización segura
+    is_pro = False 
     rank = {"name": "Aspirante", "icon": "🎓", "color": "#475569", "threshold": 0}
     next_rank = None
     pct = 0
     
     try:
+        from sqlalchemy import text
+        from core.auth import AuthManager
+        from db.session import engine
+        
         if u_id:
-            from sqlalchemy import text
-            from core.auth import AuthManager
-            
-            # Mikey v5.0: RAW SQL Safety for Sidebar
+            # Mikey v7.2: RAW SQL total para el Sidebar
             with engine.connect() as conn:
                 # 1. Stats
                 sql_stats = text("SELECT current_streak, max_streak, total_points FROM user_stats WHERE user_id = :uid")
                 row_stats = conn.execute(sql_stats, {"uid": u_id}).first()
+                
                 if row_stats:
-                    # Crear objeto dummy para mantener compatibilidad con el código de abajo
+                    # Objeto dummy para mantener compatibilidad
                     class DummyStats: pass
                     stats_s = DummyStats()
-                    stats_s.current_streak = row_stats[0]
-                    stats_s.max_streak = row_stats[1]
-                    stats_s.total_points = row_stats[2]
+                    stats_s.current_streak, stats_s.max_streak, stats_s.total_points = row_stats
+                else:
+                    # Crear stats iniciales si no existen (vía SQL crudo)
+                    sql_ins = text("INSERT INTO user_stats (user_id, current_streak, max_streak, total_points) VALUES (:uid, 0, 0, 0)")
+                    try:
+                        with engine.begin() as t_conn:
+                            t_conn.execute(sql_ins, {"uid": u_id})
+                        class DummyStats: pass
+                        stats_s = DummyStats()
+                        stats_s.current_streak, stats_s.max_streak, stats_s.total_points = 0, 0, 0
+                    except:
+                        pass
                 
                 # 2. Status Pro
                 is_pro = AuthManager.is_pro()
         
-        if not stats_s and u_id:
-            # Si no existe, intentar crearlo con SessionLocal (ORM) - Si esto falla, el try global lo atrapa
-            stats_s = UserStats(user_id=u_id, current_streak=0, max_streak=0, total_points=0)
-            db_s.add(stats_s)
-            db_s.commit()
-            db_s.refresh(stats_s)
-            
         if stats_s:
             rank, next_rank = get_rank_info(stats_s.total_points)
             if next_rank:
