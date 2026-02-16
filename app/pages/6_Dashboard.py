@@ -54,6 +54,21 @@ try:
         except Exception as e:
             st.error(f"Error reparando ia_count_today: {e}")
             
+    # --- Check question_performance columns (is_favorite, mastery_level) ---
+    try:
+        db.execute(text("SELECT is_favorite FROM question_performance LIMIT 1"))
+    except Exception:
+        st.warning("⚠️ Reparando tabla de rendimiento (Faltan columnas)...")
+        try:
+            db.execute(text("ALTER TABLE question_performance ADD COLUMN is_favorite BOOLEAN DEFAULT 0"))
+            db.execute(text("ALTER TABLE question_performance ADD COLUMN mastery_level FLOAT DEFAULT 0.0"))
+            db.execute(text("ALTER TABLE question_performance ADD COLUMN is_mastered BOOLEAN DEFAULT 0"))
+            db.commit()
+            st.toast("Columnas de rendimiento reparadas.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error reparando question_performance: {e}")
+            
 except Exception as e:
     st.error(f"Error en auto-healing DB: {e}")
 # ---------------------------------------------
