@@ -101,36 +101,38 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Bala de Plata v7.17: Redirección Absoluta vía JS"""
-        # 1. Marcar URL
-        st.query_params["logout"] = "1"
-        
-        # 2. Limpieza total de sesión
+        """Bala de Plata v7.18: Logout Nuclear sin Rerun mikey"""
+        # 1. Limpiar sesión en el servidor
         st.session_state.clear()
         st.session_state["logout_manual_flag"] = True
         
-        # 3. JS Nuclear para redirigir a la raíz con el parámetro de bloqueo
-        st.markdown(f"""
-            <script>
-                window.parent.location.href = window.parent.location.origin + "/?logout=1";
-            </script>
-        """, unsafe_allow_html=True)
-        
-        # 4. Fallback por si el JS falla o está bloqueado
+        # 2. Intentar logout nativo de Streamlit (esto suele borrar el cookie de OIDC)
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
-        st.rerun()
+            
+        # 3. JS Nuclear para redirigir a la raíz con el parámetro de bloqueo. 
+        # Usamos window.top para saltar del iframe de Streamlit Cloud.
+        st.markdown("""
+            <script>
+                var root = window.top.location.origin + window.top.location.pathname;
+                window.top.location.href = root + "?logout=1";
+            </script>
+        """, unsafe_allow_html=True)
+        
+        # 4. Detener todo para asegurar que el JS sea lo único enviado al navegador
+        st.stop()
 
     @staticmethod
     def check_auth():
-        """Guardián de Acceso v7.16"""
+        """Guardián de Acceso v7.18"""
         # 0. El Muro del Logout (Si el parámetro está en la URL, BLOQUEO TOTAL)
         if st.query_params.get("logout") == "1":
-            # Si entramos aquí, forzamos un estado de 'fuera'
-            st.session_state["logged_in"] = False
+            # Si hay una sesión activa, la limpiamos de forma atómica
+            if st.session_state.get("logged_in"):
+                st.session_state.clear()
             st.session_state["logout_manual_flag"] = True
             return False
 
