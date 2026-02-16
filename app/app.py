@@ -134,6 +134,8 @@ if st.session_state.get("show_paywall"):
 render_news_ticker()
 
 # Introduction / Hero Dashboard v6.0
+pro_tag = '<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if AuthManager.is_pro() else ""
+
 st.markdown(f"""
 <div class="hero-welcome">
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -144,7 +146,7 @@ st.markdown(f"""
         <div style="text-align: right;">
             <span style="font-size: 2.5rem;">{rank["icon"] if rank else '🎓'}</span>
             <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if rank else 'Estudiante'}</div>
-            {'<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if AuthManager.is_pro() else ""}
+            {pro_tag}
         </div>
     </div>
 </div>
@@ -220,7 +222,7 @@ with col_right:
     else:
         st.warning("No tienes una OPEC activa seleccionada.")
         if st.button("Configurar OPEC Ahora", use_container_width=True):
-            st.switch_page("pages/3_Configuración_OPEC.py")
+            st.switch_page("pages/7_Configuracion_OPEC.py")
 
 # Initialize session state for generic use
 if "user_session" not in st.session_state:
