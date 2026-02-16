@@ -103,6 +103,9 @@ class AuthManager:
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
                             print(f"🚛 [AUTH] Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
+                # mikey v7.9: Limpiar parámetros de logout al entrar
+                st.query_params.clear()
+                
                 # Iniciar sesión en Streamlit
                 st.session_state["logged_in"] = True
                 st.session_state["user_id"] = user_id
@@ -120,16 +123,18 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión con limpieza profunda mikey v7.8"""
-        # 1. Marcar el flag antes de limpiar
+        """Cierre de sesión con persistencia en URL mikey v7.9"""
+        # 1. Marcar el flag en el estado actual
         st.session_state["logout_manual_flag"] = True
         
-        # 2. Limpiar TODA la sesión para evitar fantasmas (como el 'None')
+        # 2. Persistir el logout en la URL (sobrevive a F5)
+        st.query_params["logout"] = "true"
+        
+        # 3. Limpiar la sesión
         for key in list(st.session_state.keys()):
             if key != "logout_manual_flag":
                 del st.session_state[key]
         
-        # 3. Forzar logout nativo si disponible (Streamlit 1.35+)
         try:
             if hasattr(st, "logout"):
                 st.logout()
@@ -138,6 +143,10 @@ class AuthManager:
 
     @staticmethod
     def check_auth():
+        # mikey v7.9: Si existe el parámetro logout en la URL, NO dejar entrar solo.
+        if st.query_params.get("logout") == "true":
+            return False
+
         # 1. Login Manual (session_state)
         manual_login = "logged_in" in st.session_state and st.session_state["logged_in"]
         
