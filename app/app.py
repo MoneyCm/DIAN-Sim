@@ -80,6 +80,9 @@ if not AuthManager.check_auth():
             if has_google:
                 st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
                 if st.button("🚀 Continuar con Google", use_container_width=True, type="secondary"):
+                    # mikey cleanup: Allow re-login by clearing the manual logout flag
+                    if "logout_manual_flag" in st.session_state:
+                        del st.session_state["logout_manual_flag"]
                     st.login("google")
             else:
                 with st.expander("ℹ️ ¿Cómo activar el login con Google?"):
