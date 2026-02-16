@@ -128,9 +128,14 @@ class AuthManager:
 
     @staticmethod
     def check_auth():
-        """Guardián de Acceso v7.18"""
+        """Guardián de Acceso v7.18 (Debugged)"""
+        # Debug Log
+        q_params = st.query_params
+        # print(f"🔐 CHECK_AUTH: Params detected: {q_params}")
+        
         # 0. El Muro del Logout (Si el parámetro está en la URL, BLOQUEO TOTAL)
-        if st.query_params.get("logout") == "1":
+        # Check mas permisivo: si existe la key 'logout', asumimos intencion de salir
+        if "logout" in q_params:
             # Si hay una sesión activa, la limpiamos de forma atómica
             if st.session_state.get("logged_in"):
                 st.session_state.clear()

@@ -30,8 +30,10 @@ if st.session_state.get("current_model") == "models/gemini-1.5-flash":
 if st.query_params.get("debug") == "1":
     try:
         st.write("Google User Info:", st.user)
+        st.write("Query Params:", dict(st.query_params))
+        st.write("Session Keys:", list(st.session_state.keys()))
     except:
-        st.write("st.user no disponible")
+        st.write("Debug info incomplete")
 
 if not AuthManager.check_auth():
     # mikey v7.17: Si estamos en la pantalla de login, permitir re-entrada limpia
