@@ -61,29 +61,37 @@ class AuthManager:
                 user_row = conn.execute(sql_find, {"e": email}).first()
                 
                 if not user_row:
-                    # mikey v7.0: Buscar si existe un usuario 'cesar' (el reportado por el user) 
-                    # que NO tenga email vinculado aún.
+                    # mikey v7.0: Buscar cuenta legacy 'cesar' sin email
                     sql_legacy = text("SELECT id, username, role FROM users WHERE username = 'cesar' AND (email IS NULL OR email = '')")
                     legacy_row = conn.execute(sql_legacy).first()
                     
                     if legacy_row:
-                        # ¡VINCULACIÓN ATÓMICA! mikey v7.0
                         user_id, user_name, user_role = legacy_row
                         sql_update = text("UPDATE users SET email = :e, password_hash = 'GOOGLE_OAUTH' WHERE id = :uid")
                         with engine.begin() as t_conn:
                             t_conn.execute(sql_update, {"e": email, "uid": user_id})
-                        print(f"🔗 [AUTH] Cuenta 'cesar' vinculada a {email} exitosamente. Mikey.", file=sys.stderr)
                     else:
-                        # Registro de emergencia normal si no hay cuenta legacy 'cesar'
                         base_username = username if username else email.split('@')[0]
                         sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
                         with engine.begin() as t_conn:
                             new_id = t_conn.execute(sql_ins, {"u": base_username, "e": email}).scalar()
-                            user_id = new_id
-                            user_name = base_username
-                            user_role = "user"
+                            user_id, user_name, user_role = new_id, base_username, "user"
                 else:
                     user_id, user_name, user_role = user_row
+                    # mikey v7.1: Si ya existe cuenta Gmail pero está VACÍA (sin OPEC), ver si 'cesar' tiene la OPEC
+                    sql_check_opec = text("SELECT id FROM user_opec WHERE user_id = :uid LIMIT 1")
+                    if not conn.execute(sql_check_opec, {"uid": user_id}).first():
+                        # Cuenta Gmail actual no tiene OPEC. ¿La tiene 'cesar'?
+                        sql_legacy = text("SELECT id FROM users WHERE username = 'cesar' AND (email IS NULL OR email = '')")
+                        legacy_id = conn.execute(sql_legacy).scalar()
+                        if legacy_id:
+                            # Transferencia de OPEC de cesar -> Gmail actual mikey v7.1
+                            sql_transfer = text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid")
+                            sql_transfer_stats = text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid")
+                            with engine.begin() as t_conn:
+                                t_conn.execute(sql_transfer, {"new_uid": user_id, "old_uid": legacy_id})
+                                t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
+                            print(f"🚛 [AUTH] Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
                 # Iniciar sesión en Streamlit
                 st.session_state["logged_in"] = True
