@@ -95,11 +95,14 @@ class StatsService:
                 all_skills = db.query(Skill).filter_by(user_id=user_id).all()
                 break # Success
             except OperationalError as e:
-                if "locked" in str(e).lower() and attempt < retries - 1:
-                    time.sleep(2) # Wait for unlock (increased)
+                # v5.6 Retry on any OperationalError (Postgres timeout, SQLite lock, etc)
+                if attempt < retries - 1:
+                    wait = 2 * (attempt + 1) # Linear backoff 2, 4, 6...
+                    print(f"DB Busy/Error (Attempt {attempt+1}/{retries}): {e}")
+                    time.sleep(wait) 
                     continue
                 else:
-                    print(f"DB Error getting smart mix: {e}")
+                    print(f"DB Error getting smart mix after {retries} retries: {e}")
                     return [] # Fail gracefully
             except Exception as e:
                 print(f"Error getting smart mix: {e}")
