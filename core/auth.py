@@ -95,13 +95,20 @@ class AuthManager:
                         sql_legacy = text("SELECT id FROM users WHERE username = 'cesar' AND (email IS NULL OR email = '')")
                         legacy_id = conn.execute(sql_legacy).scalar()
                         if legacy_id:
-                            # Transferencia de OPEC de cesar -> Gmail actual mikey v7.1
+                            # mikey v7.11: Evitar conflictos de duplicados en la fusión
+                            sql_del_empty_opec = text("DELETE FROM user_opec WHERE user_id = :new_uid")
+                            sql_del_empty_stats = text("DELETE FROM user_stats WHERE user_id = :new_uid")
                             sql_transfer = text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid")
                             sql_transfer_stats = text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid")
+                            
                             with engine.begin() as t_conn:
+                                # Limpiar la cuenta Gmail actual por si tiene stats vacíos
+                                t_conn.execute(sql_del_empty_opec, {"new_uid": user_id})
+                                t_conn.execute(sql_del_empty_stats, {"new_uid": user_id})
+                                # Transferir lo de 'cesar'
                                 t_conn.execute(sql_transfer, {"new_uid": user_id, "old_uid": legacy_id})
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
-                            print(f"🚛 [AUTH] Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
+                            print(f"🚛 [AUTH] Fusión atómica: Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
                 # mikey v7.10: Limpiar rastro de logout al entrar con éxito
                 if "logout" in st.query_params:
@@ -124,22 +131,24 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión atómico y persistente mikey v7.10"""
-        # 1. Limpiar TODA la sesión
-        st.session_state.clear()
-        
-        # 2. Marcar logout persistente en URL
+        """Cierre de sesión de hierro mikey v7.11"""
+        # 1. Marcar logout persistente en URL ANTES de limpiar
         st.query_params["logout"] = "1"
         
-        # 3. Intentar logout nativo (pero sin bloquear)
+        # 2. Limpieza selectiva de sesión
+        keys_to_keep = ["logout_manual_flag"]
+        for key in list(st.session_state.keys()):
+            if key not in keys_to_keep:
+                del st.session_state[key]
+        
+        st.session_state["logout_manual_flag"] = True
+        
+        # 3. Intentar logout nativo
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
-            
-        # 4. Forzar reinicio
-        st.rerun()
 
     @staticmethod
     def check_auth():

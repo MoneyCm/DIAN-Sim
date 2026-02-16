@@ -178,9 +178,9 @@ def render_custom_sidebar():
         if "RerunException" not in str(type(e)):
             st.sidebar.error(f"⚠️ Sidebar Error: {e}")
     
-    # Botón de logout FUERA del try para que st.rerun() funcione mikey v7.7
+    # Botón de logout FUERA del try para máxima fiabilidad mikey v7.11
     st.sidebar.divider()
-    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn"):
+    if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn", type="secondary"):
         from core.auth import AuthManager
         AuthManager.logout()
         st.rerun()
