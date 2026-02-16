@@ -117,9 +117,6 @@ class AuthManager:
         st.session_state["user_role"] = None
         # Nueva marca para evitar el re-login automático tras el logout mikey v6.3
         st.session_state["logout_manual_flag"] = True
-        # mikey v7.5: Forzamos el rerun. Aunque Streamlit da advertencia, 
-        # a veces es necesario para asegurar que el auth_check de app.py se dispare.
-        st.rerun()
 
     @staticmethod
     def check_auth():

@@ -173,7 +173,9 @@ def render_custom_sidebar():
         st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
         st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
         
-        st.sidebar.button("🚪 Cerrar Sesión", on_click=AuthManager.logout, use_container_width=True, key="sidebar_logout_btn")
+        if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn"):
+            AuthManager.logout()
+            st.rerun()
         
     except Exception as e:
         st.sidebar.error(f"⚠️ Sidebar Error: {e}")
