@@ -64,10 +64,17 @@ def _get_conn_badge():
         from db.session import DATABASE_URL
         if not DATABASE_URL:
             return ""
-        is_cloud = "supabase" in DATABASE_URL.lower() or "postgres" in DATABASE_URL.lower()
+        
+        # Check if we are in Streamlit Cloud or Supabase
+        is_cloud = (
+            "supabase" in DATABASE_URL.lower() or 
+            "postgres" in DATABASE_URL.lower() or
+            os.getenv("STREAMLIT_SHARING_MODE") == "runtime" or # Streamlit Cloud specific
+            "streamlit" in os.getenv("HOSTNAME", "").lower()
+        )
         
         if is_cloud:
-            return '<span style="background: rgba(0, 200, 100, 0.2); color: #00ff88; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #00ff88; font-weight: bold; text-transform: uppercase;">🌐 Nube (Sync)</span>'
+            return '<span style="background: rgba(0, 200, 100, 0.2); color: #00ff88; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #00ff88; font-weight: bold; text-transform: uppercase;">🌐 Nube (Online)</span>'
         else:
             return '<span style="background: rgba(255, 150, 0, 0.2); color: #ff9900; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #ff9900; font-weight: bold; text-transform: uppercase;">🏠 Local (Offline)</span>'
     except Exception:
