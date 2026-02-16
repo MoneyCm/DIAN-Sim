@@ -42,7 +42,6 @@ if not AuthManager.check_auth():
                 try:
                     if AuthManager.login(user_in, pass_in):
                         st.success("¡Bienvenido!")
-                        st.rerun()
                     else:
                         st.error("Usuario o contraseña incorrectos")
                 except Exception as e:
@@ -126,7 +125,6 @@ if st.session_state.get("show_paywall"):
     from ui_utils import render_paywall_card
     if st.button("⬅️ Cerrar e Ir Atrás", use_container_width=False):
         st.session_state["show_paywall"] = False
-        st.rerun()
     render_paywall_card("Acceso Pro Ilimitado")
     st.stop()
 
