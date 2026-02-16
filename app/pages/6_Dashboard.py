@@ -29,50 +29,69 @@ render_header(title="Panel de Control", subtitle="Analítica de progreso y gamif
 
 db = SessionLocal()
 
-# --- AUTO-HEALING DB SCHEMA (MIKEY vFinal) ---
+# --- AUTO-HEALING DB SCHEMA (NATIVE SQLITE3 - ROBUST) ---
 try:
-    # Check if last_ia_date exists in user_stats
-    from sqlalchemy import text
+    import sqlite3
+    
+    # Calculate path relative to this file
+    # app/pages/6_Dashboard.py -> app/pages -> app -> root -> dian_sim.db
+    # This matches the session.py logic: os.path.dirname(__file__)/../../dian_sim.db
+    db_path_fix = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'dian_sim.db'))
+    
+    # Connect directly
+    conn_fix = sqlite3.connect(db_path_fix, timeout=10)
+    cursor_fix = conn_fix.cursor()
+    
+    # 1. Check user_stats columns
     try:
-        db.execute(text("SELECT last_ia_date FROM user_stats LIMIT 1"))
-    except Exception:
-        st.warning("⚠️ Actualizando base de datos (Faltaban columnas)...")
+        cursor_fix.execute("SELECT last_ia_date FROM user_stats LIMIT 1")
+    except sqlite3.OperationalError:
         try:
-            db.execute(text("ALTER TABLE user_stats ADD COLUMN last_ia_date TIMESTAMP"))
-            db.commit()
-            st.toast("Columna 'last_ia_date' reparada.")
-        except Exception as e:
-            st.error(f"Error reparando last_ia_date: {e}")
+            cursor_fix.execute("ALTER TABLE user_stats ADD COLUMN last_ia_date TIMESTAMP")
+            conn_fix.commit()
+            st.toast("✅ DB fixed: last_ia_date")
+        except: pass
 
     try:
-        db.execute(text("SELECT ia_count_today FROM user_stats LIMIT 1"))
-    except Exception:
+        cursor_fix.execute("SELECT ia_count_today FROM user_stats LIMIT 1")
+    except sqlite3.OperationalError:
         try:
-            db.execute(text("ALTER TABLE user_stats ADD COLUMN ia_count_today INTEGER DEFAULT 0"))
-            db.commit()
-            st.toast("Columna 'ia_count_today' reparada.")
-            st.rerun() # Reload to apply changes
-        except Exception as e:
-            st.error(f"Error reparando ia_count_today: {e}")
-            
-    # --- Check question_performance columns (is_favorite, mastery_level) ---
+            cursor_fix.execute("ALTER TABLE user_stats ADD COLUMN ia_count_today INTEGER DEFAULT 0")
+            conn_fix.commit()
+            st.toast("✅ DB fixed: ia_count_today")
+        except: pass
+        
+    # 2. Check question_performance columns
     try:
-        db.execute(text("SELECT is_favorite FROM question_performance LIMIT 1"))
-    except Exception:
-        st.warning("⚠️ Reparando tabla de rendimiento (Faltan columnas)...")
+        cursor_fix.execute("SELECT is_favorite FROM question_performance LIMIT 1")
+    except sqlite3.OperationalError:
         try:
-            db.execute(text("ALTER TABLE question_performance ADD COLUMN is_favorite BOOLEAN DEFAULT 0"))
-            db.execute(text("ALTER TABLE question_performance ADD COLUMN mastery_level FLOAT DEFAULT 0.0"))
-            db.execute(text("ALTER TABLE question_performance ADD COLUMN is_mastered BOOLEAN DEFAULT 0"))
-            db.commit()
-            st.toast("Columnas de rendimiento reparadas.")
-            st.rerun()
+            cursor_fix.execute("ALTER TABLE question_performance ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
+            cursor_fix.execute("ALTER TABLE question_performance ADD COLUMN mastery_level FLOAT DEFAULT 0.0")
+            cursor_fix.execute("ALTER TABLE question_performance ADD COLUMN is_mastered BOOLEAN DEFAULT 0")
+            conn_fix.commit()
+            st.toast("✅ DB fixed: question_performance")
+        except: pass
+
+    # 3. Check skills columns (THE CRITICAL ONE)
+    try:
+        cursor_fix.execute("SELECT user_id FROM skills LIMIT 1")
+    except sqlite3.OperationalError:
+        try:
+            cursor_fix.execute("ALTER TABLE skills ADD COLUMN user_id INTEGER")
+            cursor_fix.execute("ALTER TABLE skills ADD COLUMN macro_dominio VARCHAR")
+            cursor_fix.execute("ALTER TABLE skills ADD COLUMN micro_competencia VARCHAR")
+            cursor_fix.execute("ALTER TABLE skills ADD COLUMN priority_weight FLOAT DEFAULT 1.0")
+            conn_fix.commit()
+            st.toast("✅ DB fixed: skills structure")
         except Exception as e:
-            st.error(f"Error reparando question_performance: {e}")
-            
+             st.error(f"Native SQL fix failed for skills: {e}")
+
+    conn_fix.close()
+
 except Exception as e:
-    st.error(f"Error en auto-healing DB: {e}")
-# ---------------------------------------------
+    st.error(f"Auto-healing critical error: {e}")
+# -----------------------------------------------------
 
 try:
     # 0. OPEC Goal (NEW Fase 2)
