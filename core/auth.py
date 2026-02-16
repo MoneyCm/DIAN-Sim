@@ -40,7 +40,8 @@ class AuthManager:
                     st.session_state["user_id"] = row[0]
                     st.session_state["username"] = row[1]
                     st.session_state["user_role"] = row[3]
-                    # Resetear caché de Pro para forzar nueva verificación
+                    # Resetear flags de sesión mikey v7.5
+                    st.session_state["logout_manual_flag"] = False
                     if "is_pro_cache" in st.session_state:
                         del st.session_state["is_pro_cache"]
                     return True
@@ -98,6 +99,8 @@ class AuthManager:
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
                 st.session_state["user_role"] = user_role
+                # Resetear flags de sesión mikey v7.5
+                st.session_state["logout_manual_flag"] = False
                 # Resetear caché de Pro
                 if "is_pro_cache" in st.session_state:
                     del st.session_state["is_pro_cache"]
@@ -114,7 +117,9 @@ class AuthManager:
         st.session_state["user_role"] = None
         # Nueva marca para evitar el re-login automático tras el logout mikey v6.3
         st.session_state["logout_manual_flag"] = True
-        # Quitamos st.rerun() porque esto se usa como callback y Streamlit ya refresca solo.
+        # mikey v7.5: Forzamos el rerun. Aunque Streamlit da advertencia, 
+        # a veces es necesario para asegurar que el auth_check de app.py se dispare.
+        st.rerun()
 
     @staticmethod
     def check_auth():
