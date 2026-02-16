@@ -178,11 +178,10 @@ def render_custom_sidebar():
         if "RerunException" not in str(type(e)):
             st.sidebar.error(f"⚠️ Sidebar Error: {e}")
     
-    # Botón de logout REDISEÑADO para máxima visibilidad mikey v7.13
+    # Botón de logout de ALERTA mikey v7.15
     st.sidebar.divider()
-    if st.sidebar.button("🚨 Cerrar Sesión", use_container_width=True, key="logout_btn_v713", type="primary"):
+    if st.sidebar.button("🚨 Cerrar Sesión", use_container_width=True, key="logout_iron_v715", type="primary"):
         from core.auth import AuthManager
-        st.toast("Cerrando sesión de forma segura...", icon="🔒")
         AuthManager.logout()
     
     return stats_s, rank
