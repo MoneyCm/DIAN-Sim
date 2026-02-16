@@ -92,6 +92,8 @@ class AuthManager:
         st.session_state["user_id"] = None
         st.session_state["username"] = None
         st.session_state["user_role"] = None
+        # Nueva marca para evitar el re-login automático tras el logout mikey v6.3
+        st.session_state["logout_manual_flag"] = True
         # Quitamos st.rerun() porque esto se usa como callback y Streamlit ya refresca solo.
 
     @staticmethod
@@ -103,6 +105,10 @@ class AuthManager:
         native_user = getattr(st, "user", None)
         native_login = native_user.is_logged_in if native_user else False
         
+        # Bypass de bucle si el usuario acaba de cerrar sesión manualmente
+        if st.session_state.get("logout_manual_flag"):
+            return manual_login
+            
         if native_login and not manual_login:
             # Sincronizar login nativo con sesión local mikey
             AuthManager.login_with_google(st.user.email, st.user.name)
@@ -111,21 +117,30 @@ class AuthManager:
 
     @staticmethod
     def is_pro():
-        """Verifica si el usuario actual es PRO con caché de sesión mikey v6.1"""
+        """Verifica si el usuario actual es PRO con caché de sesión mikey v6.3"""
         if "user_id" not in st.session_state or not st.session_state["user_id"]:
             return False
-        
-        # Admin es siempre PRO
+            
         if st.session_state.get("user_role") == "admin":
             return True
 
-        # Usar caché en session_state para no martillear la DB ni arriesgar errores
         if "is_pro_cache" in st.session_state:
             return st.session_state["is_pro_cache"]
             
         try:
-            from sqlalchemy import text
+            from sqlalchemy import text, inspect
             from datetime import datetime
+            from db.session import engine
+            
+            # Verificación preventiva de columna antes de hacer el SELECT
+            inspector = inspect(engine)
+            cols = [c["name"] for c in inspector.get_columns("users")]
+            
+            if "subscription_tier" not in cols:
+                # Si la columna no existe, no puede ser Pro. Retornamos False sin fallar.
+                st.session_state["is_pro_cache"] = False
+                return False
+
             with engine.connect() as conn:
                 sql = text("SELECT subscription_tier, subscription_expiry FROM users WHERE id = :uid")
                 row = conn.execute(sql, {"uid": st.session_state["user_id"]}).first()
@@ -138,12 +153,11 @@ class AuthManager:
                                 expiry = datetime.fromisoformat(expiry)
                             is_pro_val = expiry > datetime.now()
                         else:
-                            is_pro_val = True # Pro vitalicio
+                            is_pro_val = True
                 
                 st.session_state["is_pro_cache"] = is_pro_val
                 return is_pro_val
         except Exception as e:
-            # Fallback total: No crashea la app, solo asume Free
-            print(f"⚠️ [AUTH] is_pro cache fallback: {e}")
+            print(f"⚠️ [AUTH] is_pro v6.3 fallback: {e}")
             return False
         return False

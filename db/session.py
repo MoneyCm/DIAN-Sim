@@ -33,12 +33,14 @@ engine = create_engine(
 from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question, CaseStudy
 
 def sync_db_schema():
-    """Función para sincronizar el esquema sin bloquear el inicio. mikey v6.0"""
+    """Función para sincronizar el esquema sin bloquear el inicio. mikey v6.3"""
     try:
         # 1. Asegurar tablas básicas
         Base.metadata.create_all(bind=engine)
         
         db_type = "postgres" if "postgres" in DATABASE_URL.lower() else "sqlite"
+        print(f"🔧 [DB_SYNC] Modo: {db_type.upper()}. Mikey.", file=sys.stderr)
+        
         from sqlalchemy import inspect
         inspector = inspect(engine)
         
@@ -58,18 +60,27 @@ def sync_db_schema():
         with engine.begin() as conn:
             for table, cols in new_cols_map.items():
                 try:
+                    # Verificar si la tabla existe primero
+                    if table not in inspector.get_table_names():
+                        print(f"⚠️ [DB_SYNC] Tabla {table} no existe aún. Mikey.", file=sys.stderr)
+                        continue
+                        
                     existing_cols = [c["name"] for c in inspector.get_columns(table)]
                     for col_name, col_type in cols:
                         if col_name not in existing_cols:
-                            print(f"🔨 [DB] Adding {col_name} to {table}...", file=sys.stderr)
-                            if db_type == "sqlite":
-                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
-                            else:
-                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
-                except:
-                    pass
+                            print(f"🔨 [DB_SYNC] Agregando {col_name} a {table}... Mikey.", file=sys.stderr)
+                            try:
+                                if db_type == "sqlite":
+                                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};"))
+                                else:
+                                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                            except Exception as col_err:
+                                print(f"❌ [DB_SYNC] Error en columna {col_name}: {col_err}", file=sys.stderr)
+                except Exception as table_err:
+                    print(f"❌ [DB_SYNC] Error en tabla {table}: {table_err}", file=sys.stderr)
+        print("✅ [DB_SYNC] Proceso finalizado. Mikey.", file=sys.stderr)
     except Exception as e:
-        print(f"⚠️ [DB] Sync error: {e}", file=sys.stderr)
+        print(f"🔥 [DB_SYNC] Error crítico: {e}", file=sys.stderr)
 
 # Ejecutar de forma segura al importar
 sync_db_schema()
