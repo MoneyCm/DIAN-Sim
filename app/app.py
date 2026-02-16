@@ -133,7 +133,12 @@ if st.session_state.get("show_paywall"):
 render_news_ticker()
 
 # Introduction / Hero Dashboard v6.0
-pro_tag = '<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if AuthManager.is_pro() else ""
+try:
+    is_pro_user = AuthManager.is_pro()
+except:
+    is_pro_user = False
+
+pro_tag = '<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if is_pro_user else ""
 
 st.markdown(f"""
 <div class="hero-welcome">

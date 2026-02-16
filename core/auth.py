@@ -137,31 +137,25 @@ class AuthManager:
 
     @staticmethod
     def is_pro():
-        """Verifica si el usuario actual es PRO con caché de sesión mikey v6.3"""
+        """Verifica si el usuario actual es PRO con máxima resiliencia mikey v7.3"""
         if "user_id" not in st.session_state or not st.session_state["user_id"]:
             return False
             
         if st.session_state.get("user_role") == "admin":
             return True
 
+        # Caché de sesión para evitar consultas repetitivas
         if "is_pro_cache" in st.session_state:
             return st.session_state["is_pro_cache"]
             
         try:
-            from sqlalchemy import text, inspect
+            from sqlalchemy import text
             from datetime import datetime
             from db.session import engine
             
-            # Verificación preventiva de columna antes de hacer el SELECT
-            inspector = inspect(engine)
-            cols = [c["name"] for c in inspector.get_columns("users")]
-            
-            if "subscription_tier" not in cols:
-                # Si la columna no existe, no puede ser Pro. Retornamos False sin fallar.
-                st.session_state["is_pro_cache"] = False
-                return False
-
             with engine.connect() as conn:
+                # Mikey v7.3: Consulta directa. Si la columna no existe, SQLAlchemy lanzará ProgrammingError 
+                # y nuestro except lo atrapará devolviendo False (Free User) de forma segura.
                 sql = text("SELECT subscription_tier, subscription_expiry FROM users WHERE id = :uid")
                 row = conn.execute(sql, {"uid": st.session_state["user_id"]}).first()
                 is_pro_val = False
@@ -177,7 +171,6 @@ class AuthManager:
                 
                 st.session_state["is_pro_cache"] = is_pro_val
                 return is_pro_val
-        except Exception as e:
-            print(f"⚠️ [AUTH] is_pro v6.3 fallback: {e}")
+        except Exception:
+            # Fallback definitivo: Ante CUALQUIER error (DB cerrada, columna falta, etc.) -> FREE
             return False
-        return False
