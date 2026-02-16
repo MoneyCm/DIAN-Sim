@@ -27,6 +27,14 @@ if st.session_state.get("current_model") == "models/gemini-1.5-flash":
     st.session_state["current_model"] = "models/gemini-flash-latest"
 
 if not AuthManager.check_auth():
+    # mikey v7.17: Si estamos en la pantalla de login, permitir re-entrada limpia
+    if st.query_params.get("logout") == "1":
+        if st.button("🔄 Volver a Iniciar Sesión", use_container_width=True, type="primary"):
+            st.query_params.clear()
+            st.rerun()
+        st.info("Has cerrado sesión correctamente. mikey.")
+        st.stop()
+
     load_css()
     render_header(title="Acceso al Simulador", subtitle="Identifícate para continuar tu preparación")
     

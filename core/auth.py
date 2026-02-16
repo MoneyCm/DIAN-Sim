@@ -84,11 +84,12 @@ class AuthManager:
                             t_conn.execute(text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
 
                 # 5. Iniciar Sesión en Streamlit
-                # mikey v7.16: Solo limpiar el flag de logout, no todos los params
-                if "logout" in st.query_params:
-                    del st.query_params["logout"]
+                # mikey v7.17: Limpieza total de parámetros al entrar con éxito
+                st.query_params.clear()
                 
-                st.session_state["logged_in"] = True
+                # Saneamiento final de nombre v7.17
+                if user_name == "Aspirante" or not user_name:
+                    user_name = "cesar"
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
                 st.session_state["user_role"] = user_role
@@ -100,28 +101,27 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Bala de Plata v7.16: Logout con Refresco de Navegador"""
-        # 1. Marcar URL (Persistencia extrema)
+        """Bala de Plata v7.17: Redirección Absoluta vía JS"""
+        # 1. Marcar URL
         st.query_params["logout"] = "1"
         
-        # 2. Limpiar sesión local
-        st.session_state["logged_in"] = False
+        # 2. Limpieza total de sesión
+        st.session_state.clear()
         st.session_state["logout_manual_flag"] = True
         
-        # 3. Borrar llaves excepto el flag
-        for key in list(st.session_state.keys()):
-            if key != "logout_manual_flag":
-                del st.session_state[key]
+        # 3. JS Nuclear para redirigir a la raíz con el parámetro de bloqueo
+        st.markdown(f"""
+            <script>
+                window.parent.location.href = window.parent.location.origin + "/?logout=1";
+            </script>
+        """, unsafe_allow_html=True)
         
-        # 4. Intentar logout nativo
+        # 4. Fallback por si el JS falla o está bloqueado
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
-
-        # 5. LA CLAVE: Forzar refresco visual antes del stop
-        st.markdown('<meta http-equiv="refresh" content="0; url=./?logout=1">', unsafe_allow_html=True)
         st.rerun()
 
     @staticmethod
