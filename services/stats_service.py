@@ -87,7 +87,7 @@ class StatsService:
         
         db = None
         all_skills = []
-        retries = 3
+        retries = 5
         
         for attempt in range(retries):
             try:
@@ -96,7 +96,7 @@ class StatsService:
                 break # Success
             except OperationalError as e:
                 if "locked" in str(e).lower() and attempt < retries - 1:
-                    time.sleep(1) # Wait for unlock
+                    time.sleep(2) # Wait for unlock (increased)
                     continue
                 else:
                     print(f"DB Error getting smart mix: {e}")

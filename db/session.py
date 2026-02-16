@@ -29,6 +29,16 @@ engine = create_engine(
     pool_recycle=300
 )
 
+# Enable WAL Mode for SQLite concurrency
+if "sqlite" in DATABASE_URL:
+    from sqlalchemy import event
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 # IMPORTANTE: Importamos modelos DESPUÉS de definir el motor
 from db.models import Base, User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance, Configuration, Question, CaseStudy
 
