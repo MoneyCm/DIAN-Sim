@@ -35,14 +35,31 @@ if st.query_params.get("debug") == "1":
     except:
         st.write("Debug info incomplete")
 
+# --- CRITICAL AUTH FIX v8.0 ---
+# Force Logout Logic moved to top-level app.py to prevent caching issues
+# and handle native Google Session persistence.
+if "logout" in st.query_params:
+    # 1. Clear Local Session
+    if st.session_state.get("logged_in"):
+        st.session_state.clear()
+    
+    # 2. Force Native Google Logout (The missing piece)
+    try:
+        if st.user.is_logged_in:
+             st.logout() # This triggers a rerun automatically
+    except:
+        pass
+
+    # 3. Show Logout Screen
+    if st.button("🔄 Volver a Iniciar Sesión", use_container_width=True, type="primary"):
+        st.query_params.clear()
+        st.rerun()
+    st.info("Has cerrado sesión correctamente. (v8.0)")
+    st.stop()
+
 if not AuthManager.check_auth():
-    # mikey v7.17: Si estamos en la pantalla de login, permitir re-entrada limpia
-    if st.query_params.get("logout") == "1":
-        if st.button("🔄 Volver a Iniciar Sesión", use_container_width=True, type="primary"):
-            st.query_params.clear()
-            st.rerun()
-        st.info("Has cerrado sesión correctamente. mikey.")
-        st.stop()
+    # mikey v7.17: Legacy block kept for fallback, but logic above should catch it first.
+    pass
 
     load_css()
     render_header(title="Acceso al Simulador", subtitle="Identifícate para continuar tu preparación")
