@@ -84,12 +84,14 @@ class AuthManager:
                             t_conn.execute(text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
 
                 # 5. Iniciar Sesión en Streamlit
-                # mikey v7.17: Limpieza total de parámetros al entrar con éxito
                 st.query_params.clear()
                 
-                # Saneamiento final de nombre v7.17
-                if user_name == "Aspirante" or not user_name:
+                # Saneamiento de Identidad mikey v7.19
+                # Prioridad máxima para forecesar@gmail.com
+                if email == "forecesar@gmail.com" or user_name == "Aspirante" or not user_name:
                     user_name = "cesar"
+                
+                st.session_state["logged_in"] = True
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
                 st.session_state["user_role"] = user_role
@@ -101,28 +103,32 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Bala de Plata v7.18: Logout Nuclear sin Rerun mikey"""
-        # 1. Limpiar sesión en el servidor
+        """Bala de Plata v7.19: Logout con Delay y Ruptura de Iframe mikey"""
+        # 1. Limpieza de estado local
+        st.session_state["logged_in"] = False
+        st.session_state["logout_manual_flag"] = True
         st.session_state.clear()
         st.session_state["logout_manual_flag"] = True
         
-        # 2. Intentar logout nativo de Streamlit (esto suele borrar el cookie de OIDC)
+        # 2. Intentar logout nativo OIDC
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
             
-        # 3. JS Nuclear para redirigir a la raíz con el parámetro de bloqueo. 
-        # Usamos window.top para saltar del iframe de Streamlit Cloud.
+        # 3. JS Nuclear con Delay (Asegura que el navegador procese la orden)
         st.markdown("""
             <script>
-                var root = window.top.location.origin + window.top.location.pathname;
-                window.top.location.href = root + "?logout=1";
+                setTimeout(function() {
+                    var root = window.top.location.origin + window.top.location.pathname;
+                    window.top.location.href = root + "?logout=1";
+                }, 200);
             </script>
         """, unsafe_allow_html=True)
         
-        # 4. Detener todo para asegurar que el JS sea lo único enviado al navegador
+        # 4. Mensaje de despedida visual
+        st.warning("Cerrando sesión de forma segura... mikey.")
         st.stop()
 
     @staticmethod
