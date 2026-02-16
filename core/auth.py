@@ -103,8 +103,9 @@ class AuthManager:
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
                             print(f"🚛 [AUTH] Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
-                # mikey v7.9: Limpiar parámetros de logout al entrar
-                st.query_params.clear()
+                # mikey v7.10: Limpiar rastro de logout al entrar con éxito
+                if "logout" in st.query_params:
+                    del st.query_params["logout"]
                 
                 # Iniciar sesión en Streamlit
                 st.session_state["logged_in"] = True
@@ -123,40 +124,31 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión con persistencia en URL mikey v7.9"""
-        import sys
-        print("🚪 [AUTH] Iniciando Logout v7.9...", file=sys.stderr)
+        """Cierre de sesión atómico y persistente mikey v7.10"""
+        # 1. Limpiar TODA la sesión
+        st.session_state.clear()
         
-        # 1. Marcar el flag en el estado actual
-        st.session_state["logout_manual_flag"] = True
+        # 2. Marcar logout persistente en URL
+        st.query_params["logout"] = "1"
         
-        # 2. Persistir el logout en la URL (sobrevive a F5)
-        st.query_params["logout"] = "true"
-        
-        # 3. Limpiar la sesión
-        for key in list(st.session_state.keys()):
-            if key != "logout_manual_flag":
-                del st.session_state[key]
-        
-        print("🧹 [AUTH] Sesión limpia. Parámetro 'logout' fijado.", file=sys.stderr)
-        
+        # 3. Intentar logout nativo (pero sin bloquear)
         try:
             if hasattr(st, "logout"):
-                print("🔒 [AUTH] Intentando st.logout() nativo...", file=sys.stderr)
                 st.logout()
-        except Exception as e:
-            print(f"⚠️ [AUTH] st.logout() nativo falló: {e}", file=sys.stderr)
+        except:
+            pass
+            
+        # 4. Forzar reinicio
+        st.rerun()
 
     @staticmethod
     def check_auth():
-        import sys
-        # mikey v7.9: Si existe el parámetro logout en la URL, NO dejar entrar solo.
-        if st.query_params.get("logout") == "true":
-            # print("⛔ [AUTH] Logout detectado en URL. Bloqueando auto-login.", file=sys.stderr)
+        # mikey v7.10: Si existe 'logout' en URL, BLOQUEAR entrada automática
+        if st.query_params.get("logout") == "1":
             return False
 
-        # 1. Login Manual (session_state)
-        manual_login = "logged_in" in st.session_state and st.session_state["logged_in"]
+        # 1. Login Manual
+        manual_login = st.session_state.get("logged_in", False)
         
         # 2. Login Nativo (Streamlit OIDC) mikey v3.0
         native_user = getattr(st, "user", None)
