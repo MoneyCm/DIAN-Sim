@@ -2,9 +2,12 @@ import bcrypt
 import os
 import streamlit as st
 from sqlalchemy.orm import Session
-# Importación preventiva para registrar todos los modelos en SQLAlchemy registry Mikey
-from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance
-from db.session import SessionLocal
+try:
+    from db.models import User, UserOPEC, Attempt, UserStats, Achievement, Skill, QuestionPerformance
+    from db.session import SessionLocal, engine
+except ImportError:
+    # Fallback para entornos donde el path aún se está configurando
+    pass
 
 class AuthManager:
     @staticmethod
@@ -37,6 +40,9 @@ class AuthManager:
                     st.session_state["user_id"] = row[0]
                     st.session_state["username"] = row[1]
                     st.session_state["user_role"] = row[3]
+                    # Resetear caché de Pro para forzar nueva verificación
+                    if "is_pro_cache" in st.session_state:
+                        del st.session_state["is_pro_cache"]
                     return True
         except Exception as e:
             print(f"🔥 Auth Error mikey v6.0: {e}")
@@ -72,6 +78,9 @@ class AuthManager:
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
                 st.session_state["user_role"] = user_role
+                # Resetear caché de Pro
+                if "is_pro_cache" in st.session_state:
+                    del st.session_state["is_pro_cache"]
                 return True
         except Exception as e:
             print(f"🔥 Google Auth Error mikey v6.0: {e}")
@@ -102,40 +111,39 @@ class AuthManager:
 
     @staticmethod
     def is_pro():
-        """Verifica si el usuario actual es PRO mikey v4.0"""
+        """Verifica si el usuario actual es PRO con caché de sesión mikey v6.1"""
         if "user_id" not in st.session_state or not st.session_state["user_id"]:
             return False
         
         # Admin es siempre PRO
         if st.session_state.get("user_role") == "admin":
             return True
+
+        # Usar caché en session_state para no martillear la DB ni arriesgar errores
+        if "is_pro_cache" in st.session_state:
+            return st.session_state["is_pro_cache"]
             
-        from db.session import SessionLocal
-        from db.models import User
-        from datetime import datetime
-        
         try:
-            from db.session import engine
             from sqlalchemy import text
+            from datetime import datetime
             with engine.connect() as conn:
-                # Mikey v5.0: RAW SQL total para evitar problemas de caché ORM
                 sql = text("SELECT subscription_tier, subscription_expiry FROM users WHERE id = :uid")
                 row = conn.execute(sql, {"uid": st.session_state["user_id"]}).first()
+                is_pro_val = False
                 if row:
                     tier, expiry = row[0], row[1]
                     if tier == "pro":
                         if expiry:
                             if isinstance(expiry, str):
-                                from datetime import datetime
                                 expiry = datetime.fromisoformat(expiry)
-                            from datetime import datetime
-                            return expiry > datetime.now()
-                        return True
+                            is_pro_val = expiry > datetime.now()
+                        else:
+                            is_pro_val = True # Pro vitalicio
+                
+                st.session_state["is_pro_cache"] = is_pro_val
+                return is_pro_val
         except Exception as e:
-            # Fallback total: Ante la duda, es usuario FREE (pero no crashea la app)
-            print(f"⚠️ [AUTH] is_pro critical fallback: {e}")
+            # Fallback total: No crashea la app, solo asume Free
+            print(f"⚠️ [AUTH] is_pro cache fallback: {e}")
             return False
-                
-        return False
-                
         return False
