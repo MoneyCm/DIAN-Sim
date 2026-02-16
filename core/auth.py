@@ -88,7 +88,13 @@ class AuthManager:
                             t_conn.execute(sql_up_name, {"u": user_name, "uid": user_id})
                         print(f"🛠️ [AUTH] Nombre 'None' de {email} corregido a {user_name}. Mikey.", file=sys.stderr)
                     
-                            # mikey v7.14: Fusión Atómica Definitiva (OPEC + Stats)
+                    # mikey v7.14: Fusión Atómica Definitiva (OPEC + Stats)
+                    sql_check_opec = text("SELECT id FROM user_opec WHERE user_id = :uid LIMIT 1")
+                    if not conn.execute(sql_check_opec, {"uid": user_id}).first():
+                        # Cuenta Gmail actual no tiene OPEC. ¿La tiene 'cesar'?
+                        sql_legacy = text("SELECT id FROM users WHERE (username = 'cesar' OR username = 'Cesar') AND (email IS NULL OR email = '')")
+                        legacy_id = conn.execute(sql_legacy).scalar()
+                        if legacy_id:
                             sql_del_empty_opec = text("DELETE FROM user_opec WHERE user_id = :new_uid")
                             sql_del_empty_stats = text("DELETE FROM user_stats WHERE user_id = :new_uid")
                             sql_transfer_opec = text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid")
@@ -96,16 +102,12 @@ class AuthManager:
                             sql_update_name = text("UPDATE users SET username = 'cesar' WHERE id = :new_uid")
                             
                             with engine.begin() as t_conn:
-                                # 1. Limpiar rastro de la cuenta Gmail nueva (que está vacía)
                                 t_conn.execute(sql_del_empty_opec, {"new_uid": user_id})
                                 t_conn.execute(sql_del_empty_stats, {"new_uid": user_id})
-                                # 2. Transferir datos de la cuenta legacy
                                 t_conn.execute(sql_transfer_opec, {"new_uid": user_id, "old_uid": legacy_id})
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
-                                # 3. Asegurar nombre 'cesar' en la cuenta vinculada
                                 t_conn.execute(sql_update_name, {"new_uid": user_id})
                                 user_name = "cesar"
-                            
                             print(f"🚛 [AUTH] Fusión v7.14: 'cesar' -> {email}. Nombre fijado. Mikey.", file=sys.stderr)
                 
                 # mikey v7.13: Limpiar ABSOLUTAMENTE TODO rastro de logout al entrar con éxito
