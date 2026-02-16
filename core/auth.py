@@ -110,7 +110,9 @@ class AuthManager:
                                 t_conn.execute(sql_transfer_stats, {"new_uid": user_id, "old_uid": legacy_id})
                             print(f"🚛 [AUTH] Fusión atómica: Datos de 'cesar' transferidos a {email}. Mikey.", file=sys.stderr)
                 
-                # mikey v7.12: Limpiar ABSOLUTAMENTE TODO rastro de logout al entrar
+                # mikey v7.13: Limpiar ABSOLUTAMENTE TODO rastro de logout al entrar con éxito
+                if "logout" in st.query_params:
+                    del st.query_params["logout"]
                 st.query_params.clear()
                 
                 # Iniciar sesión en Streamlit
@@ -130,24 +132,27 @@ class AuthManager:
 
     @staticmethod
     def logout():
-        """Cierre de sesión de hierro mikey v7.12"""
-        # 1. Fijar parámetro persistente en la URL (sobrevive a F5)
+        """Cierre de sesión de hierro mikey v7.13"""
+        # 1. Fijar parámetro persistente en la URL (sobrevive a F5 y refrescos)
         st.query_params["logout"] = "1"
         
-        # 2. Marcar flag interno
+        # 2. Marcar flag interno antes de borrar nada
         st.session_state["logout_manual_flag"] = True
         
-        # 3. Intentar logout nativo de Streamlit 1.35+
+        # 3. Intentar logout nativo de Streamlit (esto suele forzar un rerun)
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except:
             pass
 
+        # 4. Asegurar rerun
+        st.rerun()
+
     @staticmethod
     def check_auth():
-        # mikey v7.12: El gran detector de logout persistente
-        # Si la URL dice que estamos fuera, LIMPIAR TODO y bloquear entrada.
+        # mikey v7.13: EL BLOQUEO MAESTRO
+        # Si la URL dice que estamos fuera, LIMPIAR TODO y NO dejar entrar.
         if st.query_params.get("logout") == "1":
             st.session_state.clear()
             st.session_state["logout_manual_flag"] = True
