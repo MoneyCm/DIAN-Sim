@@ -43,12 +43,12 @@ if "logout" in st.query_params:
     if st.session_state.get("logged_in"):
         st.session_state.clear()
     
-    # 2. Force Native Google Logout (The missing piece)
-    try:
-        if st.user.is_logged_in:
-             st.logout() # This triggers a rerun automatically
-    except:
-        pass
+    # 2. Force Native Google Logout (disabled for now)
+    # try:
+    #     if st.user.is_logged_in:
+    #          st.logout() # This might be triggering a redirect loop
+    # except:
+    #     pass
 
     # 3. Show Logout Screen
     if st.button("🔄 Volver a Iniciar Sesión", use_container_width=True, type="primary"):
