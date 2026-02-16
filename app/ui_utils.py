@@ -181,7 +181,7 @@ def render_custom_sidebar():
     st.sidebar.divider()
     st.sidebar.markdown(
         """
-        <a href="./?logout=1" target="_self">
+        <a href="/?logout=1" target="_self">
             <button style="
                 width: 100%;
                 background-color: #FF4B4B;
