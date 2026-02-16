@@ -82,31 +82,44 @@ def sync_db_schema():
     except Exception as e:
         print(f"🔥 [DB_SYNC] Error crítico: {e}", file=sys.stderr)
 
-    # Emergency Fix for Missing Columns (Brute Force)
+    # Emergency Fix for Missing Columns (Brute Force - SQLite Native)
     try:
-        with engine.connect() as conn:
-            # Try add last_ia_date
+        import sqlite3
+        if "sqlite" in DATABASE_URL:
+            # Local connection to bypass engine entirely
+            print(f"🔧 [DB_SYNC] Native SQLite Fix on: {db_path}", file=sys.stderr)
+            conn_native = sqlite3.connect(db_path, timeout=30)
+            cur = conn_native.cursor()
+            
+            # last_ia_date
             try:
-                if "sqlite" in DATABASE_URL:
-                   conn.execute(text("ALTER TABLE user_stats ADD COLUMN last_ia_date TIMESTAMP;"))
-                else: 
+                cur.execute("ALTER TABLE user_stats ADD COLUMN last_ia_date TIMESTAMP")
+                print("✅ [DB_SYNC] Native Added: last_ia_date", file=sys.stderr)
+            except Exception:
+                pass # Exists
+            
+            # ia_count_today
+            try:
+                cur.execute("ALTER TABLE user_stats ADD COLUMN ia_count_today INTEGER DEFAULT 0")
+                print("✅ [DB_SYNC] Native Added: ia_count_today", file=sys.stderr)
+            except Exception:
+                pass # Exists
+                
+            conn_native.commit()
+            conn_native.close()
+        else:
+            # Keep sqlalchemy fix for non-sqlite
+            with engine.connect() as conn:
+                try:
                    conn.execute(text("ALTER TABLE user_stats ADD COLUMN IF NOT EXISTS last_ia_date TIMESTAMP;"))
-                print("✅ [DB_SYNC] Forced Add: last_ia_date", file=sys.stderr)
-            except Exception:
-                pass # Already exists
-
-            # Try add ia_count_today
-            try:
-                if "sqlite" in DATABASE_URL:
-                   conn.execute(text("ALTER TABLE user_stats ADD COLUMN ia_count_today INTEGER DEFAULT 0;"))
-                else:
+                except: pass
+                try:
                    conn.execute(text("ALTER TABLE user_stats ADD COLUMN IF NOT EXISTS ia_count_today INTEGER DEFAULT 0;"))
-                print("✅ [DB_SYNC] Forced Add: ia_count_today", file=sys.stderr)
-            except Exception:
-                pass # Already exists
-            conn.commit()
+                except: pass
+                conn.commit()
+
     except Exception as e:
-        print(f"⚠️ [DB_SYNC] Emergency fix error: {e}", file=sys.stderr)
+        print(f"⚠️ [DB_SYNC] Native fix error: {e}", file=sys.stderr)
 
 # Ejecutar de forma segura al importar
 sync_db_schema()

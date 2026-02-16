@@ -28,6 +28,36 @@ render_header(title="Panel de Control", subtitle="Analítica de progreso y gamif
 
 db = SessionLocal()
 
+# --- AUTO-HEALING DB SCHEMA (MIKEY vFinal) ---
+try:
+    # Check if last_ia_date exists in user_stats
+    from sqlalchemy import text
+    try:
+        db.execute(text("SELECT last_ia_date FROM user_stats LIMIT 1"))
+    except Exception:
+        st.warning("⚠️ Actualizando base de datos (Faltaban columnas)...")
+        try:
+            db.execute(text("ALTER TABLE user_stats ADD COLUMN last_ia_date TIMESTAMP"))
+            db.commit()
+            st.toast("Columna 'last_ia_date' reparada.")
+        except Exception as e:
+            st.error(f"Error reparando last_ia_date: {e}")
+
+    try:
+        db.execute(text("SELECT ia_count_today FROM user_stats LIMIT 1"))
+    except Exception:
+        try:
+            db.execute(text("ALTER TABLE user_stats ADD COLUMN ia_count_today INTEGER DEFAULT 0"))
+            db.commit()
+            st.toast("Columna 'ia_count_today' reparada.")
+            st.rerun() # Reload to apply changes
+        except Exception as e:
+            st.error(f"Error reparando ia_count_today: {e}")
+            
+except Exception as e:
+    st.error(f"Error en auto-healing DB: {e}")
+# ---------------------------------------------
+
 try:
     # 0. OPEC Goal (NEW Fase 2)
     u_id = st.session_state.get("user_id")
