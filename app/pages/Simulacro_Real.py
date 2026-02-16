@@ -250,6 +250,8 @@ if not st.session_state.exam_active:
                         st.markdown(f"Expected: {q.options_json.get(q.correct_key)}")
                     
                     st.info(f"💡 **Explicación:** {q.rationale}")
+                    # Fix NameError v5.4
+                    user_id = st.session_state.get("user_id")
                     render_favorite_button(q.question_id, user_id)
                     st.divider()
         

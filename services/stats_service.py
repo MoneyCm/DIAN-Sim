@@ -82,9 +82,30 @@ class StatsService:
         - 30% Mantenimiento (> 70 mastery)
         Spaced Repetition Logic v5.0 implementation.
         """
-        db = SessionLocal()
-        all_skills = db.query(Skill).filter_by(user_id=user_id).all()
-        db.close()
+        import time
+        from sqlalchemy.exc import OperationalError
+        
+        db = None
+        all_skills = []
+        retries = 3
+        
+        for attempt in range(retries):
+            try:
+                db = SessionLocal()
+                all_skills = db.query(Skill).filter_by(user_id=user_id).all()
+                break # Success
+            except OperationalError as e:
+                if "locked" in str(e).lower() and attempt < retries - 1:
+                    time.sleep(1) # Wait for unlock
+                    continue
+                else:
+                    print(f"DB Error getting smart mix: {e}")
+                    return [] # Fail gracefully
+            except Exception as e:
+                print(f"Error getting smart mix: {e}")
+                return []
+            finally:
+                if db: db.close()
         
         if not all_skills:
             return [] # Cold start
@@ -96,15 +117,20 @@ class StatsService:
         import random
         
         # Debilidades (Priority)
-        num_weak = min(len(weak), int(count * 0.7) + 1)
+        num_weak = min(len(weak), int(count * 0.7))
+        if len(weak) > 0 and num_weak == 0: num_weak = 1 # Ensure at least 1 weak if available
+
         if weak:
-            selection.extend(random.sample(weak, num_weak))
+            # Safely sample
+            k = min(len(weak), num_weak)
+            if k > 0:
+                selection.extend(random.sample(weak, k))
             
         # Mantenimiento
         remaining = count - len(selection)
         if remaining > 0 and strong:
-            num_strong = min(len(strong), remaining)
-            selection.extend(random.sample(strong, num_strong))
+            k = min(len(strong), remaining)
+            selection.extend(random.sample(strong, k))
             
         # Fill rest with random weak if needed
         while len(selection) < count and weak:
