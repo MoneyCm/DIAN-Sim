@@ -47,7 +47,14 @@ with col1:
     with st.form("opec_form"):
         opec_number = st.text_input("Número OPEC", value=active_opec.opec_number if active_opec else "", placeholder="Ej: 198273")
         job_title = st.text_input("Nombre del Cargo", value=active_opec.job_title if active_opec else "", placeholder="Ej: Gestor II - Auditoría")
-        level = st.selectbox("Nivel Jerárquico", ["Profesional", "Técnico", "Asistencial"], index=0 if not active_opec else ["Profesional", "Técnico", "Asistencial"].index(active_opec.level))
+        # Mikey v8.1: Safe Selectbox Indexing
+        options_level = ["Profesional", "Técnico", "Asistencial"]
+        try:
+            current_index = options_level.index(active_opec.level) if active_opec and active_opec.level in options_level else 0
+        except ValueError:
+            current_index = 0
+            
+        level = st.selectbox("Nivel Jerárquico", options_level, index=current_index)
         
         purpose = st.text_area("Propósito del Empleo", value=active_opec.purpose if active_opec else "", height=100)
         
