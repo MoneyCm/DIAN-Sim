@@ -119,9 +119,12 @@ class AuthManager:
         except:
             pass
             
-        # 3. Redirección Nativa via Query Params + Rerun
+        # 3. Redirección Nativa via Query Params + Switch Page
         st.query_params["logout"] = "1"
-        st.rerun()
+        try:
+             st.switch_page("app.py")
+        except Exception:
+             st.rerun()
 
     @staticmethod
     def check_auth():
