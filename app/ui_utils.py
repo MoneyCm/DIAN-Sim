@@ -172,7 +172,7 @@ def render_custom_sidebar():
             """, unsafe_allow_html=True)
 
         if not is_pro:
-            if st.sidebar.button("🚀 ¡Pasar a PRO!", use_container_width=True, type="primary"):
+            if st.sidebar.button("🚀 ¡Pasar a PRO!", use_container_width=True, type="primary", key="sidebar_pro_btn"):
                 st.session_state["show_paywall"] = True
                 st.rerun()
 

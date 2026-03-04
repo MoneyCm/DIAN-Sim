@@ -16,23 +16,30 @@ def log(msg):
         f.write(f"[{timestamp}] {msg}\n")
 
 def batch_generate():
-    log("🚀 Iniciando proceso de generación masiva (600 preguntas) con RESILIENCIA MISTRAL")
+    log("🚀 Iniciando proceso de generación masiva (600 preguntas) con TRIPLE RESILIENCIA (Gemini, Mistral, Groq)")
     
     # Configuration
     USER_ID = 2 
     
     # Setup Providers
-    gemini_key = get_api_key("Gemini")
-    mistral_key = get_api_key("Mistral")
+    providers = []
+    keys = {
+        "Gemini": get_api_key("Gemini"),
+        "Mistral": get_api_key("Mistral"),
+        "Groq": get_api_key("Groq")
+    }
     
-    gen_gemini = LLMGenerator("Gemini", gemini_key, model_name="gemini-1.5-flash") if gemini_key else None
-    # Mistral Large requires paid tier sometimes, let's try mistral-large-latest or open-mistral-nemo if available, 
-    # but the library usually handles defaults. Sticking to class defaults.
-    gen_mistral = LLMGenerator("Mistral", mistral_key, model_name="mistral-large-latest") if mistral_key else None
+    gens = {}
+    if keys["Gemini"]: gens["Gemini"] = LLMGenerator("Gemini", keys["Gemini"], model_name="gemini-1.5-flash")
+    if keys["Mistral"]: gens["Mistral"] = LLMGenerator("Mistral", keys["Mistral"], model_name="mistral-large-latest")
+    if keys["Groq"]: gens["Groq"] = LLMGenerator("Groq", keys["Groq"], model_name="llama-3.3-70b-versatile")
     
-    if not gen_gemini and not gen_mistral:
-        log("❌ Error fatal: No hay API Keys configuradas ni para Gemini ni Mistral.")
+    available_providers = list(gens.keys())
+    if not available_providers:
+        log("❌ Error fatal: No hay API Keys configuradas.")
         return
+
+    log(f"🔗 Proveedores activos: {', '.join(available_providers)}")
 
     # Check Target OPEC
     db = SessionLocal()
@@ -56,10 +63,8 @@ def batch_generate():
         {"diff": 3, "count": 200, "label": "Difíciles"}
     ]
     
-    # State Management
-    current_generator = gen_gemini if gen_gemini else gen_mistral
-    provider_name = "Gemini" if gen_gemini else "Mistral"
-    
+    # State
+    provider_idx = 0
     total_generated = 0
     
     for target in TARGETS:
@@ -68,115 +73,89 @@ def batch_generate():
         label = target["label"]
         log(f"\n🌊 Iniciando lote: {label} (Objetivo: {needed})")
         
-        current_count = 0
-        batch_size = 5 # Reduced batch size for stability with multiple providers
+        # Check current progress in DB to resume
+        db = SessionLocal()
+        sources = [f"IA ({p}) - OPEC 236739" for p in available_providers]
+        current_in_db = db.query(Question).filter(
+            Question.source_refs.in_(sources),
+            Question.difficulty == diff
+        ).count()
+        db.close()
+        
+        current_count = current_in_db
+        log(f"   📊 Progreso actual para {label}: {current_count}/{needed}")
+        
+        batch_size = 5
         
         while current_count < needed:
+            p_name = available_providers[provider_idx]
+            current_generator = gens[p_name]
+            
             try:
-                # Rotate function focus
                 func_block = " ".join(opec_funcs[:5]) if opec_funcs else opec_purpose
+                synthetic_text = f"PERFIL: {opec_info}\nPROPÓSITO: {opec_purpose}\nFUNCIONES: {func_block}\nGenerar preguntas situacionales."
                 
-                synthetic_text = f"""
-                CONTEXTO ESPECÍFICO PARA GENERACIÓN DE PREGUNTAS:
-                PERFIL: {opec_info}
-                PROPÓSITO: {opec_purpose}
-                FUNCIONES CLAVE Y TEMAS A EVALUAR HOY:
-                {func_block}
-                NORMATIVA APLICABLE:
-                - Estatuto Tributario Nacional
-                - Código de Procedimiento Administrativo (CPACA)
-                - Constitución Política de Colombia
-                - Código General Disciplinario (Ley 1952)
-                OBJETIVO:
-                Generar preguntas situacionales.
-                """
+                log(f"   ⏳ [{p_name}] Generando sub-lote de {batch_size}...")
                 
-                log(f"   ⏳ Generando sub-lote de {batch_size} preguntas con {provider_name}...")
-                
-                # EXECUTE GENERATION
                 questions = current_generator._generate_batch(synthetic_text, count=batch_size, difficulty=diff)
                 
                 if not questions:
-                    log(f"   ⚠️ {provider_name} no devolvió preguntas. Reintentando...")
-                    time.sleep(2)
-                    continue
+                    raise Exception("La IA no devolvió preguntas (Posible bloqueo o error de formato)")
                 
                 # Save to DB
                 db = SessionLocal()
                 saved_batch = 0
-                seen_hashes = set()
-                
                 for q_data in questions:
-                    if "Generado" in q_data.get("topic", ""):
-                        q_data["topic"] = f"OPEC {user_opec.opec_number} - {q_data.get('micro_competencia', 'General')}"
-                    
                     h = q_data.get("hash_norm")
-                    if h in seen_hashes: continue
+                    if not h: continue
                     
                     existing = db.query(Question).filter_by(hash_norm=h).first()
                     if not existing:
                         new_q = Question(
                             question_id=str(uuid.uuid4()),
-                            track=q_data.get('track', 'FUNCIONAL'),
-                            macro_dominio=q_data.get('macro_dominio', 'Transversal'),
-                            micro_competencia=q_data.get('micro_competencia', 'General'),
-                            competency=q_data.get('competency', 'General'),
-                            topic=q_data.get('topic', 'Generado por IA'),
-                            difficulty=q_data.get('difficulty', diff),
+                            track='FUNCIONAL',
+                            competency=q_data.get('micro_competencia', 'General'),
+                            topic=f"OPEC {user_opec.opec_number} - {q_data.get('micro_competencia', 'General')}",
+                            difficulty=diff,
                             stem=q_data.get('stem'),
                             options_json=q_data.get('options_json'),
                             correct_key=q_data.get('correct_key'),
                             rationale=q_data.get('rationale'),
-                            source_refs=f"IA ({provider_name}) - OPEC 236739",
+                            source_refs=f"IA ({p_name}) - OPEC 236739",
                             created_at=datetime.datetime.utcnow(),
                             hash_norm=h,
                             is_verified=True
                         )
                         db.add(new_q)
                         saved_batch += 1
-                        seen_hashes.add(h)
                 
                 db.commit()
                 db.close()
                 
                 current_count += saved_batch
                 total_generated += saved_batch
-                log(f"   ✅ Guardadas {saved_batch} preguntas ({provider_name}). Progreso: {current_count}/{needed}")
+                log(f"   ✅ [{p_name}] Guardadas {saved_batch}. Total: {current_count}/{needed}")
                 
-                 # Dynamic Sleep based on provider
-                if provider_name == "Gemini":
-                    time.sleep(2)  # Fast
-                else:
-                    time.sleep(1) # Mistral is usually fast too but safer to wait
+                # Wait based on provider
+                time.sleep(2 if p_name == "Gemini" else 1)
 
             except Exception as e:
                 error_msg = str(e).lower()
-                log(f"   ❌ Error con {provider_name}: {str(e)[:100]}...")
+                log(f"   ❌ Error con {p_name}: {error_msg[:150]}")
                 
-                # SWITCHING LOGIC
-                if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg or "multiturn" in error_msg:
-                    log("   ⚠️ Rate Limit detectado.")
-                    
-                    if provider_name == "Gemini" and gen_mistral:
-                        log("   🔄 CAMBIANDO PROVEEDOR: Gemini -> Mistral")
-                        current_generator = gen_mistral
-                        provider_name = "Mistral"
-                        time.sleep(2) # Switch delay
-                        continue
-                        
-                    elif provider_name == "Mistral" and gen_gemini:
-                        log("   🔄 CAMBIANDO PROVEEDOR: Mistral -> Gemini (Esperando enfriamiento)")
-                        time.sleep(30) # Cool down Gemini
-                        current_generator = gen_gemini
-                        provider_name = "Gemini"
-                        continue
-                        
-                    else:
-                        log("   ⛔ Ambos proveedores saturados. Esperando 60s...")
-                        time.sleep(60)
+                # Broad Switching Condition
+                # If Gemini fails for ANY reason (429, 404, or internal "falla total"), we rotate.
+                # If we've rotated through all and still fail, we wait.
+                
+                provider_idx = (provider_idx + 1) % len(available_providers)
+                new_p = available_providers[provider_idx]
+                
+                if provider_idx == 0: # We looped back to the first one
+                    log(f"   ⚠️ Ciclo completo de proveedores sin éxito. Esperando 60s antes de reintentar con {new_p}...")
+                    time.sleep(60)
                 else:
-                    # Non-rate limit error, maybe content error or network
-                     time.sleep(5)
+                    log(f"   🔄 Saltando a {new_p}...")
+                    time.sleep(5)
                 
     log(f"\n🏁 PROCESO COMPLETADO. Total generado: {total_generated} preguntas.")
 

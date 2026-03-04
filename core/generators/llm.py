@@ -338,30 +338,13 @@ class LLMGenerator:
                         last_error = e
                         err_str = str(e)
                         if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                            # v47.2 Adaptive Backoff: Try to extract retry-after
-                            wait_time = 10 # Safer default for peak hours
-                            if "retry in " in err_str:
-                                try:
-                                    # Extract number after "retry in "
-                                    parts = err_str.split("retry in ")
-                                    wait_time = float(parts[1].split("s")[0]) + 1
-                                except: pass
-                            print(f"⚠️ [429] Cuota excedida en {model_name}. Esperando {wait_time}s para reintento automático... Mikey v6.2")
-                            time.sleep(wait_time) 
-                            # Re-attempt same model once before switching
-                            try:
-                                response = self.gemini_client.models.generate_content(
-                                    model=model_name,
-                                    contents=prompt,
-                                    config=config
-                                )
-                                if response and response.text:
-                                    content = response.text
-                                    break
-                            except: pass
+                            print(f"⚠️ [429] Cuota excedida en {model_name}. Fallando para cambio de proveedor... Mikey v6.3")
+                            raise e 
                         
-                        print(f"DEBUG: Fallo Gemini {model_name}: {e}")
+                        print(f"DEBUG: Error Gemini {model_name}: {err_str[:100]}")
                         continue
+                
+                # v47.1 Validation & Rescue Mikey (if needed for non-429 failures)
                 
                 # v47.1 Validation & Rescue Mikey
                 if not content and hasattr(self, 'fallback_client') and self.fallback_client:
