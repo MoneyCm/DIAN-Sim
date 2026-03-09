@@ -1,13 +1,14 @@
-import streamlit as st
 import os
 import sys
-import sqlite3
-from sqlalchemy import create_engine, inspect
 
 # --- CONFIGURACIÓN DE RUTAS ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+import streamlit as st
+import sqlite3
+from sqlalchemy import create_engine, inspect
 
 st.title("🔧 Diagnóstico de Base de Datos (In-App)")
 

@@ -12,10 +12,15 @@ def verify_neon_cloud():
         with engine.connect() as conn:
             print("✅ Conexión exitosa a Neon.")
             
-            # Contar registros
-            cases_count = conn.execute(text("SELECT count(*) FROM case_studies")).scalar()
-            questions_count = conn.execute(text("SELECT count(*) FROM questions")).scalar()
-            print(f"📊 Estadísticas: {cases_count} casos, {questions_count} preguntas.")
+            # Muestra de casos
+            cases = conn.execute(text("SELECT title, LEFT(text, 200) FROM case_studies LIMIT 1")).fetchall()
+            print("\n📋 Muestra de Casos:")
+            for c in cases:
+                print(f"   - Título: {c[0]}")
+                print(f"   - Texto (inicio): {c[1]}...")
+                text_full = conn.execute(text("SELECT text FROM case_studies WHERE title = :t"), {"t": c[0]}).scalar()
+                print(f"   - ¿Contiene 'DIAN'? {'SÍ' if 'DIAN' in text_full.upper() else 'NO'}")
+                print(f"   - ¿Contiene términos prohibidos? {any(t in text_full.lower() for t in ['horizonte', 'cnsc'])}")
             
             # Buscar Horizonte
             res = conn.execute(text("SELECT id, title FROM case_studies WHERE title ILIKE '%Horizonte%' OR text ILIKE '%Horizonte%'")).fetchall()

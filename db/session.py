@@ -12,8 +12,23 @@ db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dian_si
 
 try:
     import streamlit as st
-    # v19.1 - Prioridad Absoluta a Neon en Cloud
+    # v19.4 - Detección Profunda de DATABASE_URL
     secrets_url = st.secrets.get("DATABASE_URL")
+    
+    # Debug: Imprimir llaves disponibles en stderr
+    print(f"🕵️ [DB] Streamlit Secrets detectados: {list(st.secrets.keys())}", file=sys.stderr)
+
+    if not secrets_url:
+        for section in st.secrets:
+            # En Streamlit, las secciones se acceden como atributos o llaves
+            try:
+                content = st.secrets[section]
+                if hasattr(content, "get") and content.get("DATABASE_URL"):
+                    secrets_url = content.get("DATABASE_URL")
+                    print(f"🔗 [DB] DATABASE_URL encontrada en [{section}].", file=sys.stderr)
+                    break
+            except: continue
+
     env_url = os.getenv("DATABASE_URL")
     
     if secrets_url:
@@ -24,13 +39,19 @@ try:
         print("🔗 [DB] Usando DATABASE_URL de Environment Variables.", file=sys.stderr)
     else:
         raw_url = f"sqlite:///{db_path}"
-        print(f"⚠️ [DB] WARNING: No se detectó DATABASE_URL. Usando SQLite local: {db_path}", file=sys.stderr)
-except:
+        print(f"⚠️ [DB] WARNING: No se detectó DATABASE_URL. Usando SQLite local.", file=sys.stderr)
+except Exception as e:
+    print(f"❌ [DB] Error accediendo a secrets: {e}", file=sys.stderr)
     raw_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
 
 if raw_url.startswith("postgres://") or raw_url.startswith("postgresql://"):
     raw_url = raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
     raw_url = raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    
+    # v19.3 - Limpiar parámetros conflictivos de Neon
+    if "channel_binding=" in raw_url:
+        import re
+        raw_url = re.sub(r'[&?]channel_binding=[^&]*', '', raw_url)
 
 DATABASE_URL = raw_url
 
