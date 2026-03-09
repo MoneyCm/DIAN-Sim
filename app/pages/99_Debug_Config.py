@@ -1,7 +1,13 @@
 import streamlit as st
 import os
+import sys
 import sqlite3
 from sqlalchemy import create_engine, inspect
+
+# --- CONFIGURACIÓN DE RUTAS ---
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 st.title("🔧 Diagnóstico de Base de Datos (In-App)")
 
@@ -68,15 +74,22 @@ st.divider()
 # 4. Search for ghost content
 st.subheader("👻 Búsqueda de Contenido Fantasma (Horizonte/CNSC)")
 try:
+    # Mostrar llaves de secrets para ayudar al usuario
+    try:
+        import streamlit as st
+        st.write(f"**Keys detected in Secrets:** `{list(st.secrets.keys())}`")
+    except: pass
+
     with engine.connect() as conn:
         from sqlalchemy import text
         
+        # Usamos LIKE para compatibilidad con SQLite, aunque sea case-sensitive en algunos casos
         st.write("### Casos sospechosos en CaseStudy")
         res_cases = conn.execute(text("""
             SELECT id, title FROM case_studies 
-            WHERE title ILIKE '%Horizonte%' 
-            OR text ILIKE '%Horizonte%' 
-            OR text ILIKE '%CNSC%'
+            WHERE title LIKE '%Horizonte%' 
+            OR text LIKE '%Horizonte%' 
+            OR text LIKE '%CNSC%'
         """)).fetchall()
         
         if res_cases:
@@ -93,15 +106,15 @@ try:
 
         st.write("### Preguntas sospechosas sueltas")
         res_qs = conn.execute(text("""
-            SELECT question_id, LEFT(stem, 50) FROM questions 
-            WHERE stem ILIKE '%Horizonte%' 
-            OR stem ILIKE '%CNSC%'
+            SELECT question_id, stem FROM questions 
+            WHERE stem LIKE '%Horizonte%' 
+            OR stem LIKE '%CNSC%'
         """)).fetchall()
         
         if res_qs:
             st.warning(f"Se encontraron {len(res_qs)} preguntas!")
             for r in res_qs:
-                st.write(f"- ID: `{r[0]}` | Stem: `{r[1]}...`")
+                st.write(f"- ID: `{r[0]}` | Stem: `{r[1][:50]}...`")
                 if st.button(f"🗑️ Eliminar Pregunta {r[0][:8]}", key=f"del_q_{r[0]}"):
                     conn.execute(text("DELETE FROM questions WHERE question_id = :id"), {"id": r[0]})
                     conn.commit()
@@ -111,3 +124,27 @@ try:
 
 except Exception as e:
     st.error(f"Error en búsqueda fantasma: {e}")
+
+st.divider()
+
+# 5. Case Count and Topics
+st.subheader("📊 Conteo de Casos y Tópicos")
+try:
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        
+        # Conteo total de casos
+        case_count = conn.execute(text("SELECT count(*) FROM case_studies")).scalar()
+        st.write(f"**Total de Casos en DB:** `{case_count}`")
+        
+        # Muestra de tópicos únicos
+        if case_count > 0:
+            topics = conn.execute(text("SELECT DISTINCT topic FROM case_studies")).fetchall()
+            st.write("**Tópicos detectados:**")
+            for t in topics:
+                st.write(f"- `{t[0]}`")
+        else:
+            st.info("No hay casos en la tabla `case_studies`.")
+
+except Exception as e:
+    st.error(f"Error al contar casos: {e}")
