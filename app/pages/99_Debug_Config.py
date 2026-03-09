@@ -11,9 +11,17 @@ if PROJECT_ROOT not in sys.path:
 
 st.title("🔧 Diagnóstico de Base de Datos (In-App)")
 
+# 0. Path Debug
+st.subheader("🕵️ Inspección de Rutas")
+st.write(f"**Working Directory:** `{os.getcwd()}`")
+st.write(f"**Project Root:** `{PROJECT_ROOT}`")
+st.write(f"**Contenido de Root:** `{os.listdir(PROJECT_ROOT)}`")
+st.write(f"**sys.path:**")
+st.code("\n".join(sys.path))
+
 # 1. Check path
-db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dian_sim.db"))
-st.write(f"**Path calculado:** `{db_path}`")
+db_path = os.path.join(PROJECT_ROOT, "dian_sim.db")
+st.write(f"**Path DB calculado:** `{db_path}`")
 st.write(f"**Existe archivo?**: {os.path.exists(db_path)}")
 
 # 2. Check schema via SQLAlchemy
