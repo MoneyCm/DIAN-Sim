@@ -5,6 +5,7 @@ import datetime
 import random
 import os
 import sys
+import unicodedata
 
 # --- CONFIGURACIÓN DE RUTAS ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -84,6 +85,94 @@ if "current_case_idx" not in st.session_state:
 if "user_answers" not in st.session_state:
     st.session_state.user_answers = {} # {question_id: choice}
 
+BANNED_SIM_REAL_TERMS = [
+    "comision nacional del servicio civil",
+    "cnsc",
+    "constructora horizonte",
+    "constructora soluciones sas",
+    "alcaldia municipal",
+    "alcalde de villaflores",
+    "villaflores",
+    "san vicente",
+    "lpn-2023-054",
+    "contratacion publica",
+    "obra publica",
+    "licitacion publica",
+    "ley 80 de 1993",
+    "centro de salud de tercer nivel",
+    "procuraduria",
+    "fiscalia",
+    "dumping",
+    "sobornos",
+    "campana electoral",
+    "sipr",
+    "horizonte s.a.",
+    "horizonte sa",
+    "lpn 2023",
+]
+
+
+def _normalize_exam_text(value):
+    value = unicodedata.normalize("NFKD", (value or "").strip().lower())
+    return "".join(ch for ch in value if not unicodedata.combining(ch))
+
+
+def _case_is_valid_for_dian(case):
+    questions = getattr(case, "questions", []) or []
+    haystack_parts = [case.title, case.text, getattr(case, "topic", "")]
+    for question in questions:
+        haystack_parts.extend([
+            getattr(question, "stem", ""),
+            getattr(question, "rationale", ""),
+            getattr(question, "topic", ""),
+            getattr(question, "competency", ""),
+        ])
+
+        options = getattr(question, "options_json", None)
+        if not isinstance(options, dict) or len(options) != 3:
+            return False
+
+    haystack = " ".join(_normalize_exam_text(part) for part in haystack_parts if part)
+    if not haystack:
+        return False
+
+    if any(term in haystack for term in BANNED_SIM_REAL_TERMS):
+        return False
+
+    if "dian" not in haystack:
+        return False
+
+    if "gestor iii de fiscalizacion" in haystack and "dian" not in haystack:
+        return False
+
+    return True
+
+
+def _sanitize_exam_session_state():
+    active_cases = st.session_state.get("exam_cases", []) or []
+    if active_cases and not all(_case_is_valid_for_dian(case) for case in active_cases):
+        st.session_state.exam_cases = []
+        st.session_state.exam_active = False
+        st.session_state.current_case_idx = 0
+        st.session_state.user_answers = {}
+
+    review_cases = st.session_state.get("last_exam_cases", []) or []
+    if review_cases and not all(_case_is_valid_for_dian(case) for case in review_cases):
+        st.session_state.last_exam_cases = []
+        st.session_state.last_user_answers = {}
+        if "exam_score" in st.session_state:
+            del st.session_state.exam_score
+
+
+_sanitize_exam_session_state()
+
+def _reset_invalid_exam_state():
+    st.session_state.exam_cases = []
+    st.session_state.exam_active = False
+    st.session_state.current_case_idx = 0
+    st.session_state.user_answers = {}
+
+
 def load_exam_cases():
     db = next(get_db())
     user_id = st.session_state.get("user_id")
@@ -119,23 +208,27 @@ def load_exam_cases():
                     Question.topic == t,
                     Question.difficulty == user_level_int 
                 ).first()
-                if c and c not in final_cases:
+                if c and c not in final_cases and _case_is_valid_for_dian(c):
                     final_cases.append(c)
         
-        # B. RANDOM FILL (Filtered by Difficulty)
+        # B. RANDOM FILL (Filtered by Difficulty AND OPEC Topic)
         is_pro = AuthManager.is_pro()
-        target_case_count = 3 if is_pro else 2 # 2 casos aprox 6-10 Qs para Free mikey
+        target_case_count = 3 if is_pro else 2 
+        
+        # Obtener el tópico de la OPEC activa para filtrar
+        active_topic = f"OPEC {user_opec.opec_number}" if user_opec else "OPEC 236769"
         
         needed = target_case_count - len(final_cases)
         if needed > 0:
-            # Seleccionar casos que tengan preguntas del nivel correcto
+            # Seleccionar casos que tengan preguntas del nivel correcto Y correspondan a la OPEC activa
             random_cases = db.query(CaseStudy).join(Question).filter(
-                Question.difficulty == user_level_int
+                Question.difficulty == user_level_int,
+                Question.topic.like(f"%{active_topic}%")
             ).group_by(CaseStudy.id).order_by(func.random()).limit(needed * 2).all()
             
             for rc in random_cases:
                 if len(final_cases) >= target_case_count: break
-                if rc not in final_cases and rc.questions:
+                if rc not in final_cases and rc.questions and _case_is_valid_for_dian(rc):
                     final_cases.append(rc)
                     
         return final_cases
@@ -206,7 +299,7 @@ if not st.session_state.exam_active:
     # Modo Simulacro
     st.markdown("""
     ### 🎯 Sobre este Simulacro
-    Este modo simula las condiciones del examen real de la CNSC/DIAN:
+    Este modo simula las condiciones del examen real para cargos de la DIAN:
     
     *   **Formato:** Casos Protagónicos (1 Texto → Múltiples Preguntas)
     *   **Tiempo:** Estricto (2 minutos promedio por pregunta)
@@ -234,6 +327,13 @@ if not st.session_state.exam_active:
             answers = st.session_state.get("last_user_answers", {})
             
             for c_idx, case in enumerate(cases):
+                if not _case_is_valid_for_dian(case):
+                    st.session_state.last_exam_cases = []
+                    st.session_state.last_user_answers = {}
+                    if "exam_score" in st.session_state:
+                        del st.session_state.exam_score
+                    st.warning("Se oculto un caso invalido almacenado en la sesion.")
+                    st.rerun()
                 st.markdown(f"#### 📂 Caso {c_idx+1}: {case.title}")
                 st.caption(case.text[:150] + "...") # Preview text
                 
@@ -285,6 +385,11 @@ else:
     # 2. Global Progress
     current_idx = st.session_state.current_case_idx
     current_case = st.session_state.exam_cases[current_idx]
+
+    if not _case_is_valid_for_dian(current_case):
+        _reset_invalid_exam_state()
+        st.warning("Se detecto un caso invalido y fue descartado antes de mostrarlo.")
+        st.rerun()
     
     st.progress((current_idx) / len(st.session_state.exam_cases))
     st.caption(f"Caso {current_idx + 1} de {len(st.session_state.exam_cases)}")
@@ -340,4 +445,5 @@ else:
             else:
                 st.session_state.current_case_idx += 1
                 st.rerun()
+
 

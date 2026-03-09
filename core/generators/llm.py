@@ -209,8 +209,13 @@ class LLMGenerator:
         context = text[:15000]
         
         prompt = f"""
-        Actúa como un Experto en Normativa de la DIAN y Constructor de Preguntas.
+        Actúa como un Experto en Normativa de la DIAN y Constructor de Preguntas para el nivel Profesional.
         Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
+        
+        REGLA DE ORO DE ENTIDAD:
+        * El protagonista siempre trabaja para la DIAN (Dirección de Impuestos y Aduanas Nacionales).
+        * NUNCA menciones a la CNSC (Comisión Nacional del Servicio Civil) como el empleador. La CNSC solo convoca el concurso externo, pero el rol laboral ocurre dentro de la DIAN.
+        
         {opec_context}
         {normativa_context}
         {behavioral_context}
@@ -641,8 +646,13 @@ class LLMGenerator:
         """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
         
         prompt = f"""
-        Actúa como un Diseñador de Pruebas Situacionales para la DIAN (Concursos CNSC).
+        Actúa como un Diseñador de Pruebas Situacionales para la DIAN (Dirección de Impuestos y Aduanas Nacionales). 
         Tu tarea es crear un CASO PROTAGÓNICO (Case Study) completo y original.
+        
+        REGLA CRÍTICA DE CONTEXTO:
+        * El entorno de trabajo debe ser EXCLUSIVAMENTE la DIAN.
+        * El protagonista es un funcionario de la DIAN.
+        * EVITA CUALQUIER MENCIÓN a la CNSC como lugar de trabajo o jefatura.
         
         TEMA PRINCIPAL: {topic}
         DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado)

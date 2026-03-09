@@ -63,3 +63,51 @@ try:
 
 except Exception as e:
     st.error(f"Error inspeccionando SQLite directo: {e}")
+st.divider()
+
+# 4. Search for ghost content
+st.subheader("👻 Búsqueda de Contenido Fantasma (Horizonte/CNSC)")
+try:
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        
+        st.write("### Casos sospechosos en CaseStudy")
+        res_cases = conn.execute(text("""
+            SELECT id, title FROM case_studies 
+            WHERE title ILIKE '%Horizonte%' 
+            OR text ILIKE '%Horizonte%' 
+            OR text ILIKE '%CNSC%'
+        """)).fetchall()
+        
+        if res_cases:
+            st.warning(f"Se encontraron {len(res_cases)} casos!")
+            for r in res_cases:
+                st.write(f"- ID: `{r[0]}` | Título: `{r[1]}`")
+                if st.button(f"🗑️ Eliminar Caso {r[0][:8]}", key=f"del_c_{r[0]}"):
+                    conn.execute(text("DELETE FROM questions WHERE case_id = :id"), {"id": r[0]})
+                    conn.execute(text("DELETE FROM case_studies WHERE id = :id"), {"id": r[0]})
+                    conn.commit()
+                    st.success("Eliminado. Recarga la página.")
+        else:
+            st.success("No se encontraron casos con términos prohibidos en la DB actual.")
+
+        st.write("### Preguntas sospechosas sueltas")
+        res_qs = conn.execute(text("""
+            SELECT question_id, LEFT(stem, 50) FROM questions 
+            WHERE stem ILIKE '%Horizonte%' 
+            OR stem ILIKE '%CNSC%'
+        """)).fetchall()
+        
+        if res_qs:
+            st.warning(f"Se encontraron {len(res_qs)} preguntas!")
+            for r in res_qs:
+                st.write(f"- ID: `{r[0]}` | Stem: `{r[1]}...`")
+                if st.button(f"🗑️ Eliminar Pregunta {r[0][:8]}", key=f"del_q_{r[0]}"):
+                    conn.execute(text("DELETE FROM questions WHERE question_id = :id"), {"id": r[0]})
+                    conn.commit()
+                    st.success("Eliminada. Recarga la página.")
+        else:
+            st.success("No se encontraron preguntas con términos prohibidos.")
+
+except Exception as e:
+    st.error(f"Error en búsqueda fantasma: {e}")

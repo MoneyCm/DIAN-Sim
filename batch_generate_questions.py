@@ -58,9 +58,9 @@ def batch_generate():
 
     # Targets
     TARGETS = [
-        {"diff": 1, "count": 200, "label": "Fáciles"},
-        {"diff": 2, "count": 200, "label": "Intermedias"},
-        {"diff": 3, "count": 200, "label": "Difíciles"}
+        {"diff": 1, "count": 166, "label": "Fáciles"},
+        {"diff": 2, "count": 167, "label": "Intermedias"},
+        {"diff": 3, "count": 167, "label": "Difíciles"}
     ]
     
     # State

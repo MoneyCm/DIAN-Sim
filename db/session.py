@@ -12,7 +12,19 @@ db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dian_si
 
 try:
     import streamlit as st
-    raw_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL", f"sqlite:///{db_path}"))
+    # v19.1 - Prioridad Absoluta a Neon en Cloud
+    secrets_url = st.secrets.get("DATABASE_URL")
+    env_url = os.getenv("DATABASE_URL")
+    
+    if secrets_url:
+        raw_url = secrets_url
+        print("🔗 [DB] Usando DATABASE_URL de Streamlit Secrets.", file=sys.stderr)
+    elif env_url:
+        raw_url = env_url
+        print("🔗 [DB] Usando DATABASE_URL de Environment Variables.", file=sys.stderr)
+    else:
+        raw_url = f"sqlite:///{db_path}"
+        print(f"⚠️ [DB] WARNING: No se detectó DATABASE_URL. Usando SQLite local: {db_path}", file=sys.stderr)
 except:
     raw_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
 
