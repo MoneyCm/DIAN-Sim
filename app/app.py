@@ -193,8 +193,11 @@ try:
 except ImportError:
     from components.NewsTicker import render_news_ticker
 
-# Remove generic header and paywalls from router wrapper if they belong inside the specific page script
-# (Dashboard.py should draw its own header now).
+# Restaurar la info de Gamificación en la barra lateral del usuario v9.1
+try:
+    render_custom_sidebar()
+except Exception as e:
+    pass
 
 # Ejecutar la página seleccionada
 pg.run()
