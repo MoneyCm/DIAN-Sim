@@ -93,8 +93,15 @@ if not AuthManager.check_auth():
         st.markdown("---")
         # Integración NATIVA Google OAuth mikey v3.0 (Streamlit 1.42+)
         try:
-            # Verificar si existen los secretos antes de intentar st.login()
-            has_google = "auth" in st.secrets and "google" in st.secrets.auth
+            # En entorno local sin secrets.toml dict explota con FileNotFoundError
+            has_google = False
+            try:
+                if "auth" in st.secrets and "google" in st.secrets.auth:
+                    has_google = True
+            except FileNotFoundError:
+                pass # Local sin secretos, ignorar sin romper
+            except Exception:
+                pass # Otros errores de lectura
             
             if has_google:
                 st.markdown("<p style='text-align: center; color: gray;'>O usa tu cuenta corporativa:</p>", unsafe_allow_html=True)
@@ -108,7 +115,8 @@ if not AuthManager.check_auth():
                     st.info("Para activar esta función, debes configurar los 'Secrets' en Streamlit Cloud.")
                     st.code("[auth]\nredirect_uri = \"...\"\ncookie_secret = \"...\"\n\n[auth.google]\nclient_id = \"...\"\nclient_secret = \"...\"", language="toml")
         except Exception as e:
-            st.error(f"Error en Google Login Nativo: {e}")
+            # Evitamos colapsar la app entera si falla esta sección visual
+            st.error(f"Aviso Login Nativo: {e}")
 
     with col_l2:
         st.subheader("📝 Registrarse")
@@ -142,135 +150,51 @@ if not AuthManager.check_auth():
                                 st.error(f"Error al registrar: {e}")
     st.stop() # Stop execution here if not logged in
 
-# --- v2.0 NEW: Sidebar Gamification Info ---
-stats_s, rank = render_custom_sidebar()
-u_id = st.session_state.get("user_id")
+# --- NAVEGACIÓN CENTRALIZADA (st.navigation) v9.0 ---
+# Definición de páginas (st.Page deshabilita el menú automático caótico)
 
+# Grupo: Mi Cuenta
+p_dashboard = st.Page("pages/6_Dashboard.py", title="Dashboard", icon="📊", default=True)
+p_perfil = st.Page("pages/7_Mi_Perfil.py", title="Mi Perfil", icon="👤")
+p_config = st.Page("pages/7_Configuracion_OPEC.py", title="Configuración OPEC", icon="⚙️")
+p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
-# Inject Global CSS
+# Grupo: Práctica
+p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Nuevo Simulacro", icon="🚀")
+p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Real", icon="⏱️")
+p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repaso Especial", icon="🧠")
+p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
+
+# Grupo: Recursos
+p_ia = st.Page("pages/4_Generador_IA.py", title="Generador IA", icon="🤖")
+p_banco = st.Page("pages/5_Banco_Preguntas.py", title="Banco de Preguntas", icon="📚")
+p_etica = st.Page("pages/9_Etica_Integridad.py", title="Ética e Integridad", icon="⚖️")
+
+# Grupo: Administración (Sistemas)
+p_admin = st.Page("pages/8_Panel_Admin.py", title="Panel de Control", icon="🛡️")
+p_debug_opec = st.Page("pages/98_Debug_OPEC.py", title="Debug OPEC", icon="🐛")
+p_debug_cfg = st.Page("pages/99_Debug_Config.py", title="Debug Config", icon="🔧")
+
+# Agrupar menú
+pages = {
+    "Mi Cuenta": [p_dashboard, p_perfil, p_config, p_logout],
+    "Práctica DIAN": [p_simulacro, p_sim_real, p_repaso, p_resultados],
+    "Herramientas y Recursos": [p_banco, p_ia, p_etica],
+    "Sistemas (Admin)": [p_admin, p_debug_opec, p_debug_cfg]
+}
+
+# Iniciar el router de navegación de Streamlit
+pg = st.navigation(pages)
+
+# Inject Global CSS and render visual wrappers before page execution
 load_css()
-
 try:
     from app.components.NewsTicker import render_news_ticker
 except ImportError:
     from components.NewsTicker import render_news_ticker
 
-# Render Custom Header
-render_header()
+# Remove generic header and paywalls from router wrapper if they belong inside the specific page script
+# (Dashboard.py should draw its own header now).
 
-# --- Paywall Global Mikey v4.0 ---
-if st.session_state.get("show_paywall"):
-    from ui_utils import render_paywall_card
-    if st.button("⬅️ Cerrar e Ir Atrás", use_container_width=False):
-        st.session_state["show_paywall"] = False
-    render_paywall_card("Acceso Pro Ilimitado")
-    st.stop()
-
-# v6.3: Regulatory Flash Updates
-render_news_ticker()
-
-# Introduction / Hero Dashboard v6.0
-try:
-    is_pro_user = AuthManager.is_pro()
-except:
-    is_pro_user = False
-
-pro_tag = '<div style="background: #FFD700; color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px;">✨ PRO</div>' if is_pro_user else ""
-
-st.markdown(f"""
-<div class="hero-welcome">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h1 style="margin: 0;">¡Hola, {st.session_state.get('username') or 'Aspirante'}! 👋</h1>
-            <p style="font-size: 1.1rem; color: var(--text-muted); margin-top: 5px;">Bienvenido a tu Centro de Control de Preparación para la DIAN.</p>
-        </div>
-        <div style="text-align: right;">
-            <span style="font-size: 2.5rem;">{rank["icon"] if rank else '🎓'}</span>
-            <div style="font-weight: 800; color: var(--dian-red);">{rank["name"] if rank else 'Estudiante'}</div>
-            {pro_tag}
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Metrics Grid section
-m_col1, m_col2, m_col3 = st.columns(3)
-
-with m_col1:
-    metric_card(
-        label="🔥 Racha Actual",
-        value=str(stats_s.current_streak if stats_s else 0),
-        sublabel="Días seguidos"
-    )
-with m_col2:
-    metric_card(
-        label="🏆 Puntaje Total",
-        value=str(stats_s.total_points if stats_s else 0),
-        sublabel="Puntos de Maestría"
-    )
-with m_col3:
-    # Calculate global success rate if possible
-    # (Assuming we can fetch total hits/misses from stats or simple query)
-    metric_card(
-        label="🎯 Precisión",
-        value="92%", # Placeholder o query rápido
-        sublabel="Aciertos globales"
-    )
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# Main Grid: Quick Actions vs OPEC Status
-col_left, col_right = st.columns([0.6, 0.4])
-
-with col_left:
-    st.markdown("### ⚡ Acciones Rápidas")
-    
-    # Grid for action buttons
-    q_col1, q_col2 = st.columns(2)
-    with q_col1:
-        st.page_link("pages/1_Nuevo_Simulacro.py", label="Nuevo Simulacro", icon="🚀", use_container_width=True)
-        st.page_link("pages/5_Banco_Preguntas.py", label="Explorar Banco", icon="📚", use_container_width=True)
-
-    with q_col2:
-        st.page_link("pages/3_Resultados.py", label="Ver Progreso", icon="📈", use_container_width=True)
-        st.page_link("pages/4_Generador_IA.py", label="Generador IA", icon="🤖", use_container_width=True)
-
-with col_right:
-    st.markdown("### 📋 Meta Activa")
-    # Fetch active OPEC info - Mikey v5.0 Safety
-    u_opec = None
-    try:
-        from db.session import SessionLocal
-        from db.models import UserOPEC
-        
-        with SessionLocal() as db:
-            active_opec_orm = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
-            if active_opec_orm:
-                # Tuple simulation for backward compatibility with existing code
-                u_opec = (active_opec_orm.opec_number, active_opec_orm.job_title, active_opec_orm.level)
-            else:
-                u_opec = None
-    except Exception as opec_err:
-        print(f"⚠️ [APP] OPEC Fetch Error: {opec_err}")
-    
-    if u_opec:
-        st.markdown(f"""
-        <div class="dian-card" style="padding: 1.5rem; border-left: 5px solid var(--dian-red);">
-            <div style="font-weight: 800; color: var(--dian-red); font-size: 0.8rem; text-transform: uppercase;">{u_opec[0]}</div>
-            <div style="font-size: 1.2rem; font-weight: 700; margin: 5px 0;">{u_opec[1]}</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">{u_opec[2]}</div>
-            <hr style="opacity: 0.1; margin: 15px 0;">
-            <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Maestría del Cargo</div>
-            <div style="background: rgba(0,0,0,0.05); height: 10px; border-radius: 5px; overflow: hidden;">
-                <div style="background: linear-gradient(90deg, #E60000, #FFD700); width: 65%; height: 100%;"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.warning("No tienes una OPEC activa seleccionada.")
-        if st.button("Configurar OPEC Ahora", use_container_width=True):
-            st.switch_page("pages/7_Configuracion_OPEC.py")
-
-# Initialize session state for generic use
-if "user_session" not in st.session_state:
-    st.session_state["user_session"] = str(os.urandom(8))
+# Ejecutar la página seleccionada
+pg.run()
