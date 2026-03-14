@@ -57,7 +57,7 @@ if "logout" in st.query_params:
     st.info("Has cerrado sesión correctamente. (v8.0)")
     st.stop()
 
-if not AuthManager.check_auth():
+def login_view():
     # mikey v7.17: Legacy block kept for fallback, but logic above should catch it first.
     pass
 
@@ -77,6 +77,7 @@ if not AuthManager.check_auth():
                 try:
                     if AuthManager.login(user_in, pass_in):
                         st.success("¡Bienvenido!")
+                        st.rerun() # Refresh app to switch st.navigation mode
                     else:
                         st.error("Usuario o contraseña incorrectos")
                 except Exception as e:
@@ -148,7 +149,6 @@ if not AuthManager.check_auth():
                                 st.success("Cuenta creada. ¡Ya puedes entrar!")
                             except Exception as e:
                                 st.error(f"Error al registrar: {e}")
-    st.stop() # Stop execution here if not logged in
 
 # --- NAVEGACIÓN CENTRALIZADA (st.navigation) v9.0 ---
 # Definición de páginas (st.Page deshabilita el menú automático caótico)
@@ -183,21 +183,27 @@ pages = {
     "Sistemas (Admin)": [p_admin, p_debug_opec, p_debug_cfg]
 }
 
-# Iniciar el router de navegación de Streamlit
-pg = st.navigation(pages)
+# Determinar Navegación Activa (Condicional)
+if not AuthManager.check_auth():
+    # Modo no logueado: Forzar el router de 1 sola página (Login)
+    p_main_login = st.Page(login_view, title="Iniciar Sesión", icon="🔒")
+    pg = st.navigation([p_main_login])
+else:
+    # Modo logueado: Montar la app entera y sus funciones
+    # Inject Global CSS and render visual wrappers before page execution
+    load_css()
+    try:
+        from app.components.NewsTicker import render_news_ticker
+    except ImportError:
+        from components.NewsTicker import render_news_ticker
 
-# Inject Global CSS and render visual wrappers before page execution
-load_css()
-try:
-    from app.components.NewsTicker import render_news_ticker
-except ImportError:
-    from components.NewsTicker import render_news_ticker
+    # Restaurar la info de Gamificación en la barra lateral del usuario v9.1
+    try:
+        render_custom_sidebar()
+    except Exception as e:
+        pass
+        
+    pg = st.navigation(pages)
 
-# Restaurar la info de Gamificación en la barra lateral del usuario v9.1
-try:
-    render_custom_sidebar()
-except Exception as e:
-    pass
-
-# Ejecutar la página seleccionada
+# Ejecutar la página seleccionada por el router
 pg.run()
