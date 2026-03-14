@@ -12,7 +12,7 @@ from db.models import Question, QuestionPerformance
 from ui_utils import load_css, render_header, render_favorite_button, render_custom_sidebar
 from core.auth import AuthManager
 
-# st.set_page_config(page_title="Repaso Especial | DIAN Sim", page_icon="⭐", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Inicia sesión para ver tu banco de errores y favoritos.")

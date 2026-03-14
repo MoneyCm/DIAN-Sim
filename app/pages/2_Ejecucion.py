@@ -153,7 +153,7 @@ if "exam_start_time" not in st.session_state:
 
 from core.auth import AuthManager
 
-# st.set_page_config(page_title="Simulacro en Curso", page_icon="📝", layout="wide", initial_sidebar_state="collapsed")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Sesión expirada. Por favor inicia sesión.")

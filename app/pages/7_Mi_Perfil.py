@@ -17,7 +17,7 @@ from ui_utils import load_css, render_header, metric_card
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 
-# st.set_page_config(page_title="Mi Perfil | DIAN Sim", page_icon="👤", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("⚠️ Por favor inicia sesión.")

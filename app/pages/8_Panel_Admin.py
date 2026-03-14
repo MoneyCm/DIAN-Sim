@@ -12,7 +12,7 @@ from db.models import User, UserStats, UserOPEC, Attempt, Question
 from ui_utils import load_css, render_header
 from core.auth import AuthManager
 
-# st.set_page_config(page_title="Panel Admin | DIAN Sim", page_icon="🔑", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("⚠️ Acceso denegado. Por favor inicia sesión.")

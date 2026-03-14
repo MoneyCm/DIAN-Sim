@@ -16,7 +16,7 @@ from services.stats_service import StatsService
 
 from core.auth import AuthManager
 
-# st.set_page_config(page_title="Resultados | DIAN Sim", page_icon="📊", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión.")

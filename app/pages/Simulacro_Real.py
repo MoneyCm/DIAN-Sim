@@ -21,12 +21,7 @@ from services.stats_service import StatsService
 from core.auth import AuthManager
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-# st.set_page_config(
-    page_title="Simulacro Real - DIAN",
-    page_icon="⏱️",
-    layout="wide",
-    initial_sidebar_state="collapsed" # Real exam usually hides distractions
-)
+# pass # Removed st.set_page_config
 
 # --- VERIFICACIÓN DE AUTENTICACIÓN ---
 if not AuthManager.check_auth():

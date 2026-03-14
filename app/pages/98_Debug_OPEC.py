@@ -3,7 +3,7 @@ import pandas as pd
 from db.session import SessionLocal
 from db.models import UserOPEC, User
 
-# st.set_page_config(page_title="Debug OPEC", layout="wide")
+# pass # Removed st.set_page_config
 
 st.title("🔧 Diagnóstico de OPEC")
 

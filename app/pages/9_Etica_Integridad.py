@@ -16,7 +16,7 @@ import uuid
 from core.dedupe import compute_hash
 import datetime
 
-# st.set_page_config(page_title="Ética e Integridad | DIAN Sim", page_icon="⚖️", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión.")

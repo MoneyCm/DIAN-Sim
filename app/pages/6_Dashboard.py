@@ -18,7 +18,7 @@ import datetime, io
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 
-# st.set_page_config(page_title="Dashboard | DIAN Sim", page_icon="📊", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")

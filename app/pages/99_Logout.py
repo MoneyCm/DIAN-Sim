@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 
-# st.set_page_config(page_title="Cerrando Sesión...", layout="centered")
+# pass # Removed st.set_page_config
 
 # Limpieza Total
 for key in list(st.session_state.keys()):

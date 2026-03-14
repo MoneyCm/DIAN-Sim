@@ -38,7 +38,7 @@ def get_db():
 from core.auth import AuthManager
 
 # UI Setup
-# st.set_page_config(page_title="Nuevo Simulacro | DIAN Sim", page_icon="📝", layout="wide")
+# pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")
