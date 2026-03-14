@@ -320,6 +320,78 @@ if not st.session_state.exam_active:
         pct = (c/t)*100 if t > 0 else 0
         st.success(f"### Resultado Final: {c}/{t} ({pct:.1f}%)")
         
+        # --- RECOMENDACIONES DE ESTUDIO (v6.0) ---
+        cases = st.session_state.get("last_exam_cases", [])
+        answers = st.session_state.get("last_user_answers", {})
+        
+        # Mapeo: { "Tema Fallado": set("Fuente 1", "Fuente 2") }
+        failed_topics_with_refs = {}
+        
+        for c_idx, case in enumerate(cases):
+            if not _case_is_valid_for_dian(case): continue
+            for q in case.questions:
+                user_ans = answers.get(q.question_id)
+                if user_ans != q.correct_key:
+                    # v6.1: Intentar sacar un tema descriptivo
+                    topic = ""
+                    if q.micro_competencia and q.micro_competencia.strip() and q.micro_competencia.lower() != "general":
+                        topic = q.micro_competencia
+                    elif q.macro_dominio and q.macro_dominio.strip() and q.macro_dominio.lower() != "transversal":
+                        topic = q.macro_dominio
+                    elif q.competency and q.competency.strip() and q.competency.lower() != "general":
+                        topic = q.competency
+                    elif q.topic and not q.topic.upper().startswith("OPEC"):
+                        topic = q.topic
+                        
+                    if not topic:
+                        if q.topic and "OPEC" in q.topic.upper():
+                            topic = f"Competencias Fundamentales ({q.topic.split('-')[-1].strip() if '-' in q.topic else 'General'})"
+                        else:
+                            topic = "Razonamiento y Lectura Crítica"
+                            
+                    # v6.2: Almacenar la fuente documental (source_refs)
+                    if topic not in failed_topics_with_refs:
+                        failed_topics_with_refs[topic] = set()
+                        
+                    ref = getattr(q, 'source_refs', None)
+                    if ref:
+                        ref_str = str(ref).strip()
+                        # Si es un string válido y no está en la lista negra estricta
+                        if ref_str.upper() not in ["", "IA", "NONE", "NULL"]:
+                            # Filtro extendido v6.3: Ignorar marcas de agua de los generadores IA
+                            rf_upper = ref_str.upper()
+                            if "MISTRAL" in rf_upper or "BATCH GEN" in rf_upper or "INICIAL DIAN" in rf_upper:
+                                continue # Ignorar por completo esta referencia basurilla
+                                
+                            # Limpiar refernecias apiladas
+                            for r in ref_str.split('\n'):
+                                if r.strip():
+                                    failed_topics_with_refs[topic].add(r.strip())
+                    
+        if failed_topics_with_refs:
+            failed_list = list(failed_topics_with_refs.keys())
+            st.warning("### 🎯 Recomendaciones de Estudio")
+            st.markdown("Basado en tus errores en este simulacro, te sugerimos repasar fuertemente:")
+            
+            for ft, refs in failed_topics_with_refs.items():
+                if refs:
+                    # Mostrar tema principal y sus referencias
+                    refs_str = " | ".join(list(refs)[:3]) # Limitar a max 3 refs para no congestionar
+                    st.markdown(f"- **{ft}** *(Documentos sugeridos: {refs_str})*")
+                else:
+                    st.markdown(f"- **{ft}**")
+                
+            # Botón de Auto-Generación
+            st.write("")
+            if st.button("🤖 Autogenerar Casos de Refuerzo (IA)", type="primary", use_container_width=True):
+                # Guardamos el primer tema fallado (o una combinación si se quiere)
+                st.session_state["ai_reinforcement_topic"] = failed_list[0]
+                st.switch_page("pages/4_Generador_IA.py")
+        else:
+            if t > 0:
+                st.balloons()
+                st.success("¡Excelente! No tuviste fallos detectables en temas específicos. Estás listo.")
+
         # --- REVIEW SECTION ---
         st.markdown("### 📝 Revisión de Respuestas")
         with st.expander("Ver Detalles y Retroalimentación", expanded=True):

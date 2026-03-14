@@ -132,11 +132,16 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     
+    # --- RECEPCIÓN DE REFUERZOS DESDE SIMULACRO REAL (v6.0) ---
+    reinforcement_topic = st.session_state.get("ai_reinforcement_topic", None)
+    default_gen_idx = 1 if reinforcement_topic else 0 # 1 is Case Study
+    
     # --- MODE SELECTION v5.0 ---
     generate_btn = False
-    gen_mode = st.radio("Modo de Generación", ["Preguntas desde Texto/PDF", "Caso de Estudio (Simulacro Real)"], horizontal=True)
+    gen_mode = st.radio("Modo de Generación", ["Preguntas desde Texto/PDF", "Caso de Estudio (Simulacro Real)"], index=default_gen_idx, horizontal=True)
     
-    if gen_mode == "Preguntas desde Texto/PDF":
+    if reinforcement_topic and gen_mode == "Caso de Estudio (Simulacro Real)":
+        st.success(f"🎯 **Modo Refuerzo Activado:** Se pre-configuró el tema **'{reinforcement_topic}'** basado en tus resultados del simulacro.")
         # Pre-fill topic from session state if available 
         default_topic = st.session_state.get("ai_default_topic", "Gestor II")
         custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
@@ -210,7 +215,14 @@ with col1:
         # --- CASE STUDY MODE ---
         st.info("🎭 **Modo Simulacro Real:** Crea un escenario narrativo complejo (Caso Protagónico) y preguntas asociadas para entrenar lectura crítica.")
         
-        cs_topic = st.text_input("Tema del Caso (Ej: Visita de Fiscalización, Atención a Usuario Agresivo)", value="Procedimiento Tributario")
+        # Pre-fill with reinforcement topic if available
+        initial_cs_topic = reinforcement_topic if reinforcement_topic else "Procedimiento Tributario"
+        cs_topic = st.text_input("Tema del Caso (Ej: Visita de Fiscalización, Atención a Usuario Agresivo)", value=initial_cs_topic)
+        
+        # Clear the reinforcement token so it doesn't stick forever if they change modes
+        if reinforcement_topic and cs_topic != reinforcement_topic:
+            st.session_state.pop("ai_reinforcement_topic", None)
+            
         cs_num = st.slider("Preguntas por Caso", 3, 5, 3)
         cs_diff = st.slider("Dificultad del Caso", 1, 3, 2)
         
