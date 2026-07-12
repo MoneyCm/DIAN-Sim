@@ -752,3 +752,143 @@ class LLMGenerator:
             if 'content' in locals() and content:
                 print(f"DEBUG FULL CONTENT: {content}")
             raise e
+
+    def optimize_question(self, question_data: dict, audit_report: dict) -> dict:
+        """Optimizes a question based on audit findings, rewriting distractors and stem if necessary. Mikey v50"""
+        
+        prompt = f"""
+        Actúa como un Constructor de Pruebas Psicométricas Senior de la CNSC y Experto en Normativa de la DIAN.
+        Tu misión es corregir, pulir y optimizar la siguiente pregunta de juicio situacional basándote en los hallazgos de una auditoría previa.
+        
+        DATOS DE LA PREGUNTA ORIGINAL:
+        TEMA: {question_data.get('topic')}
+        ENUNCIADO ORIGINAL: {question_data.get('stem')}
+        OPCIONES ORIGINALES: {question_data.get('options_json')}
+        CLAVE ORIGINAL: {question_data.get('correct_key')}
+        JUSTIFICACIÓN ORIGINAL: {question_data.get('rationale')}
+        
+        INFORME DE AUDITORÍA:
+        PUNTAJE CALIDAD: {audit_report.get('score')}/10
+        CRÍTICA: {audit_report.get('critique')}
+        HALLAZGOS: {audit_report.get('findings')}
+        SUGERENCIA DE MEJORA: {audit_report.get('suggestion')}
+        
+        REGLAS PARA LA OPTIMIZACIÓN:
+        1. **Plausibilidad de Distractores (CRÍTICO)**: Los distractores (opciones incorrectas) deben ser altamente competitivos, técnicos y plausibles. Evita opciones absurdas, cómicas o fáciles de descartar por sentido común.
+        2. **Precisión Normativa**: Asegura que el enunciado de la situación sea coherente con la legislación de la DIAN aplicable (Estatuto Tributario, etc.).
+        3. **Conservar la Clave**: Mantén la misma letra clave correcta y el fundamento de ley original, a menos que el auditor haya señalado una discrepancia legal grave en la clave, en cuyo caso corrígela.
+        4. **Formato**: Genera una estructura de Juicio Situacional con CASO + PREGUNTA (integrados en el stem), 3 opciones (A, B, C) y justificación rigurosa.
+        
+        FORMATO DE SALIDA (Objeto JSON obligatorio):
+        {{
+            "track": "{question_data.get('track', 'FUNCIONAL')}",
+            "macro_dominio": "{question_data.get('macro_dominio', 'Transversal')}",
+            "micro_competencia": "{question_data.get('micro_competencia', 'General')}",
+            "topic": "{question_data.get('topic', 'Tema')}",
+            "difficulty": {question_data.get('difficulty', 2)},
+            "stem": "SITUACIÓN: [Caso mejorado de 80-120 palabras]. PREGUNTA: [Enunciado mejorado]?",
+            "options": {{
+                "A": "Opción A mejorada",
+                "B": "Opción B mejorada",
+                "C": "Opción C mejorada"
+            }},
+            "correct_key": "Letra correcta",
+            "rationale": "Justificación mejorada basada en el artículo exacto."
+        }}
+        
+        IMPORTANTE: No respondas con nada que no sea el JSON solicitado.
+        """
+        
+        try:
+            content = ""
+            if self.provider == "openai" and self.openai_client:
+                model = self.model_name if self.model_name else "gpt-4o-mini"
+                response = self.openai_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "Genera exclusivamente JSON válido para optimización de preguntas."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+                
+            elif self.provider == "groq" and self.openai_client:
+                response = self.openai_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": "Genera exclusivamente JSON válido para optimización de preguntas."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+                
+            elif self.provider == "mistral" and self.mistral_client:
+                response = self.mistral_client.chat.complete(
+                    model=self.model_name if self.model_name else "mistral-large-latest",
+                    messages=[
+                        {"role": "system", "content": "Genera exclusivamente JSON válido para optimización de preguntas."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+                
+            elif self.provider == "gemini":
+                candidates = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
+                config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    safety_settings=[
+                        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")
+                    ]
+                )
+                
+                for model_name in candidates:
+                    try:
+                        print(f"DEBUG: Optimizing with Gemini ({model_name})... Mikey v50")
+                        response = self.gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config=config
+                        )
+                        if response and response.text:
+                            content = response.text
+                            break
+                    except Exception as e:
+                        print(f"DEBUG: Error Gemini {model_name}: {str(e)[:100]}")
+                        continue
+                        
+                # Fallback Rescue
+                if not content and hasattr(self, 'fallback_client') and self.fallback_client:
+                    fb_t = getattr(self, 'fallback_type', 'openai')
+                    print(f"⚠️ Gemini optimization failed. Activating Rescue with {fb_t}... Mikey")
+                    try:
+                        fb_model = "gpt-4o-mini" if fb_t == "openai" else "llama-3.3-70b-versatile"
+                        fb_response = self.fallback_client.chat.completions.create(
+                            model=fb_model,
+                            messages=[{"role": "user", "content": prompt}],
+                            response_format={"type": "json_object"}
+                        )
+                        content = fb_response.choices[0].message.content
+                    except Exception as fe:
+                        print(f"❌ Rescue failed: {fe}")
+            
+            if not content:
+                raise Exception("La IA no devolvió contenido para la optimización.")
+                
+            if "```json" in content:
+                content = content.replace("```json", "").split("```")[0].strip()
+            elif "```" in content:
+                content = content.replace("```", "").strip()
+                
+            data = repair_and_parse_json(content)
+            if not data:
+                raise Exception("Fallo en optimización: El JSON retornado no es válido tras reparación.")
+                
+            return data
+            
+        except Exception as e:
+            print(f"ERROR optimizing question: {e}")
+            raise e
+

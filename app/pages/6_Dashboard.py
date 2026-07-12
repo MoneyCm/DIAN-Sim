@@ -10,8 +10,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
-from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance
+from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from ui_utils import load_css, render_header
 import datetime, io
 
@@ -134,7 +135,6 @@ try:
     mastery_pct = (mastered_qs / total_qs * 100) if total_qs > 0 else 0
 
     # Quality Metrics v32 Mikey
-    from db.models import Question
     total_bank = db.query(Question).count()
     verified_bank = db.query(Question).filter_by(is_verified=True).count()
     quality_idx = (verified_bank / total_bank * 100) if total_bank > 0 else 0
@@ -328,7 +328,6 @@ try:
     st.divider()
     st.subheader("🛠️ Herramientas de Exportación")
 
-    from db.models import Question
     all_qs = db.query(Question).all()
 
     if all_qs:
@@ -378,7 +377,8 @@ try:
                 data=output_xlsx.getvalue(),
                 file_name=f"Banco_Preguntas_DIAN_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
+                key="btn_export_xlsx"
             )
             st.caption("Ideal para respaldo completo y edición profesional.")
 
@@ -388,7 +388,8 @@ try:
                 data=text_content,
                 file_name=f"Banco_Preguntas_Texto_{datetime.datetime.now().strftime('%Y%m%d')}.txt",
                 mime="text/plain",
-                use_container_width=True
+                use_container_width=True,
+                key="btn_export_pipes"
             )
             st.caption("Formato compatible con Copiar/Pegar (delimitado por |).")
 
@@ -396,14 +397,216 @@ try:
         st.warning("El banco está vacío. No hay datos para exportar.")
 
     st.divider()
+    st.subheader("🎴 Exportar a Anki (Flashcards)")
+    st.markdown("""
+    Exporta tus **preguntas falladas** o **favoritas** para importarlas a **Anki** y repasar de forma espaciada.
+    El archivo generado es un CSV estructurado con formato HTML para que tus tarjetas se vean limpias y profesionales en la aplicación.
+    """)
+
+    # 1. Obtener preguntas falladas (Intentos incorrectos) - Obteniendo IDs primero para evitar DISTINCT sobre columnas JSON en Postgres
+    failed_q_ids = db.query(Attempt.question_id).filter(
+        Attempt.user_id == u_id,
+        Attempt.is_correct == False
+    ).distinct().all()
+    failed_q_ids = [r[0] for r in failed_q_ids]
+    failed_qs = db.query(Question).options(joinedload(Question.case_study)).filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
+
+    # 2. Obtener preguntas favoritas
+    fav_q_ids = db.query(QuestionPerformance.question_id).filter(
+        QuestionPerformance.user_id == u_id,
+        QuestionPerformance.is_favorite == True
+    ).distinct().all()
+    fav_q_ids = [r[0] for r in fav_q_ids]
+    fav_qs = db.query(Question).options(joinedload(Question.case_study)).filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
+
+    def to_anki_standard_csv(questions):
+        rows = []
+        for q in questions:
+            opts = q.options_json if q.options_json else {}
+            opts_str = "<br>".join([f"<b>{k})</b> {str(v).replace('\n', '<br>').replace('\r', '')}" for k, v in opts.items()])
+            
+            frente_parts = []
+            frente_parts.append(f"<b>Tema:</b> {q.topic}")
+            
+            if q.case_study:
+                cs_title = f" ({q.case_study.title})" if q.case_study.title else ""
+                cs_text_formatted = q.case_study.text.replace("\n", "<br>").replace("\r", "")
+                frente_parts.append(f"<b>Caso de Estudio{cs_title}:</b><br>{cs_text_formatted}")
+                
+            stem_formatted = q.stem.replace("\n", "<br>").replace("\r", "")
+            frente_parts.append(f"<b>Pregunta:</b> {stem_formatted}")
+            frente_parts.append(f"<b>Opciones:</b><br>{opts_str}")
+            
+            frente = "<br><br>".join(frente_parts)
+            
+            rationale_formatted = (q.rationale or 'N/A').replace("\n", "<br>").replace("\r", "")
+            reverso = f"<b>Respuesta Correcta:</b> {q.correct_key}<br><br><b>Justificación:</b> {rationale_formatted}"
+            if q.source_refs:
+                source_refs_formatted = q.source_refs.replace("\n", "<br>").replace("\r", "")
+                reverso += f"<br><br><b>Norma/Referencia:</b> {source_refs_formatted}"
+                
+            rows.append({"Frente": frente, "Reverso": reverso})
+        
+        df = pd.DataFrame(rows)
+        csv_buffer = io.StringIO()
+        import csv
+        df.to_csv(csv_buffer, sep=";", index=False, header=True, quoting=csv.QUOTE_ALL, encoding="utf-8")
+        return csv_buffer.getvalue()
+
+    def to_anki_interactive_csv(questions):
+        rows = []
+        for q in questions:
+            opts = q.options_json if q.options_json else {}
+            
+            caso_text = ""
+            if q.case_study:
+                cs_title = f"({q.case_study.title})\n" if q.case_study.title else ""
+                caso_text = f"{cs_title}{q.case_study.text}".replace("\n", "<br>").replace("\r", "")
+                
+            stem_formatted = q.stem.replace("\n", "<br>").replace("\r", "")
+            
+            opcion_a = str(opts.get('A', '')).replace("\n", "<br>").replace("\r", "")
+            opcion_b = str(opts.get('B', '')).replace("\n", "<br>").replace("\r", "")
+            opcion_c = str(opts.get('C', '')).replace("\n", "<br>").replace("\r", "")
+            opcion_d = str(opts.get('D', '')).replace("\n", "<br>").replace("\r", "")
+            
+            justificacion = (q.rationale or 'N/A').replace("\n", "<br>").replace("\r", "")
+            norma = (q.source_refs or '').replace("\n", "<br>").replace("\r", "")
+            
+            rows.append({
+                "Caso_Estudio": caso_text,
+                "Tema": q.topic,
+                "Pregunta": stem_formatted,
+                "Opcion_A": opcion_a,
+                "Opcion_B": opcion_b,
+                "Opcion_C": opcion_c,
+                "Opcion_D": opcion_d,
+                "Respuesta_Correcta": q.correct_key,
+                "Justificacion": justificacion,
+                "Norma": norma
+            })
+            
+        df = pd.DataFrame(rows)
+        csv_buffer = io.StringIO()
+        import csv
+        df.to_csv(csv_buffer, sep=";", index=False, header=True, quoting=csv.QUOTE_ALL, encoding="utf-8")
+        return csv_buffer.getvalue()
+
+    tab_estandar, tab_interactivo = st.tabs(["🎴 Estándar (Anverso/Reverso)", "🎮 Interactivo (Opción Múltiple)"])
+
+    with tab_estandar:
+        st.info("""
+        💡 **¿Cómo importar tarjetas estándar en Anki?**
+        1. Descarga el archivo `.csv` usando los botones de abajo.
+        2. Abre **Anki** y selecciona **Archivo -> Importar**.
+        3. Elige el archivo descargado.
+        4. En las opciones de importación:
+           - Configura el delimitador de campos como **Punto y coma** (`;`).
+           - Marca la casilla **Permitir HTML en los campos**.
+           - Mapea el primer campo al **Frente (Front)** y el segundo al **Reverso (Back)**.
+        """)
+        
+        col_std1, col_std2 = st.columns(2)
+        with col_std1:
+            st.markdown("##### ❌ Preguntas Falladas")
+            if failed_qs:
+                failed_std_csv = to_anki_standard_csv(failed_qs)
+                st.download_button(
+                    label=f"📥 Descargar Fallas Estándar ({len(failed_qs)} Qs)",
+                    data=failed_std_csv,
+                    file_name=f"Anki_Dian_Fallas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="btn_export_anki_fallas_std"
+                )
+                st.caption("Importa este archivo estándar en Anki para un repaso rápido de tus errores.")
+            else:
+                st.info("No tienes fallas registradas todavía.")
+
+        with col_std2:
+            st.markdown("##### ⭐ Preguntas Favoritas")
+            if fav_qs:
+                fav_std_csv = to_anki_standard_csv(fav_qs)
+                st.download_button(
+                    label=f"📥 Descargar Favoritas Estándar ({len(fav_qs)} Qs)",
+                    data=fav_std_csv,
+                    file_name=f"Anki_Dian_Favoritas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="btn_export_anki_favs_std"
+                )
+                st.caption("Importa este archivo estándar para repasar las tarjetas que guardaste con estrella.")
+            else:
+                st.info("No has marcado ninguna pregunta como favorita.")
+
+    with tab_interactivo:
+        st.info("""
+        💡 **¿Cómo importar tarjetas interactivas (Opción Múltiple) en Anki?**
+        1. Descarga el archivo `.csv` estructurado usando los botones de abajo.
+        2. En **Anki**, asegúrate de tener un **Tipo de Nota** con campos separados para: *Caso, Tema, Pregunta, Opción A, Opción B, Opción C, Opción D, Respuesta Correcta, Justificación y Norma*.
+        3. Ve a **Archivo -> Importar** y selecciona el archivo.
+        4. En la configuración de importación de Anki:
+           - Configura el delimitador como **Punto y coma** (`;`).
+           - Habilita la opción **Permitir HTML en los campos**.
+           - Mapea secuencialmente cada una de las 10 columnas a sus correspondientes campos de tu tarjeta interactiva.
+        """)
+
+        col_int1, col_int2 = st.columns(2)
+        with col_int1:
+            st.markdown("##### ❌ Preguntas Falladas (Estructurado)")
+            if failed_qs:
+                failed_int_csv = to_anki_interactive_csv(failed_qs)
+                st.download_button(
+                    label=f"📥 Descargar Fallas Interactivas ({len(failed_qs)} Qs)",
+                    data=failed_int_csv,
+                    file_name=f"Anki_Dian_Fallas_Interactivas_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="btn_export_anki_fallas_int"
+                )
+                st.caption("Ideal para plantillas interactivas que animan y muestran botones para cada opción por separado.")
+            else:
+                st.info("No tienes fallas registradas todavía.")
+
+        with col_int2:
+            st.markdown("##### ⭐ Preguntas Favoritas (Estructurado)")
+            if fav_qs:
+                fav_int_csv = to_anki_interactive_csv(fav_qs)
+                st.download_button(
+                    label=f"📥 Descargar Favoritas Interactivas ({len(fav_qs)} Qs)",
+                    data=fav_int_csv,
+                    file_name=f"Anki_Dian_Favoritas_Interactivas_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="btn_export_anki_favs_int"
+                )
+                st.caption("Estructura de 10 columnas para tus tarjetas favoritas con selección interactiva.")
+            else:
+                st.info("No has marcado ninguna pregunta como favorita.")
+
+    st.divider()
     st.subheader("⚙️ Otras Acciones")
-    if st.button("🗑️ Reiniciar Estadísticas de Usuario", use_container_width=True):
-        st.error("¿Estás seguro de reiniciar tus puntos y rachas?")
-        if st.button("Sí, deseo reiniciar todo"):
-             db.query(UserStats).delete()
-             db.commit()
-             st.success("Estadísticas reiniciadas.")
-             st.rerun()
+    if "confirm_delete_stats" not in st.session_state:
+        st.session_state["confirm_delete_stats"] = False
+
+    if not st.session_state["confirm_delete_stats"]:
+        if st.button("🗑️ Reiniciar Estadísticas de Usuario", use_container_width=True):
+            st.session_state["confirm_delete_stats"] = True
+            st.rerun()
+    else:
+        st.warning("⚠️ ¿Estás seguro de que deseas reiniciar tus puntos y rachas de estudio?")
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("Sí, deseo reiniciar todo", type="primary", use_container_width=True):
+                db.query(UserStats).filter_by(user_id=u_id).delete()
+                db.commit()
+                st.session_state["confirm_delete_stats"] = False
+                st.success("Estadísticas reiniciadas.")
+                st.rerun()
+        with col_no:
+            if st.button("Cancelar", use_container_width=True):
+                st.session_state["confirm_delete_stats"] = False
+                st.rerun()
 
 except Exception as e:
     st.error(f"Error cargando dashboard: {e}")

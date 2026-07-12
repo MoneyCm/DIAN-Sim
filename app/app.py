@@ -160,8 +160,8 @@ p_config = st.Page("pages/7_Configuracion_OPEC.py", title="Configuración OPEC",
 p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
 # Grupo: Práctica
-p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Nuevo Simulacro", icon="🚀")
-p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Real", icon="⏱️")
+p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica por Temas", icon="📚")
+p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Tipo Examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repaso Especial", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
 

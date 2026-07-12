@@ -84,7 +84,7 @@ class AuthManager:
                             t_conn.execute(text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
 
                 # 5. Iniciar Sesión en Streamlit
-                st.query_params.clear()
+                # st.query_params.clear() # Evitamos limpiar manualmente para prevenir fallos de UI en Streamlit 1.54+ OIDC
                 
                 # Saneamiento de Identidad mikey v7.19
                 # Prioridad máxima para forecesar@gmail.com

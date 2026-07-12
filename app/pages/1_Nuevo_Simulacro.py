@@ -25,10 +25,64 @@ except:
 PROFILES = {
     "Gestor II (Código 302, Grado 02)": core.profiles.PROFILES.get("Gestor II (Código 302, Grado 02)"),
     "Gestor III (OPEC 236769)": {
-        "description": "Perfil Profesional especializado en Fiscalización, Investigación Tributaria y Detección de Evasión.",
-        "functional_tracks": {"FUNCIONAL": ["Fiscalización", "Procedimiento Tributario", "Investigación", "Evasión", "Lavado de Activos", "Régimen Sancionatorio", "Pruebas", "Actos Administrativos"], "INTEGRIDAD": ["Ética Pública", "Código Disciplinario", "Transparencia"]},
-        "behavioral_competencies": ["Análisis de Información", "Pensamiento Crítico", "Toma de Decisiones", "Trabajo en Equipo", "Comunicación Efectiva"],
-        "raw_text": "Propósito: DESARROLLAR INVESTIGACIONES..."
+        "description": "Perfil Profesional especializado en Fiscalización, Investigación Tributaria, Detección de Evasión, Elusión, Contrabando, Lavado de Activos y Control Cambiario (Grado 3, Código 303).",
+        "salary": 9346562,
+        "salary_validity": "2025",
+        "vacancies": 21,
+        "selection_process": "DIAN 2676 - Ingreso",
+        "registration_closing": "2026-02-07",
+        "functional_tracks": {
+            "FUNCIONAL": [
+                "Fiscalización",
+                "Procedimiento Tributario",
+                "Investigación Tributaria",
+                "Detección de Evasión y Elusión",
+                "Lavado de Activos",
+                "Régimen Sancionatorio", 
+                "Práctica de Pruebas",
+                "Actos Administrativos",
+                "Fiscalización Aduanera y Cambiaria",
+                "Análisis de Denuncias y Precrítica"
+            ],
+            "INTEGRIDAD": [
+                "Ética Pública",
+                "Código Disciplinario",
+                "Transparencia"
+            ]
+        },
+        "behavioral_competencies": [
+            "Análisis de Información", 
+            "Pensamiento Crítico",
+            "Toma de Decisiones",
+            "Trabajo en Equipo",
+            "Comunicación Efectiva",
+            "Orientación al Logro"
+        ],
+        "raw_text": """
+        Nivel: Profesional  Denominación: GESTOR III  Grado: 3  Código: 303  Número OPEC: 236769
+        Asignación Salarial: $9,346,562  Vigencia Salarial: 2025
+        Proceso de Selección: DIAN 2676 - Ingreso  Cierre de Inscripciones: 2026-02-07
+        Total de Vacantes: 21
+
+        Propósito:
+        AT-FL-3006. DESARROLLAR, EN EL MARCO DE SU COMPETENCIA Y JURISDICCION, INVESTIGACIONES PARA LA VERIFICACION DEL CUMPLIMIENTO DE OBLIGACIONES EN MATERIA TRIBUTARIA, ADUANERA O CAMBIARIA, ASI ASÍ COMO LA DETECCION DE PRACTICAS TENDIENTES A LA ELUSION, EVASION, ABUSO, CONTRABANDO Y LAVADO DE ACTIVOS, DE ACUERDO CON LA NORMATIVA VIGENTE, LOS PROCEDIMIENTOS ESTABLECIDOS Y LAS DIRECTRICES INSTITUCIONALES.
+
+        Funciones:
+        1. HACER EL ANALISIS PRELIMINAR DE LAS DENUNCIAS DE FISCALIZACION RECIBIDAS, ESTABLECIENDO LA PERTINENCIA DEL INICIO DE UNA ACCION DE FISCALIZACION, DE ACUERDO CON LA NORMATIVA VIGENTE, PROCEDIMIENTOS Y LINEAMIENTOS INSTITUCIONALES.
+        2. HACER LA PRECRITICA Y CLASIFICACION DE LOS INSUMOS RECIBIDOS, ESTABLECIENDO LA PERTINENCIA DEL INICIO DE UNA INVESTIGACION, DE ACUERDO CON LOS PROCEDIMIENTOS Y LINEAMIENTOS INSTITUCIONALES.
+        3. LAS SEÑALADAS COMO COMUNES A TODOS LOS EMPLEOS DE LA PLANTA DE PERSONAL DE LA ENTIDAD, INCLUIDAS EN LA RESOLUCION QUE ADOPTA O MODIFICA EL MANUAL Y LAS DEMAS ASIGNADAS POR AUTORIDAD COMPETENTE, DE ACUERDO CON EL NIVEL, GRADO DE RESPONSABILIDAD Y EL AREA DE DESEMPEÑO DEL EMPLEO.
+        4. ORGANIZAR LA INFORMACION Y PROPUESTAS DE ASUNTOS DE FISCALIZACION PARA PRESENTARLOS A CONSIDERACION DE LA REUNION DEL NIVEL DIRECTIVO DEL PROCESO DE FISCALIZACION Y LIQUIDACION PARA LA DECISION PERTINENTE.
+        5. PARTICIPAR EN LA EJECUCION DE ACCIONES DE FISCALIZACION, EN EL MARCO DE SU COMPETENCIA Y JURISDICCION, TENDIENTES A LA VERIFICACION DEL CUMPLIMIENTO DE LAS OBLIGACIONES TRIBUTARIAS, ADUANERAS O CAMBIARIAS, DE ACUERDO CON LA NORMATIVA VIGENTE, LINEAMIENTOS INSTITUCIONALES Y PROCEDIMIENTOS ESTABLECIDOS.
+        6. PROFERIR LOS ACTOS ADMINISTRATIVOS DE TRAMITE, PREPARATORIOS Y DE FONDO REQUERIDOS DENTRO DEL PROCESO, DE ACUERDO CON LA NORMATIVA VIGENTE Y LOS PROCEDIMIENTOS ESTABLECIDOS.
+        7. REALIZAR INVESTIGACIONES PARA DETERMINAR EL CUMPLIMIENTO DE LAS OBLIGACIONES TRIBUTARIAS, ADUANERAS O CAMBIARIAS Y, EL REPORTE DE LAS OPERACIONES SOSPECHOSAS DE LAVADO DE ACTIVOS Y FINANCIACION DEL TERRORISMO, EN EL MARCO DE SU COMPETENCIA Y JURISDICCION, DE ACUERDO CON LA NORMATIVA VIGENTE, LAS DIRECTRICES INSTITUCIONALES Y LOS PROCEDIMIENTOS ESTABLECIDOS.
+        8. REALIZAR LA PRACTICA DE PRUEBAS SOLICITADAS POR UNA DEPENDENCIA DEL NIVEL CENTRAL O SECCIONAL, PARA QUE OBRE DENTRO DE UNA INVESTIGACION, DE ACUERDO CON LA NORMATIVA VIGENTE Y LOS PROCEDIMIENTOS ESTABLECIDOS.
+        9. REVISAR TECNICA Y O JURIDICAMENTE, EN EL MARCO DE SU COMPETENCIA Y JURISDICCION, LOS EXPEDIENTES Y ASUNTOS ASIGNADOS PROPIOS DEL PROCESO, DE ACUERCO CON LA NORMATIVA VIGENTE Y LAS DIRECTRICES INSTITUCIONALES.
+
+        Requisitos:
+        - Estudio: Título de PROFESIONAL en NBC: ADMINISTRACION, O NBC: CIENCIA POLITICA, RELACIONES INTERNACIONALES, O NBC: CONTADURIA PUBLICA, O NBC: DERECHO Y AFINES, O NBC: ECONOMIA, O NBC: INGENIERIA ADMINISTRATIVA Y AFINES, O NBC: INGENIERIA DE SISTEMAS, TELEMATICA Y AFINES, O NBC: INGENIERIA INDUSTRIAL Y AFINES, O NBC: INGENIERIA QUIMICA Y AFINES, O NBC: MATEMATICAS, ESTADISTICA Y AFINES.
+        - Experiencia: Doce (12) meses de EXPERIENCIA PROFESIONAL RELACIONADA y Doce (12) meses de EXPERIENCIA PROFESIONAL.
+        - Otros: Tarjeta Profesional en los casos señalados por la Ley.
+        """
     }
 }
 
@@ -47,7 +101,7 @@ if not AuthManager.check_auth():
 # UI Setup
 load_css()
 render_custom_sidebar()
-render_header(title="Nuevo Simulacro", subtitle="Configura los parámetros de tu sesión de estudio")
+render_header(title="Práctica por Temas", subtitle="Configura los parámetros de tu sesión de estudio")
 
 with st.container():
     st.markdown('<div class="dian-card">', unsafe_allow_html=True)
@@ -280,7 +334,7 @@ if run_sim:
         skills_map = {(s.track, s.competency, s.topic): s for s in skills}
         
         # 3. Select Questions
-        selected = select_questions_for_simulation(all_candidates, skills_map, n=num_questions)
+        selected = select_questions_for_simulation(selected_candidates, skills_map, n=num_questions)
         
         if not selected:
             st.error("No hay preguntas disponibles con estos criterios.")

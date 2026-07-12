@@ -216,6 +216,54 @@ with st.container():
             <div id="countdown" style='font-size:1.8rem; font-weight:800; color:{color}; font-family: monospace;'>{time_left // 60}:{time_left % 60:02d}</div>
         </div>
         """, unsafe_allow_html=True)
+        
+        js_code = f"""
+        <script>
+        (function() {{
+            let secondsLeft = {time_left};
+            const parentDoc = window.parent.document;
+            
+            function clickStreamlitButton(labelText) {{
+                const buttons = Array.from(parentDoc.querySelectorAll("button"));
+                for (const btn of buttons) {{
+                    if (btn.innerText && btn.innerText.includes(labelText)) {{
+                        btn.click();
+                        return true;
+                    }}
+                }}
+                return false;
+            }}
+            
+            if (window.parent.examTimerInterval) {{
+                clearInterval(window.parent.examTimerInterval);
+            }}
+            
+            window.parent.examTimerInterval = setInterval(() => {{
+                secondsLeft--;
+                if (secondsLeft <= 0) {{
+                    clearInterval(window.parent.examTimerInterval);
+                    const cd = parentDoc.getElementById("countdown");
+                    if (cd) cd.innerText = "0:00";
+                    clickStreamlitButton("Finalizar");
+                    clickStreamlitButton("Resultados");
+                }} else {{
+                    const cd = parentDoc.getElementById("countdown");
+                    if (cd) {{
+                        const m = Math.floor(secondsLeft / 60);
+                        const s = secondsLeft % 60;
+                        cd.innerText = m + ":" + (s < 10 ? '0' : '') + s;
+                    }}
+                    const container = parentDoc.getElementById("timer-container");
+                    if (secondsLeft < 60) {{
+                        if (container) container.style.borderColor = "#D90000";
+                        if (cd) cd.style.color = "#D90000";
+                    }}
+                }}
+            }}, 1000);
+        }})();
+        </script>
+        """
+        st.components.v1.html(js_code, height=0, width=0)
 
 if time_left <= 0:
     st.error("⏳ ¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")

@@ -226,6 +226,7 @@ def load_exam_cases():
                 if rc not in final_cases and rc.questions and _case_is_valid_for_dian(rc):
                     final_cases.append(rc)
                     
+        random.shuffle(final_cases)
         return final_cases
     except Exception as e:
         print(f"Error smart mix: {e}")
@@ -289,12 +290,12 @@ def finish_exam():
 
 if not st.session_state.exam_active:
     # --- PANTALLA DE INICIO CON PROTOCOLO ---
-    st.title("⏱️ Simulacro de Alta Presión - Modo Examen Real")
+    st.title("⏱️ Simulacro Tipo Examen - Alta Presión")
     
     # Modo Simulacro
     st.markdown("""
     ### 🎯 Sobre este Simulacro
-    Este modo simula las condiciones del examen real para cargos de la DIAN:
+    Este modo simula las condiciones oficiales del examen real para cargos de la DIAN:
     
     *   **Formato:** Casos Protagónicos (1 Texto → Múltiples Preguntas)
     *   **Tiempo:** Estricto (2 minutos promedio por pregunta)
@@ -315,73 +316,100 @@ if not st.session_state.exam_active:
         pct = (c/t)*100 if t > 0 else 0
         st.success(f"### Resultado Final: {c}/{t} ({pct:.1f}%)")
         
-        # --- RECOMENDACIONES DE ESTUDIO (v6.0) ---
+        # --- RECOMENDACIONES DE ESTUDIO DETALLADAS (v7.0) ---
         cases = st.session_state.get("last_exam_cases", [])
         answers = st.session_state.get("last_user_answers", {})
         
-        # Mapeo: { "Tema Fallado": set("Fuente 1", "Fuente 2") }
-        failed_topics_with_refs = {}
+        failed_details = {} # {topic_key: {"topic": topic, "track": track, "macro": macro, "refs": set(), "questions": []}}
         
         for c_idx, case in enumerate(cases):
             if not _case_is_valid_for_dian(case): continue
             for q in case.questions:
                 user_ans = answers.get(q.question_id)
                 if user_ans != q.correct_key:
-                    # v6.1: Intentar sacar un tema descriptivo
-                    topic = ""
-                    if q.micro_competencia and q.micro_competencia.strip() and q.micro_competencia.lower() != "general":
-                        topic = q.micro_competencia
-                    elif q.macro_dominio and q.macro_dominio.strip() and q.macro_dominio.lower() != "transversal":
-                        topic = q.macro_dominio
-                    elif q.competency and q.competency.strip() and q.competency.lower() != "general":
-                        topic = q.competency
-                    elif q.topic and not q.topic.upper().startswith("OPEC"):
-                        topic = q.topic
-                        
-                    if not topic:
-                        if q.topic and "OPEC" in q.topic.upper():
-                            topic = f"Competencias Fundamentales ({q.topic.split('-')[-1].strip() if '-' in q.topic else 'General'})"
-                        else:
-                            topic = "Razonamiento y Lectura Crítica"
-                            
-                    # v6.2: Almacenar la fuente documental (source_refs)
-                    if topic not in failed_topics_with_refs:
-                        failed_topics_with_refs[topic] = set()
-                        
+                    # Determinar el tema/micro-competencia más específico
+                    topic_name = q.micro_competencia or q.competency or q.topic or "Competencia General"
+                    if topic_name.upper().startswith("OPEC") and "-" in topic_name:
+                        topic_name = topic_name.split("-")[-1].strip()
+                    
+                    track_name = q.track or "FUNCIONAL"
+                    macro_name = q.macro_dominio or "General"
+                    
+                    if topic_name not in failed_details:
+                        failed_details[topic_name] = {
+                            "topic": topic_name,
+                            "track": track_name,
+                            "macro": macro_name,
+                            "refs": set(),
+                            "questions": []
+                        }
+                    
+                    # Agregar referencias limpias
                     ref = getattr(q, 'source_refs', None)
                     if ref:
                         ref_str = str(ref).strip()
-                        # Si es un string válido y no está en la lista negra estricta
                         if ref_str.upper() not in ["", "IA", "NONE", "NULL"]:
-                            # Filtro extendido v6.3: Ignorar marcas de agua de los generadores IA
                             rf_upper = ref_str.upper()
-                            if "MISTRAL" in rf_upper or "BATCH GEN" in rf_upper or "INICIAL DIAN" in rf_upper:
-                                continue # Ignorar por completo esta referencia basurilla
-                                
-                            # Limpiar refernecias apiladas
-                            for r in ref_str.split('\n'):
-                                if r.strip():
-                                    failed_topics_with_refs[topic].add(r.strip())
+                            if not ("MISTRAL" in rf_upper or "BATCH GEN" in rf_upper or "INICIAL DIAN" in rf_upper):
+                                for r in ref_str.split('\n'):
+                                    if r.strip():
+                                        failed_details[topic_name]["refs"].add(r.strip())
+                                        
+                    # Agregar detalles de la pregunta fallada
+                    failed_details[topic_name]["questions"].append({
+                        "stem": q.stem,
+                        "chosen": user_ans,
+                        "correct": q.correct_key,
+                        "correct_text": q.options_json.get(q.correct_key) if q.options_json else "",
+                        "rationale": q.rationale
+                    })
                     
-        if failed_topics_with_refs:
-            failed_list = list(failed_topics_with_refs.keys())
-            st.warning("### 🎯 Recomendaciones de Estudio")
-            st.markdown("Basado en tus errores en este simulacro, te sugerimos repasar fuertemente:")
+        if failed_details:
+            st.warning("### 🎯 Recomendaciones de Estudio Personalizadas")
+            st.markdown("Basado en tus errores en este simulacro, te sugerimos repasar fuertemente los siguientes temas técnicos:")
             
-            for ft, refs in failed_topics_with_refs.items():
-                if refs:
-                    # Mostrar tema principal y sus referencias
-                    refs_str = " | ".join(list(refs)[:3]) # Limitar a max 3 refs para no congestionar
-                    st.markdown(f"- **{ft}** *(Documentos sugeridos: {refs_str})*")
-                else:
-                    st.markdown(f"- **{ft}**")
+            for t_name, detail in failed_details.items():
+                track_val = detail["track"].upper()
+                track_color = "#E60000" if "FUNCIONAL" in track_val else "#3b82f6" if "COMPORTAMENTAL" in track_val else "#10b981"
                 
-            # Botón de Auto-Generación
-            st.write("")
-            if st.button("🤖 Autogenerar Casos de Refuerzo (IA)", type="primary", use_container_width=True):
-                # Guardamos el primer tema fallado (o una combinación si se quiere)
-                st.session_state["ai_reinforcement_topic"] = failed_list[0]
-                st.switch_page("pages/4_Generador_IA.py")
+                refs_list = list(detail["refs"])
+                refs_html = ""
+                if refs_list:
+                    refs_html = f"""<div style="margin-top: 10px; padding: 10px 15px; background: rgba(255, 255, 255, 0.5); border-left: 4px solid #FFD700; border-radius: 6px;">
+<span style="font-size: 0.75rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Fuentes de Estudio Sugeridas:</span><br>
+<span style="font-size: 0.95rem; color: #1e293b; font-weight: 700;">{" | ".join(refs_list[:3])}</span>
+</div>"""
+                
+                st.markdown(f"""<div style="background: rgba(255, 255, 255, 0.75); border: 1px solid rgba(0,0,0,0.06); border-left: 6px solid {track_color}; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+<span style="background: {track_color}1A; color: {track_color}; padding: 3px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; border: 1px solid {track_color}33; text-transform: uppercase;">
+{detail["track"]}
+</span>
+<span style="font-size: 0.8rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+Eje: {detail["macro"]}
+</span>
+</div>
+<h4 style="margin: 5px 0 10px 0; color: #0f172a; font-weight: 800; font-size: 1.15rem;">{detail["topic"]}</h4>
+{refs_html}
+</div>""", unsafe_allow_html=True)
+                
+                # Desglose de preguntas falladas en el expansor
+                with st.expander(f"🔍 Ver detalles de los fallos y concepto clave para: {t_name}", expanded=False):
+                    for q_idx, q_item in enumerate(detail["questions"]):
+                        stem_display = q_item["stem"]
+                        if "PREGUNTA:" in stem_display:
+                            try: stem_display = stem_display.split("PREGUNTA:")[1].strip()
+                            except: pass
+                        
+                        st.markdown(f"**Pregunta {q_idx+1}:** *{stem_display}*")
+                        st.markdown(f"❌ **Tu respuesta:** `{q_item['chosen']}` | ✅ **Respuesta correcta:** `{q_item['correct']}` — *{q_item['correct_text']}*")
+                        st.info(f"💡 **Explicación del Error / Concepto:** {q_item['rationale']}")
+                        st.write("---")
+                    
+                    # Botón específico para reforzar este tema con IA
+                    if st.button(f"🤖 Reforzar tema '{t_name}' con IA", key=f"reforce_{t_name}", use_container_width=True):
+                        st.session_state["ai_reinforcement_topic"] = t_name
+                        st.switch_page("pages/4_Generador_IA.py")
         else:
             if t > 0:
                 st.balloons()
@@ -447,7 +475,65 @@ else:
     
     # Render Timer
     mins, secs = divmod(int(remaining.total_seconds()), 60)
-    st.markdown(f'<div class="timer-box">{mins:02d}:{secs:02d}</div>', unsafe_allow_html=True)
+    time_left_secs = max(0, int(remaining.total_seconds()))
+    color = "#e74c3c" if time_left_secs < 60 else "#2e86c1"
+    st.markdown(f"""
+    <div class="timer-box" id="timer-box-real" style="background-color: {color};">
+        <span id="countdown-real">{mins:02d}:{secs:02d}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    js_code = f"""
+    <script>
+    (function() {{
+        let secondsLeft = {time_left_secs};
+        const parentDoc = window.parent.document;
+        
+        function clickStreamlitButton(labelText) {{
+            const buttons = Array.from(parentDoc.querySelectorAll("button"));
+            for (const btn of buttons) {{
+                if (btn.innerText && btn.innerText.toUpperCase().includes(labelText.toUpperCase())) {{
+                    btn.click();
+                    return true;
+                }}
+            }}
+            return false;
+        }}
+        
+        if (window.parent.examRealTimerInterval) {{
+            clearInterval(window.parent.examRealTimerInterval);
+        }}
+        
+        window.parent.examRealTimerInterval = setInterval(() => {{
+            secondsLeft--;
+            if (secondsLeft <= 0) {{
+                clearInterval(window.parent.examRealTimerInterval);
+                const cd = parentDoc.getElementById("countdown-real");
+                if (cd) cd.innerText = "00:00";
+                
+                // Tratar de finalizar el examen o pasar al siguiente caso (lo cual forzará el fin del examen en backend)
+                if (!clickStreamlitButton("FINALIZAR EXAMEN")) {{
+                    clickStreamlitButton("Siguiente Caso");
+                }}
+            }} else {{
+                const cd = parentDoc.getElementById("countdown-real");
+                if (cd) {{
+                    const m = Math.floor(secondsLeft / 60);
+                    const s = secondsLeft % 60;
+                    cd.innerText = (m < 10 ? '0' : '') + m + ":" + (s < 10 ? '0' : '') + s;
+                }}
+                const box = parentDoc.getElementById("timer-box-real");
+                if (secondsLeft < 60) {{
+                    if (box) box.style.backgroundColor = "#e74c3c";
+                }} else {{
+                    if (box) box.style.backgroundColor = "#2e86c1";
+                }}
+            }}
+        }}, 1000);
+    }})();
+    </script>
+    """
+    st.components.v1.html(js_code, height=0, width=0)
     
     # 2. Global Progress
     current_idx = st.session_state.current_case_idx
