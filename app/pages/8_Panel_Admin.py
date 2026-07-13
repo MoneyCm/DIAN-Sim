@@ -11,6 +11,7 @@ from db.session import SessionLocal
 from db.models import User, UserStats, UserOPEC, Attempt, Question
 from ui_utils import load_css, render_header
 from core.auth import AuthManager
+from core.normativa import NormativaManager
 
 # pass # Removed st.set_page_config
 
@@ -83,23 +84,68 @@ with tab_normativa:
     if not os.path.exists(norm_path):
         os.makedirs(norm_path)
     
-    files = os.listdir(norm_path)
+    files = [f for f in os.listdir(norm_path) if f.endswith(".pdf")]
     if files:
         st.write("Archivos indexados actualmente:")
         for f in files:
-            if f.endswith(".pdf"):
-                st.write(f"- 📄 {f}")
+            st.write(f"- 📄 {f}")
     else:
         st.write("La biblioteca está vacía.")
     
     st.divider()
+    
+    # --- ACCIONES DE INDEXACIÓN ---
+    st.subheader("⚙️ Acciones de Sincronización RAG")
+    col_act1, col_act2 = st.columns(2)
+    
+    with col_act1:
+        if st.button("🔄 Indexar Biblioteca (Leer PDFs)", use_container_width=True, help="Extrae el texto de los PDFs locales y los guarda en la base de datos"):
+            manager = NormativaManager()
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def progress_cb(pct, msg):
+                progress_bar.progress(pct / 100.0)
+                status_text.text(msg)
+                
+            try:
+                indexed = manager.index_all(progress_callback=progress_cb)
+                st.success(f"¡Proceso completado! Se indexaron {indexed} nuevos fragmentos de ley.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error indexando PDFs: {e}")
+                
+    with col_act2:
+        if st.button("🧠 Calcular Vectores Semánticos", use_container_width=True, help="Genera embeddings vectoriales de Gemini para la búsqueda inteligente"):
+            manager = NormativaManager()
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def progress_cb(pct, msg):
+                progress_bar.progress(pct / 100.0)
+                status_text.text(msg)
+                
+            try:
+                updated = manager.backfill_embeddings(progress_callback=progress_cb)
+                st.success(f"¡Sincronización vectorial completa! Se generaron vectores para {updated} fragmentos.")
+            except Exception as e:
+                st.error(f"Error generando embeddings: {e}")
+
+    st.divider()
     st.subheader("📤 Subir Nueva Ley")
-    uploaded_file = st.file_uploader("Sube el PDF de la Ley o Estatuto (La IA lo leerá automáticamente)", type="pdf")
+    uploaded_file = st.file_uploader("Sube el PDF de la Ley o Estatuto", type="pdf")
     if uploaded_file is not None:
         with open(os.path.join(norm_path, uploaded_file.name), "wb") as f:
             f.write(uploaded_file.getbuffer())
-        st.success(f"¡{uploaded_file.name} subido e indexado! La IA ahora tiene este conocimiento. Mikey")
-        st.balloons()
+        
+        # Auto-indexar tras la subida
+        manager = NormativaManager()
+        try:
+            indexed = manager.index_all()
+            st.success(f"¡{uploaded_file.name} subido e indexado! Se crearon {indexed} fragmentos. Haz clic en 'Calcular Vectores Semánticos' para activar la búsqueda vectorial sobre esta nueva ley. Mikey")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Error indexando automáticamente el nuevo PDF: {e}")
 
 st.divider()
 st.caption("🔒 Este panel es de uso exclusivo para el propietario de la plataforma. Mikey")
