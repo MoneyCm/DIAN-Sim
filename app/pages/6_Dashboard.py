@@ -18,6 +18,7 @@ import datetime, io
 
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
+from core.anki import generate_anki_deck
 
 # pass # Removed st.set_page_config
 
@@ -541,46 +542,116 @@ try:
 
     with tab_interactivo:
         st.info("""
-        💡 **¿Cómo importar tarjetas interactivas (Opción Múltiple) en Anki?**
-        1. Descarga el archivo `.csv` estructurado usando los botones de abajo.
-        2. En **Anki**, asegúrate de tener un **Tipo de Nota** con campos separados para: *Caso, Tema, Pregunta, Opción A, Opción B, Opción C, Opción D, Respuesta Correcta, Justificación y Norma*.
-        3. Ve a **Archivo -> Importar** y selecciona el archivo.
-        4. En la configuración de importación de Anki:
-           - Configura el delimitador como **Punto y coma** (`;`).
-           - Habilita la opción **Permitir HTML en los campos**.
-           - Mapea secuencialmente cada una de las 10 columnas a sus correspondientes campos de tu tarjeta interactiva.
+        💡 **¿Cómo usar tus tarjetas interactivas en Anki en 1 solo clic?**
+        1. Descarga el archivo de mazo directo **`.apkg`** usando los botones de abajo.
+        2. Abre el archivo descargado haciendo **doble clic** en tu computadora.
+        3. ¡Listo! Anki creará automáticamente la baraja y el diseño con botones interactivos.
+        
+        *Nota: Si prefieres configurar tu propia plantilla manualmente, puedes descargar el archivo `.csv` y seguir el mapeo tradicional de 10 columnas.*
         """)
 
         col_int1, col_int2 = st.columns(2)
         with col_int1:
-            st.markdown("##### ❌ Preguntas Falladas (Estructurado)")
+            st.markdown("##### ❌ Preguntas Falladas (Mazo Directo)")
             if failed_qs:
+                # Convertir modelos a dicts para genanki
+                failed_dicts = []
+                for q in failed_qs:
+                    opts = q.options_json if q.options_json else {}
+                    caso_text = ""
+                    if q.case_study:
+                        cs_title = f"({q.case_study.title})\n" if q.case_study.title else ""
+                        caso_text = f"{cs_title}{q.case_study.text}"
+                    
+                    failed_dicts.append({
+                        "Caso_Estudio": caso_text,
+                        "Tema": q.topic,
+                        "Pregunta": q.stem,
+                        "Opcion_A": opts.get('A', ''),
+                        "Opcion_B": opts.get('B', ''),
+                        "Opcion_C": opts.get('C', ''),
+                        "Opcion_D": opts.get('D', 'N/A'),
+                        "Respuesta_Correcta": q.correct_key,
+                        "Justificacion": q.rationale or 'N/A',
+                        "Norma": q.source_refs or ''
+                    })
+                
+                # Generar mazo APKG
+                try:
+                    failed_apkg = generate_anki_deck(failed_dicts, "DIAN - Fallas Interactivas")
+                    st.download_button(
+                        label="📥 Descargar Mazo APKG (Anki Directo)",
+                        data=failed_apkg,
+                        file_name=f"DIAN_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
+                        mime="application/apkg",
+                        use_container_width=True,
+                        key="btn_export_anki_fallas_apkg"
+                    )
+                except Exception as ex:
+                    st.error(f"Error generando APKG: {ex}")
+                
                 failed_int_csv = to_anki_interactive_csv(failed_qs)
                 st.download_button(
-                    label=f"📥 Descargar Fallas Interactivas ({len(failed_qs)} Qs)",
+                    label="📥 Descargar Respuestas en CSV (Excel)",
                     data=failed_int_csv,
-                    file_name=f"Anki_Dian_Fallas_Interactivas_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_Dian_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_fallas_int"
                 )
-                st.caption("Ideal para plantillas interactivas que animan y muestran botones para cada opción por separado.")
+                st.caption("Usa el botón APKG para importar todo en 1 clic. Usa el CSV si prefieres abrirlo en Excel.")
             else:
                 st.info("No tienes fallas registradas todavía.")
 
         with col_int2:
-            st.markdown("##### ⭐ Preguntas Favoritas (Estructurado)")
+            st.markdown("##### ⭐ Preguntas Favoritas (Mazo Directo)")
             if fav_qs:
+                # Convertir modelos a dicts para genanki
+                fav_dicts = []
+                for q in fav_qs:
+                    opts = q.options_json if q.options_json else {}
+                    caso_text = ""
+                    if q.case_study:
+                        cs_title = f"({q.case_study.title})\n" if q.case_study.title else ""
+                        caso_text = f"{cs_title}{q.case_study.text}"
+                    
+                    fav_dicts.append({
+                        "Caso_Estudio": caso_text,
+                        "Tema": q.topic,
+                        "Pregunta": q.stem,
+                        "Opcion_A": opts.get('A', ''),
+                        "Opcion_B": opts.get('B', ''),
+                        "Opcion_C": opts.get('C', ''),
+                        "Opcion_D": opts.get('D', 'N/A'),
+                        "Respuesta_Correcta": q.correct_key,
+                        "Justificacion": q.rationale or 'N/A',
+                        "Norma": q.source_refs or ''
+                    })
+                
+                # Generar mazo APKG
+                try:
+                    fav_apkg = generate_anki_deck(fav_dicts, "DIAN - Favoritas Interactivas")
+                    st.download_button(
+                        label="📥 Descargar Mazo APKG (Anki Directo)",
+                        data=fav_apkg,
+                        file_name=f"DIAN_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
+                        mime="application/apkg",
+                        use_container_width=True,
+                        key="btn_export_anki_favs_apkg"
+                    )
+                except Exception as ex:
+                    st.error(f"Error generando APKG: {ex}")
+                
                 fav_int_csv = to_anki_interactive_csv(fav_qs)
                 st.download_button(
-                    label=f"📥 Descargar Favoritas Interactivas ({len(fav_qs)} Qs)",
+                    label="📥 Descargar Respuestas en CSV (Excel)",
                     data=fav_int_csv,
-                    file_name=f"Anki_Dian_Favoritas_Interactivas_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_Dian_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_favs_int"
                 )
-                st.caption("Estructura de 10 columnas para tus tarjetas favoritas con selección interactiva.")
+                st.caption("Usa el botón APKG para importar todo en 1 clic. Usa el CSV si prefieres abrirlo en Excel.")
             else:
                 st.info("No has marcado ninguna pregunta como favorita.")
 
