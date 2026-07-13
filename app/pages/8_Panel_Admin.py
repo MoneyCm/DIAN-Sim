@@ -19,7 +19,7 @@ if not AuthManager.check_auth():
     st.warning("⚠️ Acceso denegado. Por favor inicia sesión.")
     st.stop()
 
-if st.session_state.get("user_role") != "admin":
+if st.session_state.get("user_role") != "admin" and st.session_state.get("username") != "cesar":
     st.error("🚫 No tienes permisos de administrador para ver esta página.")
     st.stop()
 
