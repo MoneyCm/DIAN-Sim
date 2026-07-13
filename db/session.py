@@ -88,6 +88,7 @@ def sync_db_schema():
         inspector = inspect(engine)
         
         new_cols_map = {
+            "normativa_chunks": [("embedding_json", "TEXT")],
             "questions": [("macro_dominio", "VARCHAR"), ("micro_competencia", "VARCHAR"), 
                           ("is_verified", "BOOLEAN DEFAULT FALSE"), ("quality_report", "JSON"),
                           ("global_hits", "INTEGER DEFAULT 0"), ("global_misses", "INTEGER DEFAULT 0"),

@@ -188,6 +188,7 @@ class NormativaChunk(Base):
     page: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
     hash_content: Mapped[str] = mapped_column(String, unique=True)
+    embedding_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
 class UserAPIKey(Base):
