@@ -183,7 +183,7 @@ try:
             )
             fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)')
             fig_pie.add_annotation(text=f"{int((total_hits/(total_hits+total_misses))*100)}%", showarrow=False, font_size=20, font_weight="bold")
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie, use_container_width=True, key="dashboard_pie_chart")
             st.markdown(f"<p style='text-align:center; color:gray;'>{total_hits} Acertadas / {total_misses} Falladas</p>", unsafe_allow_html=True)
         else:
             st.info("No hay datos de intentos.")
@@ -205,7 +205,7 @@ try:
                           color='Dominio', color_continuous_scale='RdYlGn',
                           range_color=[0, 100])
             fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=0, b=0, l=0, r=0))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="dashboard_sunburst_chart")
         else:
             st.info("¡Realiza tu primer simulacro!")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -229,7 +229,7 @@ try:
                            markers=True, line_shape='spline')
         fig_line.update_yaxes(range=[0, 105])
         fig_line.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(fig_line, use_container_width=True, key="dashboard_line_chart")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 4. Radar de Habilidades & Refuerzo
@@ -264,7 +264,7 @@ try:
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
-            st.plotly_chart(fig_radar, use_container_width=True)
+            st.plotly_chart(fig_radar, use_container_width=True, key="dashboard_radar_chart")
         else:
             st.info("Sin datos para el radar.")
 
