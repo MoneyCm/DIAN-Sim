@@ -17,4 +17,6 @@ httpx>=0.25.0
 cryptography
 Authlib
 stripe
+genanki==0.13.0
 # Force rebuild v5
+
