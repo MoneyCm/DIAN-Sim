@@ -32,7 +32,7 @@ class NormativaManager:
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.embed_content(
-                model="text-embedding-004",
+                model="gemini-embedding-2",
                 contents=text
             )
             if response and response.embeddings:
