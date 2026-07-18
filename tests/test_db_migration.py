@@ -11,6 +11,7 @@ def test_column_exists():
     inspector = inspect(engine)
     columns = [c["name"] for c in inspector.get_columns("normativa_chunks")]
     assert "embedding_json" in columns, "La columna embedding_json debe estar en normativa_chunks"
+    assert "question_anki_enrichments" in inspector.get_table_names()
     print("Prueba de migracion de columna exitosa.")
 
 if __name__ == "__main__":

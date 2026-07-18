@@ -103,6 +103,37 @@ class Question(Base):
     case_study: Mapped[Optional["CaseStudy"]] = relationship("CaseStudy", back_populates="questions")
     attempts: Mapped[List["Attempt"]] = relationship("Attempt", back_populates="question")
     perf_entries: Mapped[List["QuestionPerformance"]] = relationship("QuestionPerformance", back_populates="question")
+    anki_enrichment: Mapped[Optional["QuestionAnkiEnrichment"]] = relationship(
+        "QuestionAnkiEnrichment",
+        back_populates="question",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class QuestionAnkiEnrichment(Base):
+    __tablename__ = "question_anki_enrichments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question_id: Mapped[str] = mapped_column(
+        ForeignKey("questions.question_id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    rule: Mapped[Optional[str]] = mapped_column(Text)
+    exception: Mapped[Optional[str]] = mapped_column(Text)
+    distractor: Mapped[Optional[str]] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[Optional[str]] = mapped_column(String(100))
+    prompt_version: Mapped[str] = mapped_column(String(20), default="v1", nullable=False)
+    generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    reviewed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    question: Mapped["Question"] = relationship("Question", back_populates="anki_enrichment")
 
 class Attempt(Base):
     __tablename__ = "attempts"

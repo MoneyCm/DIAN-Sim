@@ -4,7 +4,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from core.anki import generate_anki_deck
+from core.anki import DIAN_FIELDS, generate_anki_deck
 
 def test_deck_generation():
     dummy_questions = [
@@ -22,6 +22,7 @@ def test_deck_generation():
         }
     ]
     
+    assert [field["name"] for field in DIAN_FIELDS][-3:] == ["Regla_Clave", "Excepcion_Clave", "Distractor_Clave"]
     apkg_bytes = generate_anki_deck(dummy_questions, "DIAN - Test Deck")
     assert len(apkg_bytes) > 0, "Los bytes generados deben ser mayores a 0"
     print("Prueba de generacion de APKG exitosa.")

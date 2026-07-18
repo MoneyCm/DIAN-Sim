@@ -19,6 +19,9 @@ import datetime, io
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
+from core.anki_enrichment import enrich_question, needs_enrichment
+from core.config import get_api_key
+from core.user_keys import get_user_key
 
 # pass # Removed st.set_page_config
 
@@ -410,7 +413,7 @@ try:
         Attempt.is_correct == False
     ).distinct().all()
     failed_q_ids = [r[0] for r in failed_q_ids]
-    failed_qs = db.query(Question).options(joinedload(Question.case_study)).filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
+    failed_qs = db.query(Question).options(joinedload(Question.case_study), joinedload(Question.anki_enrichment)).filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
 
     # 2. Obtener preguntas favoritas
     fav_q_ids = db.query(QuestionPerformance.question_id).filter(
@@ -418,7 +421,7 @@ try:
         QuestionPerformance.is_favorite == True
     ).distinct().all()
     fav_q_ids = [r[0] for r in fav_q_ids]
-    fav_qs = db.query(Question).options(joinedload(Question.case_study)).filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
+    fav_qs = db.query(Question).options(joinedload(Question.case_study), joinedload(Question.anki_enrichment)).filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
 
     def to_anki_standard_csv(questions):
         rows = []
@@ -493,6 +496,15 @@ try:
         df.to_csv(csv_buffer, sep=";", index=False, header=True, quoting=csv.QUOTE_ALL, encoding="utf-8")
         return csv_buffer.getvalue()
 
+    def anki_enrichment_fields(question):
+        enrichment = question.anki_enrichment
+        if not enrichment or enrichment.status not in {"generated", "reviewed"}:
+            return {"Regla_Clave": "", "Excepcion_Clave": "", "Distractor_Clave": ""}
+        return {
+            "Regla_Clave": enrichment.rule or "",
+            "Excepcion_Clave": enrichment.exception or "",
+            "Distractor_Clave": enrichment.distractor or "",
+        }
     tab_estandar, tab_interactivo = st.tabs(["🎴 Estándar (Anverso/Reverso)", "🎮 Interactivo (Opción Múltiple)"])
 
     with tab_estandar:
@@ -550,6 +562,39 @@ try:
         *Nota: Si prefieres configurar tu propia plantilla manualmente, puedes descargar el archivo `.csv` y seguir el mapeo tradicional de 10 columnas.*
         """)
 
+        export_questions = {q.question_id: q for q in [*failed_qs, *fav_qs]}.values()
+        pending_enrichments = [q for q in export_questions if needs_enrichment(q)]
+        if pending_enrichments:
+            st.warning(f"Hay {len(pending_enrichments)} preguntas sin tarjetas pedagógicas enriquecidas.")
+            provider = st.selectbox(
+                "Proveedor para enriquecer tarjetas",
+                ["Gemini", "OpenAI", "Groq", "Mistral"],
+                index=0,
+                key="anki_enrichment_provider",
+            )
+            if st.button("✨ Generar enriquecimientos faltantes", key="generate_missing_anki"):
+                provider_key = provider.lower()
+                api_key = get_user_key(u_id, provider_key) or get_api_key(provider_key)
+                if not api_key:
+                    st.error(f"Configura una API key de {provider} antes de generar.")
+                else:
+                    progress = st.progress(0)
+                    generated = 0
+                    errors = 0
+                    for index, question in enumerate(pending_enrichments, start=1):
+                        try:
+                            enrich_question(db, question, provider_key, api_key)
+                            generated += 1
+                        except Exception:
+                            errors += 1
+                        progress.progress(index / len(pending_enrichments))
+                    if errors:
+                        st.warning(f"Generadas: {generated}. Errores: {errors}.")
+                    else:
+                        st.success(f"Se generaron {generated} enriquecimientos.")
+                    st.rerun()
+        else:
+            st.success("Todas las tarjetas seleccionadas tienen enriquecimiento pedagógico.")
         col_int1, col_int2 = st.columns(2)
         with col_int1:
             st.markdown("##### ❌ Preguntas Falladas (Mazo Directo)")
@@ -573,7 +618,8 @@ try:
                         "Opcion_D": opts.get('D', 'N/A'),
                         "Respuesta_Correcta": q.correct_key,
                         "Justificacion": q.rationale or 'N/A',
-                        "Norma": q.source_refs or ''
+                        "Norma": q.source_refs or '',
+                        **anki_enrichment_fields(q)
                     })
                 
                 # Generar mazo APKG
@@ -625,7 +671,8 @@ try:
                         "Opcion_D": opts.get('D', 'N/A'),
                         "Respuesta_Correcta": q.correct_key,
                         "Justificacion": q.rationale or 'N/A',
-                        "Norma": q.source_refs or ''
+                        "Norma": q.source_refs or '',
+                        **anki_enrichment_fields(q)
                     })
                 
                 # Generar mazo APKG

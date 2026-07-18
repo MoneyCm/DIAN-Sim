@@ -70,6 +70,7 @@ if "sqlite" in DATABASE_URL:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 # IMPORTANTE: Importamos modelos DESPUÉS de definir el motor

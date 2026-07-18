@@ -8,10 +8,12 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from db.session import SessionLocal
-from db.models import User, UserStats, UserOPEC, Attempt, Question
+from db.models import User, UserStats, UserOPEC, Attempt, Question, QuestionAnkiEnrichment
 from ui_utils import load_css, render_header
 from core.auth import AuthManager
 from core.normativa import NormativaManager
+from core.anki_enrichment import backfill_enrichments
+from core.config import get_api_key
 
 # pass # Removed st.set_page_config
 
@@ -26,7 +28,7 @@ if st.session_state.get("user_role") != "admin" and st.session_state.get("userna
 load_css()
 render_header(title="Panel de Administración Maestro", subtitle="Gestión global de usuarios, leyes e inteligencia. Mikey")
 
-tab_stats, tab_users, tab_normativa = st.tabs(["📊 Estadísticas Globales", "👥 Gestión de Usuarios", "🏛️ Inteligencia Normativa"])
+tab_stats, tab_users, tab_normativa, tab_anki = st.tabs(["📊 Estadísticas Globales", "👥 Gestión de Usuarios", "🏛️ Inteligencia Normativa", "🎴 Enriquecimiento Anki"])
 
 # --- TAB: STATS ---
 with tab_stats:
@@ -147,5 +149,64 @@ with tab_normativa:
         except Exception as e:
             st.error(f"Error indexando automáticamente el nuevo PDF: {e}")
 
+# --- TAB: ANKI ENRICHMENT ---
+with tab_anki:
+    st.subheader("🎴 Enriquecimiento pedagógico para Anki")
+    db_anki = SessionLocal()
+    try:
+        generated_count = db_anki.query(QuestionAnkiEnrichment).filter(
+            QuestionAnkiEnrichment.status.in_(["generated", "reviewed"])
+        ).count()
+        error_count = db_anki.query(QuestionAnkiEnrichment).filter_by(status="error").count()
+        total_questions_anki = db_anki.query(Question).count()
+    finally:
+        db_anki.close()
+
+    col_a1, col_a2, col_a3, col_a4 = st.columns(4)
+    col_a1.metric("Preguntas", total_questions_anki)
+    col_a2.metric("Enriquecidas", generated_count)
+    col_a3.metric("Pendientes", max(total_questions_anki - generated_count, 0))
+    col_a4.metric("Errores", error_count)
+
+    provider_anki = st.selectbox(
+        "Proveedor LLM", ["Gemini", "OpenAI", "Groq", "Mistral"], key="admin_anki_provider"
+    )
+    batch_limit = st.number_input(
+        "Máximo de preguntas en esta ejecución", min_value=1, max_value=500, value=25, step=5
+    )
+    force_regeneration = st.checkbox(
+        "Regenerar contenido no revisado",
+        value=False,
+        help="Los enriquecimientos revisados nunca se sobrescriben.",
+    )
+
+    if st.button("🧠 Ejecutar backfill Anki", type="primary", use_container_width=True):
+        provider_key = provider_anki.lower()
+        api_key_anki = get_api_key(provider_key)
+        if not api_key_anki:
+            st.error(f"No hay una API key global configurada para {provider_anki}.")
+        else:
+            progress_anki = st.progress(0)
+            status_anki = st.empty()
+
+            def progress_anki_cb(pct, message):
+                progress_anki.progress(pct / 100.0)
+                status_anki.text(message)
+
+            result = backfill_enrichments(
+                SessionLocal,
+                provider_key,
+                api_key_anki,
+                limit=int(batch_limit),
+                force=force_regeneration,
+                progress_callback=progress_anki_cb,
+            )
+            if result["errors"]:
+                st.warning(
+                    f"Generadas: {result['generated']} de {result['total']}. Errores: {result['errors']}."
+                )
+            else:
+                st.success(f"Se enriquecieron {result['generated']} preguntas.")
+            st.rerun()
 st.divider()
 st.caption("🔒 Este panel es de uso exclusivo para el propietario de la plataforma. Mikey")

@@ -3,7 +3,7 @@ import tempfile
 import os
 from typing import List
 
-DIAN_MODEL_ID = 1583094821
+DIAN_MODEL_ID = 1583094822
 DIAN_DECK_ID_BASE = 2026071300
 
 FRONT_HTML = """
@@ -330,6 +330,26 @@ BACK_HTML = """
       <span class="norma-badge">{{Norma}}</span>
     </div>
     {{/Norma}}
+    {{#Regla_Clave}}
+    <div class="justificacion-box">
+      <div class="justificacion-titulo">Regla decisiva</div>
+      <div class="justificacion-texto">{{Regla_Clave}}</div>
+    </div>
+    {{/Regla_Clave}}
+
+    {{#Excepcion_Clave}}
+    <div class="justificacion-box">
+      <div class="justificacion-titulo">Excepción o límite</div>
+      <div class="justificacion-texto">{{Excepcion_Clave}}</div>
+    </div>
+    {{/Excepcion_Clave}}
+
+    {{#Distractor_Clave}}
+    <div class="justificacion-box">
+      <div class="justificacion-titulo">Distractor peligroso</div>
+      <div class="justificacion-texto">{{Distractor_Clave}}</div>
+    </div>
+    {{/Distractor_Clave}}
   </div>
 
   <div id="correct-answer" style="display: none;">{{Respuesta_Correcta}}</div>
@@ -367,12 +387,15 @@ DIAN_FIELDS = [
     {"name": "Opcion_D"},
     {"name": "Respuesta_Correcta"},
     {"name": "Justificacion"},
-    {"name": "Norma"}
+    {"name": "Norma"},
+    {"name": "Regla_Clave"},
+    {"name": "Excepcion_Clave"},
+    {"name": "Distractor_Clave"}
 ]
 
 dian_model = genanki.Model(
     DIAN_MODEL_ID,
-    'DIAN - Interactivo 10 Columnas',
+    'DIAN - Interactivo Enriquecido 13 Campos',
     fields=DIAN_FIELDS,
     templates=[
         {
@@ -402,10 +425,13 @@ def generate_anki_deck(questions: List[dict], deck_name: str) -> bytes:
         ans = str(q.get("Respuesta_Correcta", "") or "").strip().upper()
         just = str(q.get("Justificacion", "") or "").strip()
         norm = str(q.get("Norma", "") or "").strip()
+        regla = str(q.get("Regla_Clave", "") or "").strip()
+        excepcion = str(q.get("Excepcion_Clave", "") or "").strip()
+        distractor = str(q.get("Distractor_Clave", "") or "").strip()
         
         note = genanki.Note(
             model=dian_model,
-            fields=[caso, tema, preg, op_a, op_b, op_c, op_d, ans, just, norm]
+            fields=[caso, tema, preg, op_a, op_b, op_c, op_d, ans, just, norm, regla, excepcion, distractor]
         )
         dian_deck.add_note(note)
         
