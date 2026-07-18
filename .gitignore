@@ -38,3 +38,9 @@ migration_log.txt
 
 # Secrets and local credentials
 secret.key
+
+# Local planning and test artifacts
+.superpowers/
+scratch/
+data/normativa/normativa_prueba.pdf
+test_anki_card.html
