@@ -140,8 +140,9 @@ with col1:
     generate_btn = False
     gen_mode = st.radio("Modo de Generación", ["Preguntas desde Texto/PDF", "Caso de Estudio (Simulacro Real)"], index=default_gen_idx, horizontal=True)
     
-    if reinforcement_topic and gen_mode == "Caso de Estudio (Simulacro Real)":
-        st.success(f"🎯 **Modo Refuerzo Activado:** Se pre-configuró el tema **'{reinforcement_topic}'** basado en tus resultados del simulacro.")
+    if gen_mode == "Preguntas desde Texto/PDF":
+        if reinforcement_topic:
+            st.success(f"🎯 **Modo Refuerzo Activado:** Se pre-configuró el tema **'{reinforcement_topic}'** basado en tus resultados del simulacro.")
         # Pre-fill topic from session state if available 
         default_topic = st.session_state.get("ai_default_topic", "Gestor II")
         custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
@@ -199,7 +200,25 @@ with col1:
                              pass 
                     except: pass
 
-        # ... logic ...
+        source_text = st.session_state.get("ai_source_text", "")
+        char_count = len(source_text)
+        st.caption(f"Caracteres detectados: {char_count}")
+
+        difficulty_p_val = st.session_state.get("ai_default_diff", 2)
+        difficulty_map = {"Básico": 1, "Intermedio": 2, "Avanzado": 3}
+        inv_difficulty_map = {value: label for label, value in difficulty_map.items()}
+        difficulty_label = st.select_slider(
+            "Nivel de dificultad",
+            options=list(difficulty_map),
+            value=inv_difficulty_map.get(difficulty_p_val, "Intermedio"),
+        )
+        difficulty_value = difficulty_map[difficulty_label]
+
+        goa_mode = st.toggle(
+            "📄 Aplicar Protocolo situacional GOA 2667 (Recomendado)",
+            value=True,
+            help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.",
+        )
         
         if not can_generate:
             from ui_utils import render_paywall_card
