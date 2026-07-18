@@ -18,4 +18,5 @@ for i in range(100):
     progress.progress(i + 1)
 
 # Redirección Final
-st.switch_page("app.py")
+st.query_params["logout"] = "1"
+st.rerun()
