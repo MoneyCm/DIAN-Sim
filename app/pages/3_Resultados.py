@@ -31,7 +31,7 @@ if "last_results" not in st.session_state:
     st.info("No hay resultados recientes para mostrar.")
     with st.container():
          if st.button("⬅️ Volver al Inicio"):
-             st.switch_page("app.py")
+             st.switch_page("pages/6_Dashboard.py")
     st.stop()
 
 data = st.session_state["last_results"]
@@ -220,4 +220,4 @@ else:
     db.close()
 
 if st.button("🏠 Inicio", type="primary"):
-    st.switch_page("app.py")
+    st.switch_page("pages/6_Dashboard.py")

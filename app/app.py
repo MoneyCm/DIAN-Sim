@@ -161,6 +161,7 @@ p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
 # Grupo: Práctica
 p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica por Temas", icon="📚")
+p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
 p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Tipo Examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repaso Especial", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
@@ -178,7 +179,7 @@ p_debug_cfg = st.Page("pages/99_Debug_Config.py", title="Debug Config", icon="�
 # Agrupar menú
 pages = {
     "Mi Cuenta": [p_dashboard, p_perfil, p_config, p_logout],
-    "Práctica DIAN": [p_simulacro, p_sim_real, p_repaso, p_resultados],
+    "Práctica DIAN": [p_simulacro, p_ejecucion, p_sim_real, p_repaso, p_resultados],
     "Herramientas y Recursos": [p_banco, p_ia, p_etica],
     "Sistemas (Admin)": [p_admin, p_debug_opec, p_debug_cfg]
 }
