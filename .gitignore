@@ -2,12 +2,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 .venv
 venv/
 ENV/
 env/
 .env
 .env.local
+*.egg-info/
 
 # Streamlit
 .streamlit/config.toml
@@ -16,6 +18,7 @@ env/
 # Databases
 *.db
 *.sqlite
+*.sqlite3
 
 # IDEs
 .vscode/
@@ -27,3 +30,11 @@ Thumbs.db
 
 # Notebooks
 .ipynb_checkpoints
+
+# Logs and local reports
+*.log
+debug_output.txt
+migration_log.txt
+
+# Secrets and local credentials
+secret.key
