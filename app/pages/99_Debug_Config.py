@@ -9,9 +9,9 @@ if PROJECT_ROOT not in sys.path:
 import streamlit as st
 import sqlite3
 from sqlalchemy import inspect
-from core.auth import AuthManager
+from core.access_control import require_admin
 
-AuthManager.require_admin()
+require_admin()
 
 st.title("🔧 Diagnóstico de Base de Datos (In-App)")
 

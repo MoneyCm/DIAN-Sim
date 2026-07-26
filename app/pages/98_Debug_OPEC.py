@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 from db.session import SessionLocal
 from db.models import UserOPEC, User
-from core.auth import AuthManager
+from core.access_control import require_admin
 
 # pass # Removed st.set_page_config
 
-AuthManager.require_admin()
+require_admin()
 
 st.title("🔧 Diagnóstico de OPEC")
 

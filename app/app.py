@@ -17,6 +17,7 @@ try:
 except ImportError:
     from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.auth import AuthManager
+from core.access_control import is_admin
 from core.rank_system import get_rank_info
 
 st.set_page_config(
@@ -211,7 +212,7 @@ else:
     except Exception as e:
         pass
         
-    if AuthManager.is_admin():
+    if is_admin():
         pages["Sistemas (Admin)"] = [p_admin, p_debug_opec, p_debug_cfg]
     pg = st.navigation(pages)
 

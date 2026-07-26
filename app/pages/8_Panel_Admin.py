@@ -10,14 +10,14 @@ if PROJECT_ROOT not in sys.path:
 from db.session import SessionLocal
 from db.models import User, UserStats, UserOPEC, Attempt, Question, QuestionAnkiEnrichment
 from ui_utils import load_css, render_header
-from core.auth import AuthManager
+from core.access_control import require_admin
 from core.normativa import NormativaManager
 from core.anki_enrichment import backfill_enrichments
 from core.config import get_api_key
 
 # pass # Removed st.set_page_config
 
-AuthManager.require_admin()
+require_admin()
 
 load_css()
 render_header(title="Panel de Administración Maestro", subtitle="Gestión global de usuarios, leyes e inteligencia. Mikey")
