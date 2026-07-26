@@ -3,7 +3,11 @@ import sys
 import os
 
 # Add root to python path to import modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+APP_DIR = os.path.abspath(os.path.dirname(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(APP_DIR, '..'))
+for import_path in (APP_DIR, PROJECT_ROOT):
+    if import_path not in sys.path:
+        sys.path.insert(0, import_path)
 
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
@@ -201,11 +205,6 @@ else:
     # Modo logueado: Montar la app entera y sus funciones
     # Inject Global CSS and render visual wrappers before page execution
     load_css()
-    try:
-        from app.components.NewsTicker import render_news_ticker
-    except ImportError:
-        from components.NewsTicker import render_news_ticker
-
     # Restaurar la info de Gamificación en la barra lateral del usuario v9.1
     try:
         render_custom_sidebar()
