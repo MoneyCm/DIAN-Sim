@@ -41,64 +41,46 @@ class AuthManager:
 
     @staticmethod
     def login_with_google(email: str, name: str = None):
-        """Autenticación nativa Google OIDC mikey v7.15"""
+        """Autentica por OIDC usando exclusivamente el email verificado."""
         from db.session import engine
         try:
             with engine.connect() as conn:
-                # 1. Buscar por email
-                sql = text("SELECT id, username, role FROM users WHERE email = :e")
-                user = conn.execute(sql, {"e": email}).first()
-                
-                if not user:
-                    # 2. Intentar fusionar con cuenta 'cesar' legacy
-                    sql_legacy = text("SELECT id FROM users WHERE (username = 'cesar' OR username = 'Cesar') AND (email IS NULL OR email = '')")
-                    legacy_id = conn.execute(sql_legacy).scalar()
-                    
-                    if legacy_id:
-                        # Transformar cuenta legacy en cuenta Google mikey
-                        sql_up = text("UPDATE users SET email = :e, password_hash = 'GOOGLE_OAUTH' WHERE id = :uid")
-                        with engine.begin() as t_conn:
-                            t_conn.execute(sql_up, {"e": email, "uid": legacy_id})
-                        user_id, user_name, user_role = legacy_id, "cesar", "user"
-                    else:
-                        # 3. Crear cuenta nueva
-                        new_name = name if (name and name != "None") else email.split('@')[0]
-                        sql_ins = text("INSERT INTO users (username, email, password_hash, role) VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id")
-                        with engine.begin() as t_conn:
-                            user_id = t_conn.execute(sql_ins, {"u": new_name, "e": email}).scalar()
-                        user_name, user_role = new_name, "user"
-                else:
-                    user_id, user_name, user_role = user
-                    
-                # 4. Fusión de Datos atómica (OPEC y Estadísticas) v7.15
-                # Si el usuario no tiene OPEC, buscamos si 'cesar' legacy los tiene
-                sql_check_opec = text("SELECT id FROM user_opec WHERE user_id = :uid LIMIT 1")
-                if not conn.execute(sql_check_opec, {"uid": user_id}).first():
-                    sql_legacy_id = text("SELECT id FROM users WHERE (username = 'cesar' OR username = 'Cesar') AND id != :curr_id")
-                    leg_id = conn.execute(sql_legacy_id, {"curr_id": user_id}).scalar()
-                    if leg_id:
-                        with engine.begin() as t_conn:
-                            t_conn.execute(text("DELETE FROM user_opec WHERE user_id = :uid"), {"uid": user_id})
-                            t_conn.execute(text("DELETE FROM user_stats WHERE user_id = :uid"), {"uid": user_id})
-                            t_conn.execute(text("UPDATE user_opec SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
-                            t_conn.execute(text("UPDATE user_stats SET user_id = :new_uid WHERE user_id = :old_uid"), {"new_uid": user_id, "old_uid": leg_id})
+                user = conn.execute(
+                    text("SELECT id, username, role FROM users WHERE email = :e"),
+                    {"e": email},
+                ).first()
 
-                # 5. Iniciar Sesión en Streamlit
-                # st.query_params.clear() # Evitamos limpiar manualmente para prevenir fallos de UI en Streamlit 1.54+ OIDC
-                
-                # Saneamiento de Identidad mikey v7.19
-                # Prioridad máxima para forecesar@gmail.com
-                if email == "forecesar@gmail.com" or user_name == "Aspirante" or not user_name:
-                    user_name = "cesar"
-                
+                if user:
+                    user_id, user_name, user_role = user
+                else:
+                    base_name = (name if name and name != "None" else email.split("@")[0]).strip()
+                    base_name = base_name or "usuario"
+                    new_name = base_name
+                    suffix = 1
+                    while conn.execute(
+                        text("SELECT 1 FROM users WHERE username = :u"), {"u": new_name}
+                    ).first():
+                        suffix += 1
+                        new_name = f"{base_name}-{suffix}"
+
+                    with engine.begin() as insert_conn:
+                        user_id = insert_conn.execute(
+                            text(
+                                "INSERT INTO users (username, email, password_hash, role) "
+                                "VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id"
+                            ),
+                            {"u": new_name, "e": email},
+                        ).scalar()
+                    user_name, user_role = new_name, "user"
+
                 st.session_state["logged_in"] = True
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
                 st.session_state["user_role"] = user_role
                 st.session_state["logout_manual_flag"] = False
                 return True
-        except Exception as e:
-            print(f"🔥 Google Login Error: {e}", file=sys.stderr)
+        except Exception as exc:
+            print(f"Google login error: {exc}", file=sys.stderr)
             return False
 
     @staticmethod
@@ -154,6 +136,34 @@ class AuthManager:
         
         return False
 
+    @staticmethod
+    def is_admin() -> bool:
+        """Comprueba el rol actual contra la base de datos."""
+        user_id = st.session_state.get("user_id")
+        if not user_id or not st.session_state.get("logged_in"):
+            return False
+
+        from db.session import engine
+        try:
+            with engine.connect() as conn:
+                role = conn.execute(
+                    text("SELECT role FROM users WHERE id = :uid"), {"uid": user_id}
+                ).scalar()
+            st.session_state["user_role"] = role
+            return role == "admin"
+        except Exception as exc:
+            print(f"Admin authorization error: {exc}", file=sys.stderr)
+            return False
+
+    @staticmethod
+    def require_admin() -> None:
+        """Detiene la página actual si el usuario no es administrador."""
+        if not AuthManager.check_auth():
+            st.warning("Acceso denegado. Inicia sesión para continuar.")
+            st.stop()
+        if not AuthManager.is_admin():
+            st.error("No tienes permisos de administrador para ver esta página.")
+            st.stop()
     @staticmethod
     def is_pro():
         """Verificar nivel PRO mikey v7.15"""

@@ -1,6 +1,10 @@
 import streamlit as st
 import os
+import html
 
+def escape_html(value) -> str:
+    """Escapa contenido no confiable antes de insertarlo en HTML."""
+    return html.escape(str(value), quote=True)
 def load_css():
     """Inyecta el CSS personalizado en la aplicación."""
     # Build absolute path to styles.css assuming it's in the same directory as this file (app/)

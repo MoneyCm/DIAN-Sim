@@ -4,6 +4,9 @@ import streamlit as st
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
 from db.models import Configuration
+from core.security_keys import encrypt_value, decrypt_value
+
+ENCRYPTED_PREFIX = "enc:v1:"
 
 # Build absolute paths relative to this file
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,7 +38,10 @@ def get_api_key(provider: str) -> str:
     try:
         config_entry = db.query(Configuration).filter_by(key_name=key_name).first()
         if config_entry:
-            return config_entry.value
+            stored_value = config_entry.value
+            if stored_value.startswith(ENCRYPTED_PREFIX):
+                return decrypt_value(stored_value[len(ENCRYPTED_PREFIX):])
+            return stored_value
     except Exception as e:
         print(f"DB Config error: {e}")
     finally:
@@ -58,9 +64,12 @@ def save_api_key_persistent(provider: str, value: str) -> bool:
         clean_val = value.strip() # Clean white spaces
         config_entry = db.query(Configuration).filter_by(key_name=key_name).first()
         if config_entry:
-            config_entry.value = clean_val
+            config_entry.value = ENCRYPTED_PREFIX + encrypt_value(clean_val)
         else:
-            config_entry = Configuration(key_name=key_name, value=clean_val)
+            config_entry = Configuration(
+                key_name=key_name,
+                value=ENCRYPTED_PREFIX + encrypt_value(clean_val),
+            )
             db.add(config_entry)
         db.commit()
         print(f"✅ API Key for {provider} saved to central DB.")

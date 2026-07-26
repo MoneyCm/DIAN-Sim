@@ -12,7 +12,7 @@ from core.adaptive import calculate_mastery_update, update_priority
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.generators.llm import LLMGenerator
-from ui_utils import load_css, render_header, render_favorite_button
+from ui_utils import load_css, render_header, render_favorite_button, escape_html
 
 # --- v21: Safe Attribute Assignment Mikey ---
 def safe_setattr(obj, attr, value):
@@ -277,13 +277,13 @@ stem_text = question.stem
 if "SITUACIÓN:" in stem_text and "PREGUNTA:" in stem_text:
     try:
         parts = stem_text.split("PREGUNTA:")
-        sit_part = parts[0].replace("SITUACIÓN:", "").strip()
-        q_part = parts[1].strip()
+        sit_part = escape_html(parts[0].replace("SITUACIÓN:", "").strip())
+        q_part = escape_html(parts[1].strip())
         st.markdown(f"<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; margin-bottom: 24px; backdrop-filter: blur(5px);'><div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'><span style='background: var(--dian-red); width: 8px; height: 8px; border-radius: 50%;'></span>Caso / Situación Laboral</div><div style='font-size: 1.1rem; line-height: 1.7; color: #334155;'>{sit_part}</div></div><div class='question-stem'>{q_part}</div>", unsafe_allow_html=True)
     except:
-        st.markdown(f"<div class='question-stem'>{stem_text}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='question-stem'>{escape_html(stem_text)}</div>", unsafe_allow_html=True)
 else:
-    st.markdown(f"<div class='question-stem'>{stem_text}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='question-stem'>{escape_html(stem_text)}</div>", unsafe_allow_html=True)
 
 options = question.options_json 
 opts_keys = list(options.keys())

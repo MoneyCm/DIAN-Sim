@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 from db.session import SessionLocal
 from db.models import UserOPEC, User
+from core.auth import AuthManager
 
 # pass # Removed st.set_page_config
 
+AuthManager.require_admin()
+
 st.title("🔧 Diagnóstico de OPEC")
 
-if "user_id" not in st.session_state:
-    st.error("No hay usuario logueado en session_state.")
-    st.stop()
 
 u_id = st.session_state["user_id"]
 st.write(f"**User ID en Sesión:** `{u_id}`")

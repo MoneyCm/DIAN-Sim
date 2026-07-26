@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 from db.session import get_db
 from db.models import CaseStudy, Question, UserOPEC
-from ui_utils import load_css as inject_custom_css, render_favorite_button
+from ui_utils import load_css as inject_custom_css, render_favorite_button, escape_html
 from services.stats_service import StatsService
 from core.auth import AuthManager
 
@@ -552,7 +552,7 @@ else:
     
     with col_text:
         st.markdown(f"### 📄 {current_case.title or 'Situación'}")
-        st.markdown(f'<div class="case-text">{current_case.text}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="case-text">{escape_html(current_case.text)}</div>', unsafe_allow_html=True)
         st.info("💡 Lee atentamente el texto. Todas las preguntas de la derecha se basan en esta información.")
 
     with col_questions:

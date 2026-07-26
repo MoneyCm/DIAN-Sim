@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
-from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
+from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 
@@ -129,8 +129,11 @@ def login_view():
             btn_reg = st.form_submit_button("Crear Cuenta", use_container_width=True)
             
             if btn_reg:
-                if not new_user or not new_pass:
+                clean_user = new_user.strip()
+                if not clean_user or not new_pass:
                     st.error("Completa todos los campos")
+                elif len(new_pass) < 8:
+                    st.error("La contraseña debe tener al menos 8 caracteres")
                 elif new_pass != confirm_pass:
                     st.error("Las contraseñas no coinciden")
                 else:
@@ -138,14 +141,17 @@ def login_view():
                     from db.session import engine
                     with engine.connect() as check_conn:
                         sql_up = text("SELECT id FROM users WHERE username = :u")
-                        if check_conn.execute(sql_up, {"u": new_user}).first():
+                        if check_conn.execute(sql_up, {"u": clean_user}).first():
                             st.error("El usuario ya existe")
                         else:
                             try:
                                 hashed = AuthManager.hash_password(new_pass)
                                 with engine.begin() as ins_conn:
-                                    sql_ins = text("INSERT INTO users (username, password_hash) VALUES (:u, :p)")
-                                    ins_conn.execute(sql_ins, {"u": new_user, "p": hashed})
+                                    sql_ins = text(
+                                        "INSERT INTO users (username, password_hash, role) "
+                                        "VALUES (:u, :p, 'user')"
+                                    )
+                                    ins_conn.execute(sql_ins, {"u": clean_user, "p": hashed})
                                 st.success("Cuenta creada. ¡Ya puedes entrar!")
                             except Exception as e:
                                 st.error(f"Error al registrar: {e}")
@@ -180,8 +186,7 @@ p_debug_cfg = st.Page("pages/99_Debug_Config.py", title="Debug Config", icon="�
 pages = {
     "Mi Cuenta": [p_dashboard, p_perfil, p_config, p_logout],
     "Práctica DIAN": [p_simulacro, p_ejecucion, p_sim_real, p_repaso, p_resultados],
-    "Herramientas y Recursos": [p_banco, p_ia, p_etica],
-    "Sistemas (Admin)": [p_admin, p_debug_opec, p_debug_cfg]
+    "Herramientas y Recursos": [p_banco, p_ia, p_etica]
 }
 
 # Determinar Navegación Activa (Condicional)
@@ -204,6 +209,8 @@ else:
     except Exception as e:
         pass
         
+    if AuthManager.is_admin():
+        pages["Sistemas (Admin)"] = [p_admin, p_debug_opec, p_debug_cfg]
     pg = st.navigation(pages)
 
 # Ejecutar la página seleccionada por el router

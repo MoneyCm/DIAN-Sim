@@ -22,6 +22,8 @@ from core.anki import generate_anki_deck
 from core.anki_enrichment import enrich_question, needs_enrichment
 from core.config import get_api_key
 from core.user_keys import get_user_key
+from core.adaptive import build_daily_plan
+from services.question_service import QuestionService
 
 # pass # Removed st.set_page_config
 
@@ -118,6 +120,65 @@ try:
         st.warning("⚠️ No has configurado una OPEC. Ve a 'Configuración OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
+    # Plan diario adaptativo
+    daily_candidates = QuestionService.get_questions_for_user(db, u_id)
+    daily_skills = db.query(Skill).filter_by(user_id=u_id).all()
+    daily_performances = db.query(QuestionPerformance).filter_by(user_id=u_id).all()
+    daily_skills_map = {
+        (item.track, item.competency, item.topic): item for item in daily_skills
+    }
+    daily_performance_map = {
+        item.question_id: item for item in daily_performances
+    }
+    daily_plan = build_daily_plan(
+        daily_candidates,
+        daily_skills_map,
+        daily_performance_map,
+        n=20,
+    )
+
+    with st.container(border=True):
+        col_plan, col_action = st.columns([3, 1])
+        with col_plan:
+            st.subheader("🎯 Tu plan inteligente de hoy")
+            if daily_plan:
+                plan_topics = []
+                for item in daily_plan:
+                    if item.question.topic not in plan_topics:
+                        plan_topics.append(item.question.topic)
+                st.write(
+                    f"{len(daily_plan)} preguntas seleccionadas para producir el mayor avance: "
+                    f"{', '.join(plan_topics[:4])}."
+                )
+                reason_counts = {}
+                for item in daily_plan:
+                    for reason in item.reasons:
+                        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                reason_summary = ", ".join(
+                    f"{reason}: {count}"
+                    for reason, count in sorted(
+                        reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                    )[:3]
+                )
+                st.caption(f"Criterios principales: {reason_summary}")
+            else:
+                st.info("Todavía no hay preguntas disponibles para construir tu plan.")
+        with col_action:
+            if st.button(
+                "Iniciar plan diario",
+                type="primary",
+                use_container_width=True,
+                disabled=not daily_plan,
+            ):
+                st.session_state["exam_mode"] = True
+                st.session_state["exam_questions"] = [
+                    item.question.question_id for item in daily_plan
+                ]
+                st.session_state["current_idx"] = 0
+                st.session_state["answers"] = {}
+                st.session_state["hardcore_mode"] = False
+                st.session_state["study_session_kind"] = "daily"
+                st.switch_page("pages/2_Ejecucion.py")
     # 1. User Stats & Mastery
     stats = db.query(UserStats).filter_by(user_id=u_id).first()
     if not stats:

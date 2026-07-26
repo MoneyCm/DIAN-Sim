@@ -8,7 +8,10 @@ if PROJECT_ROOT not in sys.path:
 
 import streamlit as st
 import sqlite3
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import inspect
+from core.auth import AuthManager
+
+AuthManager.require_admin()
 
 st.title("🔧 Diagnóstico de Base de Datos (In-App)")
 
@@ -83,11 +86,6 @@ st.divider()
 # 4. Search for ghost content
 st.subheader("👻 Búsqueda de Contenido Fantasma (Horizonte/CNSC)")
 try:
-    # Mostrar llaves de secrets para ayudar al usuario
-    try:
-        import streamlit as st
-        st.write(f"**Keys detected in Secrets:** `{list(st.secrets.keys())}`")
-    except: pass
 
     with engine.connect() as conn:
         from sqlalchemy import text

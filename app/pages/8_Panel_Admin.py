@@ -17,13 +17,7 @@ from core.config import get_api_key
 
 # pass # Removed st.set_page_config
 
-if not AuthManager.check_auth():
-    st.warning("⚠️ Acceso denegado. Por favor inicia sesión.")
-    st.stop()
-
-if st.session_state.get("user_role") != "admin" and st.session_state.get("username") != "cesar":
-    st.error("🚫 No tienes permisos de administrador para ver esta página.")
-    st.stop()
+AuthManager.require_admin()
 
 load_css()
 render_header(title="Panel de Administración Maestro", subtitle="Gestión global de usuarios, leyes e inteligencia. Mikey")
