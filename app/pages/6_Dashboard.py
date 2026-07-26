@@ -19,7 +19,6 @@ import datetime, io
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
-from core.anki_enrichment import enrich_question, needs_enrichment
 from core.config import get_api_key
 from core.user_keys import get_user_key
 from core.adaptive import build_daily_plan
@@ -474,16 +473,20 @@ try:
         Attempt.is_correct == False
     ).distinct().all()
     failed_q_ids = [r[0] for r in failed_q_ids]
-    failed_qs = db.query(Question).options(joinedload(Question.case_study), joinedload(Question.anki_enrichment)).filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
-
+    failed_query = db.query(Question).options(joinedload(Question.case_study))
+    if hasattr(Question, "anki_enrichment"):
+        failed_query = failed_query.options(joinedload(Question.anki_enrichment))
+    failed_qs = failed_query.filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
     # 2. Obtener preguntas favoritas
     fav_q_ids = db.query(QuestionPerformance.question_id).filter(
         QuestionPerformance.user_id == u_id,
         QuestionPerformance.is_favorite == True
     ).distinct().all()
     fav_q_ids = [r[0] for r in fav_q_ids]
-    fav_qs = db.query(Question).options(joinedload(Question.case_study), joinedload(Question.anki_enrichment)).filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
-
+    fav_query = db.query(Question).options(joinedload(Question.case_study))
+    if hasattr(Question, "anki_enrichment"):
+        fav_query = fav_query.options(joinedload(Question.anki_enrichment))
+    fav_qs = fav_query.filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
     def to_anki_standard_csv(questions):
         rows = []
         for q in questions:
@@ -558,7 +561,7 @@ try:
         return csv_buffer.getvalue()
 
     def anki_enrichment_fields(question):
-        enrichment = question.anki_enrichment
+        enrichment = getattr(question, "anki_enrichment", None)
         if not enrichment or enrichment.status not in {"generated", "reviewed"}:
             return {"Regla_Clave": "", "Excepcion_Clave": "", "Distractor_Clave": ""}
         return {
@@ -623,8 +626,13 @@ try:
         *Nota: Si prefieres configurar tu propia plantilla manualmente, puedes descargar el archivo `.csv` y seguir el mapeo tradicional de 10 columnas.*
         """)
 
-        export_questions = {q.question_id: q for q in [*failed_qs, *fav_qs]}.values()
-        pending_enrichments = [q for q in export_questions if needs_enrichment(q)]
+        export_questions = list({q.question_id: q for q in [*failed_qs, *fav_qs]}.values())
+        enrichment_available = hasattr(Question, "anki_enrichment")
+        if enrichment_available:
+            from core.anki_enrichment import enrich_question, needs_enrichment
+            pending_enrichments = [q for q in export_questions if needs_enrichment(q)]
+        else:
+            pending_enrichments = []
         if pending_enrichments:
             st.warning(f"Hay {len(pending_enrichments)} preguntas sin tarjetas pedagógicas enriquecidas.")
             provider = st.selectbox(
@@ -654,8 +662,10 @@ try:
                     else:
                         st.success(f"Se generaron {generated} enriquecimientos.")
                     st.rerun()
-        else:
+        elif enrichment_available:
             st.success("Todas las tarjetas seleccionadas tienen enriquecimiento pedagógico.")
+        else:
+            st.info("El enriquecimiento Anki se activará tras reiniciar la aplicación.")
         col_int1, col_int2 = st.columns(2)
         with col_int1:
             st.markdown("##### ❌ Preguntas Falladas (Mazo Directo)")
