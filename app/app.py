@@ -8,7 +8,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
-from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
+try:
+    from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
+except ImportError:
+    from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 
