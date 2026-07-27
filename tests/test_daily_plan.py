@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-from core.adaptive import build_daily_plan, select_daily_questions
+from core.adaptive import (
+    build_daily_plan,
+    build_remaining_daily_plan,
+    select_daily_questions,
+)
 
 
 def question(qid, topic="Tema", difficulty=2):
@@ -86,3 +90,31 @@ def test_daily_plan_preserves_topic_variety():
 def test_daily_plan_handles_empty_or_zero_size():
     assert build_daily_plan([], {}, {}, n=20) == []
     assert build_daily_plan([question("q")], {}, {}, n=0) == []
+
+def test_remaining_daily_plan_excludes_completed_questions():
+    now = datetime(2026, 7, 27, 12, 0)
+    questions = [question(f"q{i}", f"Tema {i}") for i in range(6)]
+
+    plan = build_remaining_daily_plan(
+        questions,
+        {},
+        {},
+        completed_question_ids={"q0", "q1"},
+        daily_goal=5,
+        now=now,
+    )
+
+    assert len(plan) == 3
+    assert {item.question.question_id for item in plan}.isdisjoint({"q0", "q1"})
+
+
+def test_remaining_daily_plan_stops_at_completed_goal():
+    questions = [question(f"q{i}") for i in range(3)]
+    plan = build_remaining_daily_plan(
+        questions,
+        {},
+        {},
+        completed_question_ids={"a", "b", "c"},
+        daily_goal=3,
+    )
+    assert plan == []

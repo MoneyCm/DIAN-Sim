@@ -15,13 +15,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from ui_utils import load_css, render_header
 import datetime, io
+from zoneinfo import ZoneInfo
 
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
 from core.config import get_api_key
 from core.user_keys import get_user_key
-from core.adaptive import build_daily_plan
+from core.adaptive import build_remaining_daily_plan
 from services.question_service import QuestionService
 
 # pass # Removed st.set_page_config
@@ -55,7 +56,30 @@ try:
         st.warning("⚠️ No has configurado una OPEC. Ve a 'Configuración OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
-    # Plan diario adaptativo
+    # Plan diario adaptativo y acumulativo (zona horaria de Colombia)
+    daily_goal = 20
+    bogota_now = datetime.datetime.now(ZoneInfo("America/Bogota"))
+    local_day_start = datetime.datetime.combine(
+        bogota_now.date(), datetime.time.min, tzinfo=bogota_now.tzinfo
+    )
+    utc_day_start = local_day_start.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    utc_day_end = (
+        local_day_start + datetime.timedelta(days=1)
+    ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+    today_attempt_rows = db.query(Attempt.question_id, Attempt.is_correct).filter(
+        Attempt.user_id == u_id,
+        Attempt.created_at >= utc_day_start,
+        Attempt.created_at < utc_day_end,
+    ).all()
+    completed_today_ids = {row.question_id for row in today_attempt_rows}
+    completed_today = min(len(completed_today_ids), daily_goal)
+    daily_accuracy = (
+        sum(1 for row in today_attempt_rows if row.is_correct) / len(today_attempt_rows) * 100
+        if today_attempt_rows
+        else 0.0
+    )
+
     daily_candidates = QuestionService.get_questions_for_user(db, u_id)
     daily_skills = db.query(Skill).filter_by(user_id=u_id).all()
     daily_performances = db.query(QuestionPerformance).filter_by(user_id=u_id).all()
@@ -65,42 +89,54 @@ try:
     daily_performance_map = {
         item.question_id: item for item in daily_performances
     }
-    daily_plan = build_daily_plan(
+    daily_plan = build_remaining_daily_plan(
         daily_candidates,
         daily_skills_map,
         daily_performance_map,
-        n=20,
+        completed_question_ids=completed_today_ids,
+        daily_goal=daily_goal,
+        now=bogota_now,
     )
 
     with st.container(border=True):
-        col_plan, col_action = st.columns([3, 1])
-        with col_plan:
-            st.subheader("🎯 Tu plan inteligente de hoy")
-            if daily_plan:
-                plan_topics = []
-                for item in daily_plan:
-                    if item.question.topic not in plan_topics:
-                        plan_topics.append(item.question.topic)
-                st.write(
-                    f"{len(daily_plan)} preguntas seleccionadas para producir el mayor avance: "
-                    f"{', '.join(plan_topics[:4])}."
-                )
-                reason_counts = {}
-                for item in daily_plan:
-                    for reason in item.reasons:
-                        reason_counts[reason] = reason_counts.get(reason, 0) + 1
-                reason_summary = ", ".join(
-                    f"{reason}: {count}"
-                    for reason, count in sorted(
-                        reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
-                    )[:3]
-                )
-                st.caption(f"Criterios principales: {reason_summary}")
-            else:
-                st.info("Todavía no hay preguntas disponibles para construir tu plan.")
-        with col_action:
+        st.subheader("🎯 Tu plan inteligente de hoy")
+        progress_col, accuracy_col, action_col = st.columns([1, 1, 1.4])
+        progress_col.metric("Avance diario", f"{completed_today}/{daily_goal}")
+        accuracy_col.metric(
+            "Precisión de hoy",
+            f"{daily_accuracy:.0f}%" if today_attempt_rows else "Sin intentos",
+        )
+        st.progress(completed_today / daily_goal)
+
+        if completed_today >= daily_goal:
+            st.success("Meta diaria completada. Ahora conviene descansar o hacer un repaso ligero.")
+        elif daily_plan:
+            plan_topics = []
+            for item in daily_plan:
+                if item.question.topic not in plan_topics:
+                    plan_topics.append(item.question.topic)
+            st.write(
+                f"Te faltan {daily_goal - completed_today} preguntas. "
+                f"Prioridad: {', '.join(plan_topics[:4])}."
+            )
+            reason_counts = {}
+            for item in daily_plan:
+                for reason in item.reasons:
+                    reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            reason_summary = ", ".join(
+                f"{reason}: {count}"
+                for reason, count in sorted(
+                    reason_counts.items(), key=lambda pair: (-pair[1], pair[0])
+                )[:3]
+            )
+            st.caption(f"Criterios principales: {reason_summary}")
+        else:
+            st.info("No hay suficientes preguntas nuevas para completar la meta de hoy.")
+
+        with action_col:
+            action_label = "Continuar plan diario" if completed_today else "Iniciar plan diario"
             if st.button(
-                "Iniciar plan diario",
+                action_label,
                 type="primary",
                 use_container_width=True,
                 disabled=not daily_plan,

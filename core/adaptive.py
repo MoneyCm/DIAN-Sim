@@ -148,6 +148,33 @@ def build_daily_plan(
     return selected[:n]
 
 
+def build_remaining_daily_plan(
+    all_questions: List[Question],
+    skills_map: Mapping[SkillKey, Skill],
+    performance_map: Mapping[str, QuestionPerformance],
+    completed_question_ids: set[str],
+    daily_goal: int = 20,
+    now: Optional[datetime] = None,
+) -> List[DailyRecommendation]:
+    """Devuelve sólo las preguntas que faltan para completar la meta diaria."""
+    completed_count = min(len(completed_question_ids), max(daily_goal, 0))
+    remaining_count = max(daily_goal - completed_count, 0)
+    if remaining_count == 0:
+        return []
+
+    eligible_questions = [
+        question
+        for question in all_questions
+        if question.question_id not in completed_question_ids
+    ]
+    return build_daily_plan(
+        eligible_questions,
+        skills_map,
+        performance_map,
+        n=remaining_count,
+        now=now,
+    )
+
 def select_daily_questions(
     all_questions: List[Question],
     skills_map: Mapping[SkillKey, Skill],
