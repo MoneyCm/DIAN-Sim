@@ -19,6 +19,7 @@ from db.models import CaseStudy, Question, UserOPEC
 from ui_utils import load_css as inject_custom_css, render_favorite_button, escape_html
 from services.stats_service import StatsService
 from core.auth import AuthManager
+from core.competitions import get_active_competition_id
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 # pass # Removed st.set_page_config
@@ -131,15 +132,8 @@ def _case_is_valid_for_dian(case):
     if not haystack:
         return False
 
-    if any(term in haystack for term in BANNED_SIM_REAL_TERMS):
-        return False
-
-    if "dian" not in haystack:
-        return False
-
-    if "gestor iii de fiscalizacion" in haystack and "dian" not in haystack:
-        return False
-
+    # El aislamiento por concurso se realiza en la consulta. Aquí solo validamos
+    # que el caso tenga contenido y el formato situacional esperado por CNSC.
     return True
 
 
@@ -177,7 +171,8 @@ def load_exam_cases():
     user_level_int = 3 # Default Profesional
     try:
         if user_id:
-            user_opec = db.query(UserOPEC).filter_by(user_id=user_id).first()
+            user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
+            active_competition_id = get_active_competition_id(db, user_id)
             if user_opec and user_opec.level:
                 lvl = user_opec.level.upper()
                 if "ASISTENCIAL" in lvl: user_level_int = 1
@@ -200,6 +195,7 @@ def load_exam_cases():
             for t in smart_topics:
                 # Find case with matching topic AND difficulty
                 c = db.query(CaseStudy).join(Question).filter(
+                    CaseStudy.competition_id == active_competition_id,
                     Question.topic == t,
                     Question.difficulty == user_level_int 
                 ).first()
@@ -217,6 +213,7 @@ def load_exam_cases():
         if needed > 0:
             # Seleccionar casos que tengan preguntas del nivel correcto Y correspondan a la OPEC activa
             random_cases = db.query(CaseStudy).join(Question).filter(
+                CaseStudy.competition_id == active_competition_id,
                 Question.difficulty == user_level_int,
                 Question.topic.like(f"%{active_topic}%")
             ).group_by(CaseStudy.id).order_by(func.random()).limit(needed * 2).all()
@@ -295,7 +292,7 @@ if not st.session_state.exam_active:
     # Modo Simulacro
     st.markdown("""
     ### 🎯 Sobre este Simulacro
-    Este modo simula las condiciones oficiales del examen real para cargos de la DIAN:
+    Este modo simula las condiciones oficiales del examen para el concurso y cargo activos:
     
     *   **Formato:** Casos Protagónicos (1 Texto → Múltiples Preguntas)
     *   **Tiempo:** Estricto (2 minutos promedio por pregunta)

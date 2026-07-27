@@ -90,6 +90,7 @@ def get_db():
     return SessionLocal()
 
 from core.auth import AuthManager
+from core.competitions import get_active_competition_id
 
 # UI Setup
 # pass # Removed st.set_page_config
@@ -120,9 +121,13 @@ with st.container():
             # Get available options with error handling
             try:
                 db_temp = get_db()
-                all_tracks = [t[0] for t in db_temp.query(Question.track).distinct().all() if t[0]]
-                all_competencies = [t[0] for t in db_temp.query(Question.competency).distinct().all() if t[0]]
-                all_topics = [t[0] for t in db_temp.query(Question.topic).distinct().all() if t[0]]
+                competition_id = get_active_competition_id(db_temp, st.session_state.get("user_id"))
+                competition_questions = db_temp.query(Question).filter(
+                    Question.competition_id == competition_id
+                )
+                all_tracks = [t[0] for t in competition_questions.with_entities(Question.track).distinct().all() if t[0]]
+                all_competencies = [t[0] for t in competition_questions.with_entities(Question.competency).distinct().all() if t[0]]
+                all_topics = [t[0] for t in competition_questions.with_entities(Question.topic).distinct().all() if t[0]]
                 db_temp.close()
             except Exception as e:
                 st.error(f"Error de conexión con la base de datos: {e}")
@@ -143,7 +148,7 @@ with st.container():
             with col_t1:
                 only_situational_manual = st.toggle("Solo preguntas situacionales", value=True, help="Filtra para mostrar solo preguntas que plantean casos prácticos.", key="only_sit_manual")
             with col_t2:
-                hardcore_mode = st.toggle("🛡️ Modo Hardcore DIAN", value=False, help="Simula el examen real: mezcla temas, oculta respuestas hasta el final y aplica tiempos estrictos.")
+                hardcore_mode = st.toggle("🛡️ Modo Hardcore CNSC", value=False, help="Simula el examen real: mezcla temas, oculta respuestas hasta el final y aplica tiempos estrictos.")
             
             submitted_manual = st.form_submit_button("🚀 Iniciar Simulacro Manual", type="primary")
 
@@ -330,7 +335,8 @@ if run_sim:
         
         # 2. Fetch Skills for Adaptive Logic
         u_id = st.session_state.get("user_id")
-        skills = db.query(Skill).filter_by(user_id=u_id).all()
+        competition_id = get_active_competition_id(db, u_id)
+        skills = db.query(Skill).filter_by(user_id=u_id, competition_id=competition_id).all()
         skills_map = {(s.track, s.competency, s.topic): s for s in skills}
         
         # 3. Select Questions

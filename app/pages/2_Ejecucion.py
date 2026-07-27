@@ -63,10 +63,11 @@ def finalize_exam(db, q_ids, answers_dict):
                 safe_setattr(q_obj, 'global_hits', getattr(q_obj, 'global_hits', 0) + 1)
             else:
                 safe_setattr(q_obj, 'global_misses', getattr(q_obj, 'global_misses', 0) + 1)
-            skill = db.query(Skill).filter_by(user_id=u_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
+            skill = db.query(Skill).filter_by(user_id=u_id, competition_id=q_obj.competition_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
             if not skill:
                 skill = Skill()
                 safe_setattr(skill, "user_id", u_id)
+                safe_setattr(skill, "competition_id", q_obj.competition_id)
                 safe_setattr(skill, "track", q_obj.track)
                 safe_setattr(skill, "competency", q_obj.competency)
                 safe_setattr(skill, "topic", q_obj.topic)

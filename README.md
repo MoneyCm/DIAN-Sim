@@ -7,6 +7,7 @@ Aplicación Streamlit para preparar concursos DIAN mediante simulacros, práctic
 - Simulacros por temas y simulacro tipo examen.
 - Plan diario inteligente de 20 preguntas basado en debilidades, errores recurrentes y repasos pendientes.
 - Repaso espaciado nativo con cola diaria, nivel de confianza y clasificación de errores; Anki queda como exportación opcional.
+- Preparación multi-concurso CNSC con catálogo de procesos, OPEC activa y bancos/progreso separados por concurso.
 - Motor adaptativo para simulacros configurables.
 - Banco de preguntas, casos situacionales y módulo de ética.
 - Exportación Anki y enriquecimiento pedagógico opcional mediante IA.

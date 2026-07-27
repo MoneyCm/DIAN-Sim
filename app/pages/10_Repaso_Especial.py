@@ -11,6 +11,7 @@ if PROJECT_ROOT not in sys.path:
 
 from core.adaptive import calculate_mastery_update, update_priority
 from core.auth import AuthManager
+from core.competitions import get_active_competition_id
 from core.spaced_repetition import schedule_review
 from db.models import Attempt, Question, QuestionPerformance, Skill
 from db.session import SessionLocal
@@ -47,8 +48,10 @@ user_id = st.session_state.get("user_id")
 now = datetime.datetime.utcnow()
 
 db = SessionLocal()
+competition_id = get_active_competition_id(db, user_id)
 try:
-    due_count = db.query(QuestionPerformance).filter(
+    due_count = db.query(QuestionPerformance).join(Question).filter(
+        Question.competition_id == competition_id,
         QuestionPerformance.user_id == user_id,
         or_(
             QuestionPerformance.next_review <= now,
@@ -73,7 +76,8 @@ with review_tab:
 
     queue_db = SessionLocal()
     try:
-        due_rows = queue_db.query(QuestionPerformance).filter(
+        due_rows = queue_db.query(QuestionPerformance).join(Question).filter(
+            Question.competition_id == competition_id,
             QuestionPerformance.user_id == user_id,
             or_(
                 QuestionPerformance.next_review <= now,
@@ -187,6 +191,7 @@ with review_tab:
 
                     skill = review_db.query(Skill).filter_by(
                         user_id=user_id,
+                        competition_id=question.competition_id,
                         track=question.track,
                         competency=question.competency,
                         topic=question.topic,
@@ -194,6 +199,7 @@ with review_tab:
                     if not skill:
                         skill = Skill(
                             user_id=user_id,
+                            competition_id=question.competition_id,
                             track=question.track,
                             competency=question.competency,
                             topic=question.topic,
@@ -231,7 +237,8 @@ with errors_tab:
     st.markdown("### Preguntas con errores registrados")
     errors_db = SessionLocal()
     try:
-        error_rows = errors_db.query(QuestionPerformance).filter(
+        error_rows = errors_db.query(QuestionPerformance).join(Question).filter(
+            Question.competition_id == competition_id,
             QuestionPerformance.user_id == user_id,
             QuestionPerformance.misses > 0,
         ).order_by(QuestionPerformance.misses.desc()).limit(50).all()
@@ -257,7 +264,8 @@ with favorites_tab:
     st.markdown("### Preguntas favoritas")
     favorites_db = SessionLocal()
     try:
-        favorite_rows = favorites_db.query(QuestionPerformance).filter(
+        favorite_rows = favorites_db.query(QuestionPerformance).join(Question).filter(
+            Question.competition_id == competition_id,
             QuestionPerformance.user_id == user_id,
             QuestionPerformance.is_favorite.is_(True),
         ).all()

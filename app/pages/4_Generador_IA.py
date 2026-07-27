@@ -18,6 +18,7 @@ import pypdf
 import io
 
 from core.auth import AuthManager
+from core.competitions import get_active_competition_id
 
 # pass # Removed st.set_page_config
 
@@ -419,6 +420,7 @@ with col2:
                     existing = db.query(Question).filter_by(hash_norm=h).first()
                     if not existing:
                         new_q = Question(
+                            competition_id=get_active_competition_id(db, st.session_state.get("user_id")),
                             question_id=str(uuid.uuid4()),
                             track=data.get('track', 'FUNCIONAL'),
                             macro_dominio=data.get('macro_dominio'),
@@ -510,6 +512,7 @@ with col2:
                     macro_dom = q.get('macro_dominio') or "Transversal"
                     
                     new_q = Question(
+                        competition_id=get_active_competition_id(db, st.session_state.get("user_id")),
                         question_id=str(uuid.uuid4()),
                         case_id=new_case.id, # LINKED
                         track=q.get("track", "FUNCIONAL"),

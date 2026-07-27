@@ -8,7 +8,7 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
-from db.models import UserOPEC
+from db.models import Competition, UserOPEC
 from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
@@ -23,15 +23,79 @@ load_css()
 render_custom_sidebar()
 render_header(title="Mi Meta: OPEC", subtitle="Configura tu cargo y enfoca tu preparación")
 
-def get_active_opec():
+def get_active_opec(competition_id=None):
     db = SessionLocal()
     u_id = st.session_state.get("user_id")
-    opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
+    query = db.query(UserOPEC).filter_by(user_id=u_id)
+    if competition_id is not None:
+        query = query.filter(UserOPEC.competition_id == competition_id)
+    else:
+        query = query.filter(UserOPEC.is_active.is_(True))
+    opec = query.order_by(UserOPEC.updated_at.desc()).first()
     db.close()
     return opec
 
-active_opec = get_active_opec()
 u_id = st.session_state.get("user_id")
+competition_db = SessionLocal()
+competitions = competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
+current_opec = get_active_opec()
+competition_ids = [competition.id for competition in competitions]
+default_competition_id = (
+    current_opec.competition_id if current_opec and current_opec.competition_id in competition_ids
+    else (competition_ids[0] if competition_ids else None)
+)
+selected_competition_id = st.selectbox(
+    "Concurso o proceso de selección",
+    competition_ids,
+    index=competition_ids.index(default_competition_id) if default_competition_id in competition_ids else 0,
+    format_func=lambda competition_id: next(
+        competition.name for competition in competitions if competition.id == competition_id
+    ),
+    key="selected_competition_id",
+) if competition_ids else None
+selected_competition = competition_db.get(Competition, selected_competition_id) if selected_competition_id else None
+competition_db.close()
+active_opec = get_active_opec(selected_competition_id)
+if active_opec and not active_opec.is_active:
+    if st.button("Usar este concurso y cargo", type="primary", use_container_width=True):
+        activate_db = SessionLocal()
+        try:
+            activate_db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
+            selected_opec = activate_db.get(UserOPEC, active_opec.id)
+            selected_opec.is_active = True
+            activate_db.commit()
+            st.success(f"Concurso activo: {selected_competition.name}")
+            st.rerun()
+        finally:
+            activate_db.close()
+
+with st.expander("Agregar otro concurso CNSC"):
+    with st.form("new_competition_form"):
+        new_competition_code = st.text_input("Código del proceso", placeholder="Ej: TERRITORIAL-11")
+        new_competition_name = st.text_input("Nombre del concurso", placeholder="Ej: Territorial 11")
+        new_competition_entity = st.text_input("Entidad", placeholder="Ej: Alcaldía o entidad convocante")
+        if st.form_submit_button("Registrar concurso"):
+            if not new_competition_code.strip() or not new_competition_name.strip():
+                st.error("Indica el código y el nombre del concurso.")
+            else:
+                create_db = SessionLocal()
+                try:
+                    code = new_competition_code.strip().upper()
+                    existing_competition = create_db.query(Competition).filter_by(code=code).first()
+                    if existing_competition:
+                        st.warning("Ese concurso ya está registrado.")
+                    else:
+                        create_db.add(Competition(
+                            code=code,
+                            name=new_competition_name.strip(),
+                            entity=new_competition_entity.strip() or None,
+                            is_active=True,
+                        ))
+                        create_db.commit()
+                        st.success("Concurso registrado. Ya puedes asociarle una OPEC.")
+                        st.rerun()
+                finally:
+                    create_db.close()
 
 st.markdown("""
 <div class="dian-card">
@@ -41,7 +105,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Debug session
-if st.session_state.get("debug_mode") or True: # Force debug for now
+if st.session_state.get("debug_mode"):
     st.caption(f"🔧 Debug: User ID: {u_id} | Active OPEC: {active_opec.id if active_opec else 'None'}")
 
 col1, col2 = st.columns([1, 1])
@@ -81,6 +145,9 @@ with col1:
             else:
                 db = SessionLocal()
                 try:
+                    if selected_competition_id is None:
+                        st.error("Primero selecciona o registra un concurso.")
+                        st.stop()
                     # Deactivate others for THIS user
                     db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
                     
@@ -88,7 +155,9 @@ with col1:
                     func_list = [f.strip() for f in functions_text.split("\n") if f.strip()]
                     
                     # Check if this OPEC already exists FOR THIS USER
-                    existing = db.query(UserOPEC).filter_by(user_id=u_id, opec_number=opec_number).first()
+                    existing = db.query(UserOPEC).filter_by(
+                        user_id=u_id, competition_id=selected_competition_id, opec_number=opec_number
+                    ).first()
                     if existing:
                         existing.job_title = job_title
                         existing.level = level
@@ -99,6 +168,7 @@ with col1:
                     else:
                         new_opec = UserOPEC(
                             user_id=u_id,
+                            competition_id=selected_competition_id,
                             opec_number=opec_number,
                             job_title=job_title,
                             level=level,
@@ -218,6 +288,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                     
                     # Save Case
                     new_case = CaseStudy(
+                        competition_id=selected_competition_id,
                         id=str(uuid.uuid4()),
                         title=case_data.get("title", "Caso Generado"),
                         text=case_data.get("text"),
@@ -232,6 +303,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                         micro_comp = q.get('micro_competencia') or q.get('competency') or "General"
                         macro_dom = q.get('macro_dominio') or "Transversal"
                         new_q = Question(
+                            competition_id=selected_competition_id,
                             question_id=str(uuid.uuid4()),
                             case_id=new_case.id,
                             stem=q.get("stem"),
@@ -263,6 +335,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             for q in q_func:
                 new_q = Question(
+                    competition_id=selected_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),
@@ -289,6 +362,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             for q in q_behav:
                 new_q = Question(
+                    competition_id=selected_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),
@@ -315,6 +389,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
              
             for q in q_int:
                 new_q = Question(
+                    competition_id=selected_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),

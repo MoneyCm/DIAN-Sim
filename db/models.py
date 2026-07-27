@@ -48,10 +48,21 @@ class User(Base):
     api_keys: Mapped[List["UserAPIKey"]] = relationship("UserAPIKey", back_populates="user", cascade="all, delete-orphan")
     ethics_attempts: Mapped[List["EthicsAttempt"]] = relationship("EthicsAttempt", back_populates="user", cascade="all, delete-orphan")
 
+class Competition(Base):
+    __tablename__ = "competitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    entity: Mapped[Optional[str]] = mapped_column(String(200))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
 class UserOPEC(Base):
     __tablename__ = "user_opec"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
     opec_number: Mapped[str] = mapped_column(String)
     job_title: Mapped[str] = mapped_column(String)
     level: Mapped[Optional[str]] = mapped_column(String)
@@ -66,6 +77,7 @@ class UserOPEC(Base):
 class CaseStudy(Base):
     __tablename__ = "case_studies"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
     title: Mapped[Optional[str]] = mapped_column(String)
     text: Mapped[str] = mapped_column(Text)
     difficulty: Mapped[int] = mapped_column(Integer, default=2)
@@ -78,6 +90,7 @@ class CaseStudy(Base):
 class Question(Base):
     __tablename__ = "questions"
     question_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
     case_id: Mapped[Optional[str]] = mapped_column(ForeignKey("case_studies.id"))
     track: Mapped[str] = mapped_column(String)
     competency: Mapped[str] = mapped_column(String)
@@ -178,6 +191,7 @@ class Achievement(Base):
 class Skill(Base):
     __tablename__ = "skills"
     skill_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     track: Mapped[str] = mapped_column(String)
     competency: Mapped[str] = mapped_column(String)

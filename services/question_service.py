@@ -1,6 +1,7 @@
 import json
 from sqlalchemy import or_, and_, func
 from db.models import Question, UserOPEC
+from core.competitions import get_active_competition_id
 
 class QuestionService:
     @staticmethod
@@ -11,8 +12,11 @@ class QuestionService:
         """
         user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
         
-        # Base Query
+        # El banco siempre se limita al concurso activo.
+        competition_id = get_active_competition_id(db, user_id)
         query = db.query(Question)
+        if competition_id is not None:
+            query = query.filter(Question.competition_id == competition_id)
         
         # Si no hay perfil, devolvemos todo (para Administradores o usuarios nuevos)
         if not user_opec:

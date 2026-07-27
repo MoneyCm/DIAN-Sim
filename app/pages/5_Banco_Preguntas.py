@@ -16,6 +16,7 @@ from core.config import get_api_key
 from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
+from core.competitions import get_active_competition_id
 
 # pass # Removed st.set_page_config
 
@@ -443,6 +444,7 @@ elif action == "Carga Masiva (Excel/CSV)":
                             difficulty = 2
                             
                         q = Question(
+                            competition_id=get_active_competition_id(db, u_id),
                             question_id=str(uuid.uuid4()),
                             track=str(row['track']).upper(),
                             competency=str(row.get('competency', 'General')),
@@ -498,6 +500,7 @@ elif action == "Crear Manualmente":
                 st.error("¡Pregunta idéntica ya existe!")
             else:
                 q = Question(
+                    competition_id=get_active_competition_id(db, u_id),
                     question_id=str(uuid.uuid4()),
                     track=track,
                     competency="Manual",

@@ -18,6 +18,7 @@ import datetime, io
 from zoneinfo import ZoneInfo
 
 from core.auth import AuthManager
+from core.competitions import get_active_competition, get_active_competition_id
 from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
 from core.config import get_api_key
@@ -41,6 +42,11 @@ try:
     u_id = st.session_state.get("user_id")
     
     active_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
+    active_competition = get_active_competition(db, u_id)
+    active_competition_id = get_active_competition_id(db, u_id)
+    competition_export_name = (
+        active_competition.code.replace(" ", "_") if active_competition else "CNSC"
+    )
     
     # DEBUG LINE
     # st.write(f"🔍 DEBUG DASHBOARD: User {u_id} | Active OPEC found: {active_opec}")
@@ -48,7 +54,7 @@ try:
     if active_opec:
         st.markdown(f"""
         <div style="background: rgba(230, 0, 0, 0.05); border-left: 5px solid var(--dian-red); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <span style="font-size: 0.8rem; color: #666; font-weight: bold; text-transform: uppercase;">Meta Activa: OPEC {active_opec.opec_number}</span><br>
+            <span style="font-size: 0.8rem; color: #666; font-weight: bold; text-transform: uppercase;">{active_competition.name if active_competition else "Concurso"} · OPEC {active_opec.opec_number}</span><br>
             <span style="font-size: 1.2rem; font-weight: 800; color: #1e293b;">{active_opec.job_title}</span>
         </div>
         """, unsafe_allow_html=True)
@@ -75,7 +81,8 @@ try:
     completed_today_ids = {row.question_id for row in today_attempt_rows}
     completed_today = min(len(completed_today_ids), daily_goal)
     review_now_utc = datetime.datetime.utcnow()
-    due_review_count = db.query(QuestionPerformance).filter(
+    due_review_count = db.query(QuestionPerformance).join(Question).filter(
+        Question.competition_id == active_competition_id,
         QuestionPerformance.user_id == u_id,
         or_(
             QuestionPerformance.next_review <= review_now_utc,
@@ -92,7 +99,9 @@ try:
     )
 
     daily_candidates = QuestionService.get_questions_for_user(db, u_id)
-    daily_skills = db.query(Skill).filter_by(user_id=u_id).all()
+    daily_skills = db.query(Skill).filter_by(
+        user_id=u_id, competition_id=active_competition_id
+    ).all()
     daily_performances = db.query(QuestionPerformance).filter_by(user_id=u_id).all()
     daily_skills_map = {
         (item.track, item.competency, item.topic): item for item in daily_skills
@@ -380,7 +389,9 @@ try:
     st.divider()
     st.subheader("🛠️ Herramientas de Exportación")
 
-    all_qs = db.query(Question).all()
+    all_qs = db.query(Question).filter(
+        Question.competition_id == active_competition_id
+    ).all()
 
     if all_qs:
         export_data = []
@@ -427,7 +438,7 @@ try:
             st.download_button(
                 label="📥 Descargar Banco (Excel .xlsx)",
                 data=output_xlsx.getvalue(),
-                file_name=f"Banco_Preguntas_DIAN_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"Banco_Preguntas_{competition_export_name}_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
                 key="btn_export_xlsx"
@@ -464,7 +475,10 @@ try:
     failed_query = db.query(Question).options(joinedload(Question.case_study))
     if hasattr(Question, "anki_enrichment"):
         failed_query = failed_query.options(joinedload(Question.anki_enrichment))
-    failed_qs = failed_query.filter(Question.question_id.in_(failed_q_ids)).all() if failed_q_ids else []
+    failed_qs = failed_query.filter(
+        Question.competition_id == active_competition_id,
+        Question.question_id.in_(failed_q_ids),
+    ).all() if failed_q_ids else []
     # 2. Obtener preguntas favoritas
     fav_q_ids = db.query(QuestionPerformance.question_id).filter(
         QuestionPerformance.user_id == u_id,
@@ -474,7 +488,10 @@ try:
     fav_query = db.query(Question).options(joinedload(Question.case_study))
     if hasattr(Question, "anki_enrichment"):
         fav_query = fav_query.options(joinedload(Question.anki_enrichment))
-    fav_qs = fav_query.filter(Question.question_id.in_(fav_q_ids)).all() if fav_q_ids else []
+    fav_qs = fav_query.filter(
+        Question.competition_id == active_competition_id,
+        Question.question_id.in_(fav_q_ids),
+    ).all() if fav_q_ids else []
     def to_anki_standard_csv(questions):
         rows = []
         for q in questions:
@@ -579,7 +596,7 @@ try:
                 st.download_button(
                     label=f"📥 Descargar Fallas Estándar ({len(failed_qs)} Qs)",
                     data=failed_std_csv,
-                    file_name=f"Anki_Dian_Fallas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_{competition_export_name}_Fallas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_fallas_std"
@@ -595,7 +612,7 @@ try:
                 st.download_button(
                     label=f"📥 Descargar Favoritas Estándar ({len(fav_qs)} Qs)",
                     data=fav_std_csv,
-                    file_name=f"Anki_Dian_Favoritas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_{competition_export_name}_Favoritas_Std_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_favs_std"
@@ -683,11 +700,11 @@ try:
                 
                 # Generar mazo APKG
                 try:
-                    failed_apkg = generate_anki_deck(failed_dicts, "DIAN - Fallas Interactivas")
+                    failed_apkg = generate_anki_deck(failed_dicts, f"{competition_export_name} - Fallas Interactivas")
                     st.download_button(
                         label="📥 Descargar Mazo APKG (Anki Directo)",
                         data=failed_apkg,
-                        file_name=f"DIAN_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
+                        file_name=f"{competition_export_name}_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
                         mime="application/apkg",
                         use_container_width=True,
                         key="btn_export_anki_fallas_apkg"
@@ -699,7 +716,7 @@ try:
                 st.download_button(
                     label="📥 Descargar Respuestas en CSV (Excel)",
                     data=failed_int_csv,
-                    file_name=f"Anki_Dian_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_{competition_export_name}_Fallas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_fallas_int"
@@ -736,11 +753,11 @@ try:
                 
                 # Generar mazo APKG
                 try:
-                    fav_apkg = generate_anki_deck(fav_dicts, "DIAN - Favoritas Interactivas")
+                    fav_apkg = generate_anki_deck(fav_dicts, f"{competition_export_name} - Favoritas Interactivas")
                     st.download_button(
                         label="📥 Descargar Mazo APKG (Anki Directo)",
                         data=fav_apkg,
-                        file_name=f"DIAN_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
+                        file_name=f"{competition_export_name}_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.apkg",
                         mime="application/apkg",
                         use_container_width=True,
                         key="btn_export_anki_favs_apkg"
@@ -752,7 +769,7 @@ try:
                 st.download_button(
                     label="📥 Descargar Respuestas en CSV (Excel)",
                     data=fav_int_csv,
-                    file_name=f"Anki_Dian_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
+                    file_name=f"Anki_{competition_export_name}_Favoritas_Interactivas_{datetime.date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_export_anki_favs_int"
