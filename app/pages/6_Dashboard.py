@@ -11,7 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
 from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 from ui_utils import load_css, render_header
 import datetime, io
@@ -74,6 +74,17 @@ try:
     ).all()
     completed_today_ids = {row.question_id for row in today_attempt_rows}
     completed_today = min(len(completed_today_ids), daily_goal)
+    review_now_utc = datetime.datetime.utcnow()
+    due_review_count = db.query(QuestionPerformance).filter(
+        QuestionPerformance.user_id == u_id,
+        or_(
+            QuestionPerformance.next_review <= review_now_utc,
+            and_(
+                QuestionPerformance.next_review.is_(None),
+                QuestionPerformance.misses > 0,
+            ),
+        ),
+    ).count()
     daily_accuracy = (
         sum(1 for row in today_attempt_rows if row.is_correct) / len(today_attempt_rows) * 100
         if today_attempt_rows
@@ -107,6 +118,7 @@ try:
             f"{daily_accuracy:.0f}%" if today_attempt_rows else "Sin intentos",
         )
         st.progress(completed_today / daily_goal)
+        action_col.metric("Repasos vencidos", due_review_count)
 
         if completed_today >= daily_goal:
             st.success("Meta diaria completada. Ahora conviene descansar o hacer un repaso ligero.")
@@ -133,6 +145,10 @@ try:
         else:
             st.info("No hay suficientes preguntas nuevas para completar la meta de hoy.")
 
+        if due_review_count and st.button(
+            "Ir a repasos de hoy", use_container_width=True, key="dashboard_due_reviews"
+        ):
+            st.switch_page("pages/10_Repaso_Especial.py")
         with action_col:
             action_label = "Continuar plan diario" if completed_today else "Iniciar plan diario"
             if st.button(

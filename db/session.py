@@ -96,7 +96,11 @@ def sync_db_schema():
                           ("case_id", "VARCHAR"), ("question_type", "VARCHAR DEFAULT 'SITUATIONAL'")],
             "skills": [("macro_dominio", "VARCHAR"), ("micro_competencia", "VARCHAR"), 
                        ("priority_weight", "FLOAT"), ("last_seen", "TIMESTAMP")],
-            "question_performance": [("mastery_level", "FLOAT"), ("is_mastered", "BOOLEAN"), ("is_favorite", "BOOLEAN DEFAULT FALSE")],
+            "question_performance": [("mastery_level", "FLOAT"), ("is_mastered", "BOOLEAN"), ("is_favorite", "BOOLEAN DEFAULT FALSE"),
+                                     ("next_review", "TIMESTAMP"), ("review_interval_days", "FLOAT DEFAULT 0"),
+                                     ("ease_factor", "FLOAT DEFAULT 2.5"), ("review_count", "INTEGER DEFAULT 0"),
+                                     ("lapse_count", "INTEGER DEFAULT 0"), ("last_confidence", "VARCHAR(20)"),
+                                     ("last_error_type", "VARCHAR(50)"), ("last_reviewed_at", "TIMESTAMP")],
             "attempts": [("user_id", "INTEGER")],
             "users": [("subscription_tier", "VARCHAR DEFAULT 'free'"), ("subscription_expiry", "TIMESTAMP"), ("stripe_customer_id", "VARCHAR")],
             "user_stats": [("last_ia_date", "TIMESTAMP"), ("ia_count_today", "INTEGER DEFAULT 0")]

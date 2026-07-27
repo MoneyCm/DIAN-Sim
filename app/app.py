@@ -177,7 +177,7 @@ p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica por Temas", icon="📚")
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
 p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Tipo Examen", icon="⏱️")
-p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repaso Especial", icon="🧠")
+p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
 
 # Grupo: Recursos

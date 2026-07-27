@@ -9,6 +9,7 @@ from db.session import SessionLocal
 from db.models import Question, Attempt, Skill
 import datetime
 from core.adaptive import calculate_mastery_update, update_priority
+from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.generators.llm import LLMGenerator
@@ -103,7 +104,14 @@ def finalize_exam(db, q_ids, answers_dict):
             if total_attempts > 0:
                 safe_setattr(perf, "mastery_level", (perf.hits / total_attempts) * 10.0)
                 
-            safe_setattr(perf, "last_attempt", datetime.datetime.utcnow())
+            review_now = datetime.datetime.utcnow()
+            safe_setattr(perf, "last_attempt", review_now)
+            schedule_review(
+                perf,
+                is_correct=is_right,
+                confidence="unsure" if is_right else "guess",
+                now=review_now,
+            )
             
             # Threshold logic v21
             m_lvl = getattr(perf, "mastery_level", 0.0)
