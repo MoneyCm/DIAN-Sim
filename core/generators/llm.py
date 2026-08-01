@@ -502,14 +502,15 @@ class LLMGenerator:
             m_name = getattr(self, "model_name", "Unknown")
             return f"Tutor Mikey Error con modelo [{m_name}]: {str(e)}"
 
-    def audit_question(self, question_data: dict) -> dict:
+    def audit_question(self, question_data: dict, source_context: str = "") -> dict:
         """Audits a question against CNSC quality standards using IA. Mikey"""
         # Fetch Normativa Context for Audit
-        normativa_context = ""
+        normativa_context = source_context.strip()
         try:
-            from core.normativa import NormativaManager
-            normativa = NormativaManager()
-            normativa_context = normativa.get_law_context(question_data.get('stem', '') + " " + question_data.get('rationale', ''))
+            if not normativa_context:
+                from core.normativa import NormativaManager
+                normativa = NormativaManager()
+                normativa_context = normativa.get_law_context(question_data.get('stem', '') + " " + question_data.get('rationale', ''))
         except Exception as e:
             print(f"DEBUG: Error fetching normativa context for audit: {e}")
 
@@ -519,6 +520,7 @@ class LLMGenerator:
         {normativa_context}
         
         DATOS DE LA PREGUNTA:
+        CASO BASE: {question_data.get('case_text', '')}
         TEMA: {question_data.get('topic')}
         ENUNCIADO: {question_data.get('stem')}
         OPCIONES: {question_data.get('options_json')}
@@ -527,10 +529,11 @@ class LLMGenerator:
         
         CRITERIOS DE EVALUACIÓN (0-10):
         1. Precisión Legal: ¿La clave coincide con la norma citada?
-        2. Coherencia Situacional: ¿El caso plantea un escenario laboral realista?
-        3. Calidad de Distractores: ¿Son plausibles y técnicos?
-        4. No Inducción: ¿La pregunta no regala la respuesta?
-        5. Justificación Técnica: ¿Es clara y cita artículos reales?
+        2. Dependencia Situacional: ¿La clave exige usar uno o más datos concretos del caso y no puede resolverse solo memorizando la norma?
+        3. Coherencia Situacional: ¿El caso plantea un escenario laboral realista?
+        4. Calidad de Distractores: ¿Son plausibles y técnicos?
+        5. No Inducción: ¿La pregunta no regala la respuesta?
+        6. Justificación Técnica: ¿Es clara y cita artículos reales?
         
         RESPONDE ÚNICAMENTE EN FORMATO JSON:
         {{
@@ -631,7 +634,7 @@ class LLMGenerator:
         except Exception as e:
             return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
 
-    def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2) -> dict:
+    def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2, source_context: str = "") -> dict:
         """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
         
         # GOA DIAN 2667: un caso funcional comparte exactamente tres enunciados.
@@ -649,6 +652,14 @@ class LLMGenerator:
         TEMA PRINCIPAL: {topic}
         DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado)
         CANTIDAD DE PREGUNTAS: {num_questions}
+
+        FUENTE OFICIAL AUTORIZADA:
+        {source_context or "No se suministró una fuente oficial. Evita detalles jurídicos no sustentados."}
+
+        REGLA DE PRECISIÓN NORMATIVA:
+        * Usa exclusivamente hechos jurídicos comprobables en la fuente autorizada.
+        * No inventes artículos, plazos, autoridades, actos administrativos ni porcentajes.
+        * Si falta sustento, pregunta sobre el procedimiento general que sí consta en la fuente.
         
         ESTRUCTURA DEL CONTENIDO:
         1. TÍTULO: Un título profesional y descriptivo.
@@ -658,6 +669,8 @@ class LLMGenerator:
            - El protagonista debe enfrentar un dilema o una serie de procedimientos a resolver.
         3. ENUNCIADOS: Genera EXACTAMENTE tres (3) enunciados que SOLO se puedan responder leyendo el mismo caso.
            - Cada pregunta debe indagar sobre una parte específica del procedimiento descrito.
+           - La clave debe depender de uno o mÃ¡s datos concretos del caso; si puede responderse sin leerlo, es invÃ¡lida.
+           - Evita definiciones, objetos generales de normas y memoria aislada de artÃ­culos.
         
         FORMATO DE SALIDA (JSON ÚNICAMENTE):
         {{
@@ -677,6 +690,7 @@ class LLMGenerator:
                     }},
                     "correct_key": "A",
                     "rationale": "Justificación técnica...",
+                    "source_ref": "Fuente oficial que sustenta la clave",
                     "track": "FUNCIONAL",
                     "competency": "Competencia evaluada"
                 }}
