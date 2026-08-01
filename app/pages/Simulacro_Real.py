@@ -20,6 +20,7 @@ from ui_utils import load_css as inject_custom_css, render_favorite_button, esca
 from services.stats_service import StatsService
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
+from core.exam_format import build_official_case_blocks, official_question_groups
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 # pass # Removed st.set_page_config
@@ -146,8 +147,9 @@ def _official_inventory():
         if competition_id is not None:
             query = query.filter(CaseStudy.competition_id == competition_id)
         cases = query.all()
-        official = sum(1 for case in cases if _case_is_valid_for_dian(case))
-        return official, max(0, len(cases) - official)
+        blocks = build_official_case_blocks(cases)
+        source_cases_used = sum(1 for case in cases if official_question_groups(case))
+        return len(blocks), max(0, len(cases) - source_cases_used)
     finally:
         db.close()
 
@@ -179,68 +181,45 @@ def _reset_invalid_exam_state():
 def load_exam_cases():
     db = next(get_db())
     user_id = st.session_state.get("user_id")
-    
-    # v5.0 SMART MIX LOGIC
-    # 1. Detectar Nivel del Usuario (OPEC)
-    user_level_int = 3 # Default Profesional
-    try:
-        if user_id:
-            user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
-            active_competition_id = get_active_competition_id(db, user_id)
-            if user_opec and user_opec.level:
-                lvl = user_opec.level.upper()
-                if "ASISTENCIAL" in lvl: user_level_int = 1
-                elif "TECNICO" in lvl: user_level_int = 2
-                elif "PROFESIONAL" in lvl: user_level_int = 3
-                elif "ASESOR" in lvl: user_level_int = 4
-                elif "DIRECTIVO" in lvl: user_level_int = 5
-    except Exception as e:
-        print(f"Error checking user level: {e}")
 
-    smart_topics = []
-    if user_id:
-        smart_topics = StatsService.get_smart_mix_topics(user_id, count=2) # 2 targeted, 1 random
-    
-    final_cases = []
-    
     try:
-        # A. SMART TOPICS (Filtered by Difficulty if possible, but topics are usually level-agnostic)
-        if smart_topics:
-            for t in smart_topics:
-                # Find case with matching topic AND difficulty
-                c = db.query(CaseStudy).join(Question).filter(
-                    CaseStudy.competition_id == active_competition_id,
-                    Question.topic == t,
-                    Question.difficulty == user_level_int 
-                ).first()
-                if c and c not in final_cases and _case_is_valid_for_dian(c):
-                    final_cases.append(c)
-        
-        # B. RANDOM FILL (Filtered by Difficulty AND OPEC Topic)
-        is_pro = AuthManager.is_pro()
-        target_case_count = 3 if is_pro else 2 
-        
-        # Obtener el tópico de la OPEC activa para filtrar
-        active_topic = f"OPEC {user_opec.opec_number}" if user_opec else "OPEC 236769"
-        
-        needed = target_case_count - len(final_cases)
-        if needed > 0:
-            # Seleccionar casos que tengan preguntas del nivel correcto Y correspondan a la OPEC activa
-            random_cases = db.query(CaseStudy).join(Question).filter(
-                CaseStudy.competition_id == active_competition_id,
-                Question.difficulty == user_level_int,
-                Question.topic.like(f"%{active_topic}%")
-            ).group_by(CaseStudy.id).order_by(func.random()).limit(needed * 2).all()
-            
-            for rc in random_cases:
-                if len(final_cases) >= target_case_count: break
-                if rc not in final_cases and rc.questions and _case_is_valid_for_dian(rc):
-                    final_cases.append(rc)
-                    
-        random.shuffle(final_cases)
-        return final_cases
-    except Exception as e:
-        print(f"Error smart mix: {e}")
+        user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first() if user_id else None
+        competition_id = get_active_competition_id(db, user_id)
+        query = db.query(CaseStudy).options(joinedload(CaseStudy.questions))
+        if competition_id is not None:
+            query = query.filter(CaseStudy.competition_id == competition_id)
+
+        blocks = build_official_case_blocks(query.all())
+        if not blocks:
+            return []
+
+        # Prefer weak topics, while preserving a random mix when no match exists.
+        smart_topics = StatsService.get_smart_mix_topics(user_id, count=2) if user_id else []
+        selected = []
+        for topic in smart_topics:
+            match = next(
+                (
+                    block for block in blocks
+                    if block not in selected
+                    and any(
+                        topic == getattr(question, "topic", None)
+                        or topic == getattr(question, "micro_competencia", None)
+                        for question in block.questions
+                    )
+                ),
+                None,
+            )
+            if match:
+                selected.append(match)
+
+        target_case_count = 3 if AuthManager.is_pro() else 2
+        remaining = [block for block in blocks if block not in selected]
+        random.shuffle(remaining)
+        selected.extend(remaining[:max(0, target_case_count - len(selected))])
+        random.shuffle(selected)
+        return selected[:target_case_count]
+    except Exception as exc:
+        print(f"Error loading official GOA blocks: {exc}")
         return []
     finally:
         db.close()

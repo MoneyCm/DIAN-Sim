@@ -2,17 +2,18 @@ from types import SimpleNamespace
 
 from core.exam_format import (
     LIKERT_OPTIONS, OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL,
-    is_official_functional_case, is_official_functional_payload, question_format_status,
+    build_official_case_blocks, is_official_functional_case, is_official_functional_payload, question_format_status,
 )
 
 
-def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SITUATIONAL"):
+def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SITUATIONAL", is_verified=True):
     return SimpleNamespace(
         track=track,
         options_json=options or {"A": "Uno", "B": "Dos", "C": "Tres"},
         correct_key=correct_key,
         question_type=question_type,
         stem="Enunciado",
+        is_verified=is_verified,
     )
 
 
@@ -58,3 +59,17 @@ def test_question_format_status_is_non_destructive():
     assert question_format_status(review_case.questions[0]) == REVIEW_LABEL
 
     assert question_format_status(question()) == PRACTICE_LABEL
+
+def test_verified_ten_question_case_yields_three_non_destructive_blocks():
+    questions = [question() for _ in range(10)]
+    for index, item in enumerate(questions):
+        item.question_id = str(index)
+        item.created_at = str(index).zfill(2)
+    case = SimpleNamespace(
+        id="case-1", title="Caso", text="Contexto", topic="Tema",
+        difficulty=3, competition_id=1, questions=questions,
+    )
+    blocks = build_official_case_blocks([case])
+    assert len(blocks) == 3
+    assert all(len(block.questions) == 3 for block in blocks)
+    assert len(case.questions) == 10
