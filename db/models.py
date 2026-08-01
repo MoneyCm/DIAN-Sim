@@ -3,7 +3,7 @@ import datetime
 import uuid
 import sys
 from typing import List, Optional
-from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Float, ForeignKey, JSON, func
+from sqlalchemy import Column, String, Integer, Text, Boolean, Date, DateTime, Float, ForeignKey, JSON, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
 # --- EL EXORCISMO TOTAL v19.0 - MIKEY ---
@@ -73,6 +73,17 @@ class UserOPEC(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="opecs")
+
+class StudyPlanConfig(Base):
+    __tablename__ = "study_plan_configs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    competition_id: Mapped[int] = mapped_column(ForeignKey("competitions.id"), index=True)
+    exam_date: Mapped[Optional[datetime.date]] = mapped_column(Date)
+    daily_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    saturday_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    study_days: Mapped[list] = mapped_column(JSON, default=lambda: [0, 1, 2, 3, 4, 5])
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
 class CaseStudy(Base):
     __tablename__ = "case_studies"

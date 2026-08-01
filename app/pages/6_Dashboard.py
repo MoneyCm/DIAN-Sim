@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
-from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy
+from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy, StudyPlanConfig
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 from ui_utils import load_css, render_header
@@ -24,6 +24,7 @@ from core.anki import generate_anki_deck
 from core.config import get_api_key
 from core.user_keys import get_user_key
 from core.adaptive import build_remaining_daily_plan
+from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from services.question_service import QuestionService
 
 # pass # Removed st.set_page_config
@@ -62,9 +63,21 @@ try:
         st.warning("⚠️ No has configurado una OPEC. Ve a 'Configuración OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
-    # Plan diario adaptativo y acumulativo (zona horaria de Colombia)
-    daily_goal = 20
+    # Plan diario adaptativo por disponibilidad y zona horaria de Colombia.
     bogota_now = datetime.datetime.now(ZoneInfo("America/Bogota"))
+    study_config = db.query(StudyPlanConfig).filter_by(
+        user_id=u_id,
+        competition_id=active_competition_id,
+    ).first()
+    configured_days = study_config.study_days if study_config and study_config.study_days else [0, 1, 2, 3, 4, 5]
+    is_study_day = bogota_now.weekday() in configured_days
+    configured_minutes = (
+        study_config.saturday_minutes
+        if study_config and bogota_now.weekday() == 5
+        else (study_config.daily_minutes if study_config else 30)
+    )
+    timed_session = build_timed_session(configured_minutes)
+    daily_goal = timed_session.question_goal
     local_day_start = datetime.datetime.combine(
         bogota_now.date(), datetime.time.min, tzinfo=bogota_now.tzinfo
     )
@@ -118,15 +131,28 @@ try:
         now=bogota_now,
     )
 
+    exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
+
     with st.container(border=True):
-        st.subheader("🎯 Tu plan inteligente de hoy")
-        progress_col, accuracy_col, action_col = st.columns([1, 1, 1.4])
+        st.subheader("🎯 Tu sesión guiada de hoy")
+        progress_col, accuracy_col, time_col, action_col = st.columns([1, 1, 1, 1.35])
         progress_col.metric("Avance diario", f"{completed_today}/{daily_goal}")
         accuracy_col.metric(
             "Precisión de hoy",
             f"{daily_accuracy:.0f}%" if today_attempt_rows else "Sin intentos",
         )
         st.progress(completed_today / daily_goal)
+        st.caption(
+            f"{timed_session.review_minutes} min repaso · "
+            f"{timed_session.learning_minutes} min aprendizaje · "
+            f"{timed_session.practice_minutes} min práctica · "
+            f"{timed_session.closing_minutes} min cierre"
+        )
+        if exam_days is not None:
+            st.caption(f"Examen en {exam_days} días · Etapa: {preparation_phase(exam_days)}")
+        if not is_study_day:
+            st.info("Hoy está configurado como descanso. Puedes estudiar si lo deseas o retomar el próximo día disponible.")
+        time_col.metric("Tiempo", f"{timed_session.total_minutes} min")
         action_col.metric("Repasos vencidos", due_review_count)
 
         if completed_today >= daily_goal:
@@ -153,6 +179,8 @@ try:
             st.caption(f"Criterios principales: {reason_summary}")
         else:
             st.info("No hay suficientes preguntas nuevas para completar la meta de hoy.")
+
+        st.page_link("pages/11_Plan_Estudio.py", label="Configurar tiempo y fecha", icon="🗓️")
 
         if due_review_count and st.button(
             "Ir a repasos de hoy", use_container_width=True, key="dashboard_due_reviews"

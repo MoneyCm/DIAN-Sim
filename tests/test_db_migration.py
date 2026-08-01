@@ -13,6 +13,7 @@ def test_column_exists():
     assert "embedding_json" in columns, "La columna embedding_json debe estar en normativa_chunks"
     assert "question_anki_enrichments" in inspector.get_table_names()
     assert "competitions" in inspector.get_table_names()
+    assert "study_plan_configs" in inspector.get_table_names()
     for table in ("user_opec", "case_studies", "questions", "skills"):
         table_columns = {column["name"] for column in inspector.get_columns(table)}
         assert "competition_id" in table_columns
