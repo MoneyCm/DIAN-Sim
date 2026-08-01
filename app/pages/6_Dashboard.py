@@ -25,6 +25,7 @@ from core.config import get_api_key
 from core.user_keys import get_user_key
 from core.adaptive import build_remaining_daily_plan
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
+from core.motivation import build_weekly_progress, coverage_percent, topic_status
 from services.question_service import QuestionService
 
 # pass # Removed st.set_page_config
@@ -133,6 +134,61 @@ try:
 
     exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
 
+    week_start_date = bogota_now.date() - datetime.timedelta(days=bogota_now.weekday())
+    week_start_local = datetime.datetime.combine(
+        week_start_date, datetime.time.min, tzinfo=bogota_now.tzinfo
+    )
+    week_start_utc = week_start_local.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    weekly_attempt_times = db.query(Attempt.created_at).join(Question).filter(
+        Attempt.user_id == u_id,
+        Question.competition_id == active_competition_id,
+        Attempt.created_at >= week_start_utc,
+    ).all()
+    studied_week_days = set()
+    for row in weekly_attempt_times:
+        created_at = row.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+        studied_week_days.add(created_at.astimezone(bogota_now.tzinfo).date())
+    weekly_progress = build_weekly_progress(
+        len(studied_week_days), len(configured_days)
+    )
+
+    candidate_topic_keys = {
+        (question.track, question.competency, question.topic)
+        for question in daily_candidates
+    }
+    candidate_by_id = {
+        question.question_id: question for question in daily_candidates
+    }
+    topic_attempts = {key: 0 for key in candidate_topic_keys}
+    for performance in daily_performances:
+        question = candidate_by_id.get(performance.question_id)
+        if not question:
+            continue
+        key = (question.track, question.competency, question.topic)
+        topic_attempts[key] = topic_attempts.get(key, 0) + int(performance.hits or 0) + int(performance.misses or 0)
+    studied_topic_count = sum(1 for attempts in topic_attempts.values() if attempts > 0)
+    topic_coverage = coverage_percent(len(candidate_topic_keys), studied_topic_count)
+
+    with st.container(border=True):
+        st.subheader("🚀 Misión de esta semana")
+        mission_cols = st.columns(4)
+        mission_cols[0].metric(
+            "Sesiones", f"{weekly_progress.completed_days}/{weekly_progress.target_days}"
+        )
+        mission_cols[1].metric("Cobertura", f"{topic_coverage:.0f}%")
+        mission_cols[2].metric("Meta de hoy", f"{daily_goal} preguntas")
+        mission_cols[3].metric("Días al examen", exam_days if exam_days is not None else "—")
+        st.progress(weekly_progress.ratio)
+        if weekly_progress.is_complete:
+            st.success("Objetivo semanal cumplido. La constancia ya está hecha; lo adicional es opcional.")
+        else:
+            st.caption(
+                f"Te faltan {weekly_progress.remaining_days} sesión(es) para cumplir la semana. "
+                "Puedes descansar un día sin perder tu avance."
+            )
+
     with st.container(border=True):
         st.subheader("🎯 Tu sesión guiada de hoy")
         progress_col, accuracy_col, time_col, action_col = st.columns([1, 1, 1, 1.35])
@@ -203,6 +259,34 @@ try:
                 st.session_state["hardcore_mode"] = False
                 st.session_state["study_session_kind"] = "daily"
                 st.switch_page("pages/2_Ejecucion.py")
+    if completed_today >= daily_goal:
+        celebration_key = f"daily_completion_{bogota_now.date().isoformat()}"
+        if not st.session_state.get(celebration_key):
+            st.session_state[celebration_key] = True
+            st.balloons()
+            st.toast("Sesión terminada. Hoy cumpliste lo importante.", icon="✅")
+
+    with st.expander("🗺️ Mapa de avance del temario", expanded=False):
+        st.caption(
+            "El color refleja práctica y dominio, no solo lectura. "
+            "La cobertura aumenta cuando respondes preguntas del tema."
+        )
+        topic_rows = []
+        for key in candidate_topic_keys:
+            skill = daily_skills_map.get(key)
+            mastery = float(skill.mastery_score or 0.0) if skill else 0.0
+            attempts = topic_attempts.get(key, 0)
+            label, icon = topic_status(mastery, attempts)
+            topic_rows.append((attempts == 0, mastery, key, label, icon, attempts))
+        topic_rows.sort(key=lambda row: (row[0], row[1], row[2][2]))
+        for _, mastery, key, label, icon, attempts in topic_rows[:15]:
+            st.write(
+                f"{icon} **{key[2]}** · {label} · "
+                f"dominio {mastery:.0f}% · {attempts} intento(s)"
+            )
+        if len(topic_rows) > 15:
+            st.caption(f"Mostrando 15 de {len(topic_rows)} temas del concurso activo.")
+
     # 1. User Stats & Mastery
     stats = db.query(UserStats).filter_by(user_id=u_id).first()
     if not stats:
