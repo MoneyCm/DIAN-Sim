@@ -273,8 +273,8 @@ class EthicsAttempt(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     categoria: Mapped[str] = mapped_column(String)  # Conflicto de Intereses, etc.
     afirmacion: Mapped[str] = mapped_column(Text)  # La afirmación presentada
-    respuesta_usuario: Mapped[int] = mapped_column(Integer)  # 1-5 Likert scale
-    respuesta_esperada: Mapped[Optional[int]] = mapped_column(Integer)  # 1-5 esperada
+    respuesta_usuario: Mapped[int] = mapped_column(Integer)  # GOA actual: 1-4; histÃ³rico: 1-5
+    respuesta_esperada: Mapped[Optional[int]] = mapped_column(Integer)  # Solo intentos histÃ³ricos
     es_correcta: Mapped[Optional[bool]] = mapped_column(Boolean)  # Si la respuesta fue correcta
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)  # Si fue generada con IA
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())

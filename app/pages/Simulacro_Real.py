@@ -114,6 +114,10 @@ def _normalize_exam_text(value):
 
 
 def _case_is_valid_for_dian(case):
+    from core.exam_format import is_official_functional_case
+
+    if not is_official_functional_case(case):
+        return False
     questions = getattr(case, "questions", []) or []
     haystack_parts = [case.title, case.text, getattr(case, "topic", "")]
     for question in questions:
@@ -123,10 +127,6 @@ def _case_is_valid_for_dian(case):
             getattr(question, "topic", ""),
             getattr(question, "competency", ""),
         ])
-
-        options = getattr(question, "options_json", None)
-        if not isinstance(options, dict) or len(options) != 3:
-            return False
 
     haystack = " ".join(_normalize_exam_text(part) for part in haystack_parts if part)
     if not haystack:

@@ -216,7 +216,7 @@ with col1:
         difficulty_value = difficulty_map[difficulty_label]
 
         goa_mode = st.toggle(
-            "📄 Aplicar Protocolo situacional GOA 2667 (Recomendado)",
+            "📄 Usar contexto situacional individual (prÃ¡ctica)",
             value=True,
             help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.",
         )
@@ -243,7 +243,8 @@ with col1:
         if reinforcement_topic and cs_topic != reinforcement_topic:
             st.session_state.pop("ai_reinforcement_topic", None)
             
-        cs_num = st.slider("Preguntas por Caso", 3, 5, 3)
+        cs_num = 3
+        st.caption("Formato oficial GOA: cada caso funcional contiene exactamente 3 enunciados.")
         cs_diff = st.slider("Dificultad del Caso", 1, 3, 2)
         
         generate_cs_btn = st.button("✨ Generar Caso Protagónico", type="primary", use_container_width=True)
@@ -470,6 +471,10 @@ with col2:
         st.subheader("2. Revisar y Guardar Caso Protagónico")
         
         case_data = st.session_state["generated_case"]
+        from core.exam_format import is_official_functional_payload
+        case_is_official = is_official_functional_payload(case_data)
+        if not case_is_official:
+            st.error("El caso generado no cumple el formato oficial: debe contener exactamente 3 enunciados funcionales, cada uno con opciones A, B y C y una clave valida.")
         
         with st.container(border=True):
             st.markdown(f"### 📂 {case_data.get('title', 'Sin Título')}")
@@ -485,7 +490,7 @@ with col2:
                     st.write(f"**Clave:** {q.get('correct_key')}")
                     st.write(f"**Justificación:** {q.get('rationale')}")
 
-        if st.button("💾 Guardar Caso en Banco", type="primary", use_container_width=True):
+        if st.button("Guardar Caso en Banco", type="primary", use_container_width=True, disabled=not case_is_official):
             from db.session import SessionLocal
             from db.models import CaseStudy, Question
             import datetime
@@ -493,9 +498,11 @@ with col2:
             
             db = SessionLocal()
             try:
+                active_competition_id = get_active_competition_id(db, st.session_state.get("user_id"))
                 # 1. Create Case
                 new_case = CaseStudy(
                     id=str(uuid.uuid4()),
+                    competition_id=active_competition_id,
                     title=case_data.get("title"),
                     text=case_data.get("text"),
                     topic=case_data.get("topic"),

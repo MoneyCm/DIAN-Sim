@@ -210,7 +210,7 @@ class LLMGenerator:
         
         prompt = f"""
         Actúa como un Experto en Normativa de la DIAN y Constructor de Preguntas para el nivel Profesional.
-        Tu misión es generar EXACTAMENTE {count} preguntas de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
+        Tu misión es generar EXACTAMENTE {count} preguntas FUNCIONALES de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
         
         REGLA DE ORO DE ENTIDAD:
         * El protagonista siempre trabaja para la DIAN (Dirección de Impuestos y Aduanas Nacionales).
@@ -229,7 +229,7 @@ class LLMGenerator:
         {{
           "questions": [
             {{
-              "track": "FUNCIONAL | COMPORTAMENTAL | INTEGRIDAD",
+              "track": "FUNCIONAL",
               "macro_dominio": "Macro-Dominio detectado",
               "micro_competencia": "Micro-Competencia detectada",
               "topic": "tema resumido",
@@ -645,6 +645,9 @@ class LLMGenerator:
     def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2) -> dict:
         """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
         
+        # GOA DIAN 2667: un caso funcional comparte exactamente tres enunciados.
+        num_questions = 3
+
         prompt = f"""
         Actúa como un Diseñador de Pruebas Situacionales para la DIAN (Dirección de Impuestos y Aduanas Nacionales). 
         Tu tarea es crear un CASO PROTAGÓNICO (Case Study) completo y original.
@@ -660,11 +663,11 @@ class LLMGenerator:
         
         ESTRUCTURA DEL CONTENIDO:
         1. TÍTULO: Un título profesional y descriptivo.
-        2. TEXTO DEL CASO (SITUACIÓN): Una narrativa detallada de 300-500 palabras.
+        2. TEXTO DEL CASO (SITUACIÓN): Una situación laboral clara y autosuficiente.
            - Debe describir una situación compleja en un entorno de la DIAN (Aduanas, Fiscalización, Atención, etc.).
            - Incluye detalles técnicos, cifras, fechas o normativas implicadas.
            - El protagonista debe enfrentar un dilema o una serie de procedimientos a resolver.
-        3. PREGUNTAS: Genera {num_questions} preguntas que SOLO se puedan responder leyendo el texto del caso.
+        3. ENUNCIADOS: Genera EXACTAMENTE tres (3) enunciados que SOLO se puedan responder leyendo el mismo caso.
            - Cada pregunta debe indagar sobre una parte específica del procedimiento descrito.
         
         FORMATO DE SALIDA (JSON ÚNICAMENTE):

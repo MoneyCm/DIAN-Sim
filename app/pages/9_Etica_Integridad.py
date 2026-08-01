@@ -14,6 +14,7 @@ from ui_utils import load_css, render_header, render_custom_sidebar
 from core.auth import AuthManager
 import uuid
 from core.dedupe import compute_hash
+from core.exam_format import LIKERT_OPTIONS
 import datetime
 
 # pass # Removed st.set_page_config
@@ -197,13 +198,7 @@ else:  # Simulacro mode
             
             answer = st.radio(
                 "Tu respuesta:",
-                options=[
-                    "1 - Totalmente en desacuerdo",
-                    "2 - En desacuerdo",
-                    "3 - Neutral",
-                    "4 - De acuerdo",
-                    "5 - Totalmente de acuerdo"
-                ],
+                options=LIKERT_OPTIONS,
                 key=f"ethics_q_{i}",
                 horizontal=False
             )
@@ -224,7 +219,6 @@ else:  # Simulacro mode
         # Guardar respuestas en BD (solo una vez)
         if not st.session_state.get("ethics_saved", False):
             try:
-                from core.generators.ethics_generator import evaluate_ethics_response, detect_weak_categories
                 from db.models import EthicsAttempt
                 
                 db = SessionLocal()
@@ -239,22 +233,16 @@ else:  # Simulacro mode
                         # Extraer valor numérico de la respuesta
                         answer_text = answers[i]
                         respuesta_valor = int(answer_text.split(" - ")[0])
-                        
-                        # Evaluar respuesta
-                        es_correcta, respuesta_esperada, explicacion = evaluate_ethics_response(
-                            q["categoria"],
-                            q["afirmacion"],
-                            respuesta_valor
-                        )
-                        
+
+                        # La GOA no define clave correcta para esta escala.
                         # Crear registro
                         attempt = EthicsAttempt(
                             user_id=user_id,
                             categoria=q["categoria"],
                             afirmacion=q["afirmacion"],
                             respuesta_usuario=respuesta_valor,
-                            respuesta_esperada=respuesta_esperada,
-                            es_correcta=es_correcta,
+                            respuesta_esperada=None,
+                            es_correcta=None,
                             ai_generated=ai_generated
                         )
                         db.add(attempt)
@@ -267,19 +255,12 @@ else:  # Simulacro mode
                 st.error(f"Error al guardar respuestas: {e}")
         
         st.success("✅ Simulacro completado")
-        st.markdown("### 📊 Análisis de Respuestas")
+        st.markdown("### Registro de respuestas")
         
         st.info("""
-        **Nota Importante:** Este es un simulacro de práctica. Las respuestas "correctas" en ética dependen del 
-        contexto y la interpretación del Código de Ética DIAN. 
-        
-        **Criterios generales:**
-        - **Conflicto de intereses:** Siempre declarar y abstenerse
-        - **Información privilegiada:** Uso estrictamente institucional
-        - **Regalos:** Rechazar cualquier obsequio
-        - **Transparencia:** Documentar todas las actuaciones
-        - **Recursos públicos:** Uso exclusivo institucional
-        - **Imparcialidad:** Decisiones basadas solo en criterios técnicos
+        **Formato oficial GOA:** estas afirmaciones no tienen respuestas correctas o incorrectas.
+        La práctica sirve para familiarizarte con la escala forzada de cuatro niveles y responder
+        de forma honesta y consistente.
         """)
         
         questions = st.session_state.get("ethics_questions", [])
