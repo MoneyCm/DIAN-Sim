@@ -137,6 +137,20 @@ def _case_is_valid_for_dian(case):
     return True
 
 
+def _official_inventory():
+    """Return official and review case counts for the active competition."""
+    db = next(get_db())
+    try:
+        competition_id = get_active_competition_id(db, st.session_state.get("user_id"))
+        query = db.query(CaseStudy).options(joinedload(CaseStudy.questions))
+        if competition_id is not None:
+            query = query.filter(CaseStudy.competition_id == competition_id)
+        cases = query.all()
+        official = sum(1 for case in cases if _case_is_valid_for_dian(case))
+        return official, max(0, len(cases) - official)
+    finally:
+        db.close()
+
 def _sanitize_exam_session_state():
     active_cases = st.session_state.get("exam_cases", []) or []
     if active_cases and not all(_case_is_valid_for_dian(case) for case in active_cases):
@@ -302,6 +316,18 @@ if not st.session_state.exam_active:
     **¿Estás listo para probar tu nivel real?**
     """)
     
+    official_cases, review_cases = _official_inventory()
+    target_cases = 30
+    inventory_cols = st.columns(3)
+    inventory_cols[0].metric("Casos oficiales", official_cases)
+    inventory_cols[1].metric("Meta inicial", target_cases)
+    inventory_cols[2].metric("Casos para revisar", review_cases)
+    st.progress(min(official_cases / target_cases, 1.0))
+    if official_cases < 2:
+        st.warning(
+            "El banco oficial aun no tiene suficientes casos para un simulacro completo. "
+            "El material anterior se conserva en Practica/Requiere revision."
+        )
     if not AuthManager.is_pro():
         st.info("💡 Como usuario **Free**, tu simulacro será una versión breve (máximo 2 casos).")
         if st.button("🚀 Desbloquear Simulacro Completo (100 Qs) con PRO", use_container_width=True):
@@ -450,7 +476,7 @@ Eje: {detail["macro"]}
         # Cleanup score but keep review data until new exam starts
         # del st.session_state.exam_score # Keep it for display
     
-    if st.button("🔴 INICIAR EXAMEN AHORA", type="primary", use_container_width=True):
+    if st.button("🔴 INICIAR EXAMEN AHORA", type="primary", use_container_width=True, disabled=official_cases == 0):
         # Clear previous review data
         if "last_exam_cases" in st.session_state: del st.session_state.last_exam_cases
         if "last_user_answers" in st.session_state: del st.session_state.last_user_answers

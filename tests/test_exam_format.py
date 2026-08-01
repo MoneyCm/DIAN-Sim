@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 
-from core.exam_format import LIKERT_OPTIONS, is_official_functional_case, is_official_functional_payload
+from core.exam_format import (
+    LIKERT_OPTIONS, OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL,
+    is_official_functional_case, is_official_functional_payload, question_format_status,
+)
 
 
 def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SITUATIONAL"):
@@ -43,3 +46,15 @@ def test_generated_payload_must_match_official_case_shape():
     assert is_official_functional_payload(payload)
     payload["questions"][0]["track"] = "COMPORTAMENTAL"
     assert not is_official_functional_payload(payload)
+
+def test_question_format_status_is_non_destructive():
+    official_case = SimpleNamespace(text="Caso", questions=[question(), question(), question()])
+    official_question = official_case.questions[0]
+    official_question.case_study = official_case
+    assert question_format_status(official_question) == OFFICIAL_LABEL
+
+    review_case = SimpleNamespace(text="Caso", questions=[question()])
+    review_case.questions[0].case_study = review_case
+    assert question_format_status(review_case.questions[0]) == REVIEW_LABEL
+
+    assert question_format_status(question()) == PRACTICE_LABEL

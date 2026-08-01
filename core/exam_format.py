@@ -5,6 +5,10 @@ SITUATIONAL_TYPE = "SITUATIONAL"
 FUNCTIONAL_QUESTIONS_PER_CASE = 3
 FUNCTIONAL_OPTION_KEYS = ("A", "B", "C")
 
+OFFICIAL_LABEL = "Oficial GOA"
+PRACTICE_LABEL = "Practica"
+REVIEW_LABEL = "Requiere revision"
+
 LIKERT_OPTIONS = (
     "1 - Totalmente en desacuerdo",
     "2 - En desacuerdo",
@@ -50,3 +54,12 @@ def is_official_functional_payload(payload: dict) -> bool:
         if not str(question.get("stem", "")).strip():
             return False
     return True
+
+def question_format_status(question) -> str:
+    """Classify a question without modifying historical data."""
+    case = getattr(question, "case_study", None)
+    if case is not None and is_official_functional_case(case):
+        return OFFICIAL_LABEL
+    if case is not None:
+        return REVIEW_LABEL
+    return PRACTICE_LABEL

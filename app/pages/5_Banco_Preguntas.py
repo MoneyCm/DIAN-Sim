@@ -17,6 +17,9 @@ from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
+from core.exam_format import (
+    OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL, question_format_status,
+)
 
 # pass # Removed st.set_page_config
 
@@ -78,7 +81,7 @@ opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)",
 
 if action == "Explorar / Bulk":
     # FILTERS
-    col_filters = st.columns([2, 1, 1, 1, 1])
+    col_filters = st.columns([2, 1, 1, 1, 1, 1])
     with col_filters[0]:
         search = st.text_input("🔍 Buscar en enunciado o justificación...")
     with col_filters[1]:
@@ -89,6 +92,8 @@ if action == "Explorar / Bulk":
         # Quality Filter Mikey v36
         quality_f = st.selectbox("Calidad", ["Todas", "Solo Verificadas ✅", "Pendientes ⏳"])
     with col_filters[4]:
+        format_f = st.selectbox("Formato", ["Todos", OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL])
+    with col_filters[5]:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state["bulk_selection"]:
             st.markdown(f"### ⚙️ Acciones Masivas ({len(st.session_state['bulk_selection'])} ítems seleccionados)")
@@ -223,6 +228,8 @@ if action == "Explorar / Bulk":
                 continue
             if quality_f == "Pendientes ⏳" and q.is_verified:
                 continue
+            if format_f != "Todos" and question_format_status(q) != format_f:
+                continue
             filtered.append(q)
         
         total_count = len(filtered)
@@ -245,10 +252,13 @@ if action == "Explorar / Bulk":
         elif quality_f == "Pendientes ⏳":
             query = query.filter(Question.is_verified == False)
         
-        total_count = query.count()
+        filtered = query.all()
+        if format_f != "Todos":
+            filtered = [q for q in filtered if question_format_status(q) == format_f]
+        total_count = len(filtered)
         PAGE_SIZE = 20
         offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
-        questions = query.offset(offset).limit(PAGE_SIZE).all()
+        questions = filtered[offset:offset+PAGE_SIZE]
         st.info(f"📚 Mostrando **{len(questions)}** de **{total_count}** preguntas totales.")
     
     if not questions:
@@ -286,8 +296,11 @@ if action == "Explorar / Bulk":
             
             with col_exp:
                 status_icon = "✅" if getattr(q, 'is_verified', False) else "⏳"
-                display_title = f"{status_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
+                format_status = question_format_status(q)
+                format_icon = "OFICIAL" if format_status == OFFICIAL_LABEL else "PRACTICA" if format_status == PRACTICE_LABEL else "REVISAR"
+                display_title = f"{status_icon} {format_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
                 with st.expander(display_title):
+                    st.caption(f"Formato: {format_status}")
                     st.markdown(f"**Enunciado:**\n{q.stem}")
                     ops = q.options_json if q.options_json else {}
                     if ops:
