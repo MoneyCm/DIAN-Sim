@@ -16,6 +16,9 @@ from .utils import repair_and_parse_json
 
 
 class LLMGenerator:
+    DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+    GEMINI_MODEL_FALLBACKS = ("gemini-2.5-flash", "gemini-flash-latest")
+
     def __init__(self, provider: str, api_key: str, model_name: str = None, goa_mode: bool = True):
         self.provider = provider.lower()
         self.api_key = api_key.strip() if api_key else ""
@@ -298,15 +301,7 @@ class LLMGenerator:
                 
             elif self.provider == "gemini":
                 # v43 Mikey: New SDK candidates
-                candidates = [
-                    "gemini-2.0-flash-exp",
-                    "gemini-2.0-flash",
-                    "gemini-2.0-flash-001",
-                    "gemini-1.5-flash-002",
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro-002",
-                    "gemini-1.5-pro"
-                ]
+                candidates = list(self.GEMINI_MODEL_FALLBACKS)
                 
                 # If specialized model requested
                 if self.model_name:
@@ -484,7 +479,7 @@ class LLMGenerator:
                 return response.choices[0].message.content
                 
             elif self.provider == "gemini":
-                candidates = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
+                candidates = list(self.GEMINI_MODEL_FALLBACKS)
                 exp_content = ""
                 config = types.GenerateContentConfig(
                     safety_settings=[types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")]
@@ -566,14 +561,8 @@ class LLMGenerator:
                 content = response.choices[0].message.content
 
             elif self.provider == "gemini":
-                # v43 Mikey: Resiliency List with new SDK
-                candidates = [
-                    "gemini-2.0-flash",
-                    "gemini-1.5-flash",
-                    "gemini-2.0-flash-001",
-                    "gemini-pro",
-                    "gemini-1.5-pro"
-                ]
+                # Prefer a stable production model, with a maintained alias as fallback.
+                candidates = list(self.GEMINI_MODEL_FALLBACKS)
                 
                 config = types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -708,11 +697,11 @@ class LLMGenerator:
                 content = response.choices[0].message.content
                 
             elif self.provider == "gemini":
-                # Use Gemini 1.5 Flash for speed/context
+                model_name = (self.model_name or self.DEFAULT_GEMINI_MODEL).replace("models/", "")
                 config = types.GenerateContentConfig(response_mime_type="application/json")
                 try:
                     response = self.gemini_client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model=model_name,
                         contents=prompt,
                         config=config
                     )
@@ -720,7 +709,7 @@ class LLMGenerator:
                 except Exception as ex:
                      # Fallback to text if JSON mode fails
                      response = self.gemini_client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model=model_name,
                         contents=prompt + "\nRESPOND ONLY IN JSON."
                     )
                      content = response.text
@@ -839,7 +828,7 @@ class LLMGenerator:
                 content = response.choices[0].message.content
                 
             elif self.provider == "gemini":
-                candidates = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"]
+                candidates = list(self.GEMINI_MODEL_FALLBACKS)
                 config = types.GenerateContentConfig(
                     response_mime_type="application/json",
                     safety_settings=[
