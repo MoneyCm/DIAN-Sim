@@ -155,14 +155,10 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error fetching OPEC context: {e}")
 
-        # Fetch Normativa Context (RAG Phase 4)
+        # The supplied document is the only normative authority for question
+        # generation. Automatic RAG results can be useful for tutoring, but here
+        # they may introduce rules that are absent from the user's source.
         normativa_context = ""
-        try:
-            normativa = NormativaManager()
-            # Use topic or text preview as query
-            normativa_context = normativa.get_law_context(text[:500])
-        except Exception as e:
-            print(f"DEBUG: Error fetching normativa context: {e}")
 
         # Fetch Behavioral Competencies (Res 65) - v48 Mikey
         behavioral_context = ""
@@ -218,6 +214,8 @@ class LLMGenerator:
         REGLA DE ORO DE ENTIDAD:
         * El protagonista siempre trabaja para la DIAN (Dirección de Impuestos y Aduanas Nacionales).
         * NUNCA menciones a la CNSC (Comisión Nacional del Servicio Civil) como el empleador. La CNSC solo convoca el concurso externo, pero el rol laboral ocurre dentro de la DIAN.
+        * Usa EXCLUSIVAMENTE hechos, reglas y excepciones presentes en el TEXTO DE REFERENCIA.
+        * Si el texto no permite sustentar una pregunta, devuelve {{"questions": []}}. No completes vacíos con conocimiento externo.
         
         {opec_context}
         {normativa_context}
@@ -338,7 +336,7 @@ class LLMGenerator:
                         last_error = e
                         err_str = str(e)
                         if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                            print(f"⚠️ [429] Cuota excedida en {model_name}. Fallando para cambio de proveedor... Mikey v6.3")
+                            print(f"[429] Cuota excedida en {model_name}.")
                             raise e 
                         
                         print(f"DEBUG: Error Gemini {model_name}: {err_str[:100]}")
@@ -421,6 +419,11 @@ class LLMGenerator:
             if "429" in error_msg or "rate_limit_exceeded" in error_msg:
                 if self.provider == "groq":
                     raise Exception("Límite diario de Groq alcanzado (TPD). Por favor, espera a que se reinicie tu cuota o usa Google Gemini como alternativa gratuita más estable.")
+                if self.provider == "gemini":
+                    raise Exception(
+                        "La cuota diaria de Gemini está agotada. Espera a que se restablezca "
+                        "o selecciona Mistral en la configuración del generador."
+                    )
                 else:
                     raise Exception(f"Límite de velocidad (Rate Limit) alcanzado: {error_msg}")
             raise Exception(f"Fallo en lote: {error_msg}")

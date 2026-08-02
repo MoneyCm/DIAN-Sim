@@ -19,6 +19,8 @@ import io
 
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
+from core.generated_questions import candidate_issues, extract_candidates
+from core.user_keys import get_user_key, save_user_key
 
 # pass # Removed st.set_page_config
 
@@ -51,24 +53,34 @@ if not is_pro:
                 can_generate = False
 
 load_css()
-render_header(title="Generador de Preguntas con IA v5.2 (Mistral Fix)", subtitle="Crea material de estudio a partir de documentos")
+render_header(title="Generador de preguntas con IA", subtitle="Crea candidatos desde una fuente y revísalos antes de incorporarlos al banco")
 
-st.markdown("""
-<div class="dian-card">
-    Aquí puedes usar inteligencia artificial para crear preguntas a partir de tus propios documentos.
-</div>
-""", unsafe_allow_html=True)
+st.info(
+    "La IA crea borradores, no preguntas confiables automáticamente. Cada candidato queda "
+    "pendiente de revisión normativa antes de entrar al estudio activo."
+)
 
 with st.expander("🔐 Configuración de API Key", expanded=True):
-    col_prov, col_model = st.columns(2)
+    current_user_id = st.session_state.get("user_id")
+    provider_options = ["Gemini", "Mistral", "OpenAI", "Groq"]
+    configured = {
+        item: bool(get_user_key(current_user_id, item) or get_api_key(item))
+        for item in provider_options
+    }
+    default_provider = next((item for item in provider_options if configured[item]), "Gemini")
     col_prov, col_model = st.columns(2)
     with col_prov:
-        provider = st.selectbox("Proveedor", ["OpenAI", "Gemini", "Groq", "Mistral"])
+        provider = st.selectbox(
+            "Proveedor",
+            provider_options,
+            index=provider_options.index(default_provider),
+            format_func=lambda item: f"{item} {'· configurado' if configured[item] else '· sin clave'}",
+        )
     
     with col_model:
         models_map = {
             "OpenAI": ["gpt-4o-mini", "gpt-4o"],
-            "Gemini": ["gemini-flash-latest", "gemini-2.0-flash-001", "gemini-pro-latest"],
+            "Gemini": ["gemini-2.5-flash", "gemini-flash-latest"],
             "Groq": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
             "Mistral": ["mistral-large-latest", "mistral-small-latest"]
         }
@@ -78,9 +90,6 @@ with st.expander("🔐 Configuración de API Key", expanded=True):
 
     # Usar el nuevo sistema de carga persistente
     # Usar el nuevo sistema de carga persistente v5 (User-Secure)
-    from core.user_keys import get_user_key, save_user_key
-    
-    current_user_id = st.session_state.get("user_id")
     user_key_saved = get_user_key(current_user_id, provider) if current_user_id else None
     system_key_saved = get_api_key(provider) # Fallback system key
     
@@ -92,10 +101,11 @@ with st.expander("🔐 Configuración de API Key", expanded=True):
     
     with col_key:
         api_key_input = st.text_input(
-            f"API Key {provider}", 
-            value=effective_key_val if effective_key_val else "", 
-            type="password", 
-            help="Tu llave se guarda ENCRIPTADA en tu cuenta Personal."
+            f"Nueva API Key de {provider}",
+            value="",
+            type="password",
+            placeholder="Deja vacío para usar la clave ya configurada",
+            help="Solo escribe una clave si deseas reemplazar la actual.",
         )
         
         if active_key_source == "Personal":
@@ -120,12 +130,12 @@ with st.expander("🔐 Configuración de API Key", expanded=True):
             else:
                 st.warning("Escribe algo")
     
-    st.caption("🔒 **Seguridad v5:** Tus llaves se cifran (Fernet 256-bit) y solo tú puedes usarlas.")
+    st.caption("🔒 Las claves personales se almacenan cifradas y el campo nunca muestra la clave guardada.")
     if provider == "Groq":
         st.warning("⚠️ **Nota Groq:** Límite gratuito diario muy estricto. Recomendamos Gemini.")
         
     # Ensure api_key is available for the generator logic below
-    api_key = api_key_input
+    api_key = api_key_input.strip() or effective_key_val
 
 st.divider()
 
@@ -149,7 +159,18 @@ with col1:
         default_topic = st.session_state.get("ai_default_topic", "Gestor II")
         custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
         
-        num_q = st.slider("Cantidad de preguntas a generar", 1, 100, 10, key="num_q_temp", help="Recomendado: 10-30 para máxima calidad y evitar errores de tiempo de espera.")
+        num_q = st.select_slider(
+            "Cantidad de preguntas",
+            options=[1, 3, 5, 10, 15, 20],
+            value=5,
+            key="num_q_temp",
+            help="Genera lotes pequeños para revisar mejor y evitar tiempos de espera.",
+        )
+        source_reference = st.text_input(
+            "Referencia normativa de la fuente",
+            placeholder="Ej.: Estatuto Tributario, artículo 684",
+            help="Obligatoria para guardar. Identifica la norma, artículo o documento utilizado.",
+        )
         
         tab_text, tab_file, tab_json = st.tabs(["📋 Pegar Texto", "📂 Subir Archivo", "🧩 Importar JSON"])
         
@@ -198,14 +219,19 @@ with col1:
                         if not data:
                             st.error("Json Error")
                         else:
-                             # Simplified for brevity in replace - in real implementation ensuring indentation is correct
-                             pass 
-                    except: pass
+                            imported = extract_candidates(data, difficulty=2, source_ref=source_reference)
+                            if imported:
+                                st.session_state["generated_questions"] = imported
+                                st.success(f"{len(imported)} candidato(s) importado(s) para revisión.")
+                                st.rerun()
+                            else:
+                                st.error("El JSON no contiene preguntas reconocibles.")
+                    except Exception as exc:
+                        st.error(f"No se pudo importar el JSON: {exc}")
 
         source_text = st.session_state.get("ai_source_text", "")
         char_count = len(source_text)
         st.caption(f"Caracteres detectados: {char_count}")
-
         difficulty_p_val = st.session_state.get("ai_default_diff", 2)
         difficulty_map = {"Básico": 1, "Intermedio": 2, "Avanzado": 3}
         inv_difficulty_map = {value: label for label, value in difficulty_map.items()}
@@ -217,7 +243,7 @@ with col1:
         difficulty_value = difficulty_map[difficulty_label]
 
         goa_mode = st.toggle(
-            "📄 Usar contexto situacional individual (prÃ¡ctica)",
+            "📄 Generar preguntas situacionales",
             value=True,
             help="Si se desactiva, las preguntas serán técnicas directas en lugar de casos situacionales.",
         )
@@ -229,7 +255,8 @@ with col1:
             generate_btn = False
         else:
             if not is_pro:
-                st.caption(f"🎁 Te quedan **{3 - user_stats.ia_count_today}** generaciones gratuitas hoy.")
+                remaining_free = 3 - int(user_stats.ia_count_today or 0) if user_stats else 3
+                st.caption(f"🎁 Te quedan **{remaining_free}** generaciones gratuitas hoy.")
             generate_btn = st.button("✨ Generar Preguntas", type="primary", use_container_width=True)
 
     else:
@@ -287,8 +314,13 @@ st.sidebar.markdown(f"""
 if generate_btn:
     if not api_key:
         st.error("🔑 Falta la API Key. Por favor, ingrésala en la sección de configuración arriba.")
-    elif not source_text or len(source_text) < 10:
-        st.warning("📋 El texto de origen está vacío o es muy corto. Pega algún contenido o sube un archivo para generar preguntas.")
+    elif not source_text or len(source_text) < 500:
+        st.warning(
+            "📋 El texto de origen es insuficiente. Aporta al menos 500 caracteres "
+            "para sustentar un caso situacional sin inventar reglas o procedimientos."
+        )
+    elif not source_reference.strip():
+        st.warning("📚 Indica la referencia normativa antes de generar preguntas.")
     else:
         with st.spinner("Analizando texto y creando preguntas... (Esto puede tardar unos segundos)"):
             try:
@@ -320,10 +352,14 @@ if generate_btn:
                 
                 prog_bar.progress(100, text="¡Generación completada!")
                 
+                results = extract_candidates(
+                    results, difficulty=difficulty_value, source_ref=source_reference
+                )
                 # Apply Custom Topic Override
                 if results and custom_topic.strip():
                     for q in results:
                         q['topic'] = custom_topic.strip()
+                        q['source_refs'] = source_reference.strip()
                 
                 st.session_state["generated_questions"] = results
                 
@@ -403,14 +439,17 @@ with col2:
                 
                 # Check Duplicates
                 exists = check_duplicate(q['hash_norm'])
+                issues = candidate_issues(q, st.session_state.get("ai_source_text", ""))
                 if exists:
                     st.warning("⚠️ Ya existe en el banco.")
+                elif issues:
+                    st.error("No se puede guardar: " + "; ".join(issues))
                 else:
                     if st.checkbox("Incluir en el guardado", key=f"save_{i}", value=True):
                         indices_to_save.append(i)
         
         st.divider()
-        if st.button("💾 Guardar Seleccionadas en Banco", type="primary", use_container_width=True, disabled=not indices_to_save):
+        if st.button("💾 Guardar como candidatos pendientes", type="primary", use_container_width=True, disabled=not indices_to_save):
             from db.session import SessionLocal
             import datetime
             db = SessionLocal()
@@ -441,7 +480,16 @@ with col2:
                             options_json=data.get('options_json'),
                             correct_key=data.get('correct_key'),
                             rationale=data.get('rationale'),
-                            source_refs=data.get('source_refs', 'IA'),
+                            source_refs=data.get('source_refs'),
+                            question_type="SITUATIONAL" if str(data.get("stem", "")).upper().startswith("SITUACIÓN:") else "DIRECT",
+                            is_verified=False,
+                            quality_report={
+                                "status": "PENDING_REVIEW",
+                                "review": "reinforcement_candidate",
+                                "origin": "ai_text_generator",
+                                "provider": provider,
+                                "model": model_name,
+                            },
                             created_at=datetime.datetime.utcnow(),
                             hash_norm=h
                         )
