@@ -12,6 +12,7 @@ from db.session import SessionLocal
 from db.models import Question
 from ui_utils import load_css, render_header, metric_card, render_custom_sidebar, render_favorite_button
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
+from core.legacy_question_audit import is_safe_for_active_study
 from services.stats_service import StatsService
 
 from core.auth import AuthManager
@@ -110,7 +111,11 @@ if user_id:
             try:
                 # Find a reference from the bank for this topic
                 db_ref = SessionLocal()
-                ref_q = db_ref.query(Question).filter(Question.topic == top_weak.topic).filter(Question.source_refs != None).first()
+                topic_refs = db_ref.query(Question).filter(
+                    Question.topic == top_weak.topic,
+                    Question.source_refs != None,
+                ).all()
+                ref_q = next((item for item in topic_refs if is_safe_for_active_study(item)), None)
                 if ref_q and ref_q.source_refs:
                     st.markdown(f"> **📖 Lectura Prioritaria:**  \n*{ref_q.source_refs}*")
                 else:
@@ -119,9 +124,15 @@ if user_id:
             except:
                 pass
             
-            if st.button("💊 Generar Refuerzo (Solo Fallos)", key="btn_refuerzo", type="primary"):
-                 st.toast("Iniciando generador focalizado...", icon="🤖")
-                 # Future: Redirect to specific generator config
+            if st.button("💊 Crear refuerzo de mi debilidad", key="btn_refuerzo", type="primary"):
+                 source_context = ""
+                 if 'ref_q' in locals() and ref_q:
+                     source_context = f"{ref_q.source_refs or ''}\n{ref_q.rationale or ''}".strip()
+                 st.session_state["ai_reinforcement_topic"] = top_weak.topic
+                 st.session_state["ai_reinforcement_source_context"] = source_context
+                 st.session_state["ai_default_topic"] = top_weak.topic
+                 st.session_state["ai_default_diff"] = 3 if top_weak.mastery_score < 40 else 2
+                 st.switch_page("pages/4_Generador_IA.py")
     else:
         st.success("¡Tu mapa de calor está verde! Sigue así.")
 else:

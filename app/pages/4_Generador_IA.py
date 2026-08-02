@@ -135,6 +135,7 @@ with col1:
     
     # --- RECEPCIÓN DE REFUERZOS DESDE SIMULACRO REAL (v6.0) ---
     reinforcement_topic = st.session_state.get("ai_reinforcement_topic", None)
+    reinforcement_source_context = st.session_state.get("ai_reinforcement_source_context", "")
     default_gen_idx = 1 if reinforcement_topic else 0 # 1 is Case Study
     
     # --- MODE SELECTION v5.0 ---
@@ -252,11 +253,18 @@ with col1:
         if generate_cs_btn:
              if not api_key:
                 st.error("Falta API Key")
+             elif reinforcement_topic and not reinforcement_source_context:
+                st.error("No hay una fuente verificada para esta debilidad. Adjunta primero la norma oficial en modo Texto/PDF.")
              else:
                 with st.spinner("Creando narrativa y preguntas..."):
                     try:
                         generator = LLMGenerator(provider, api_key, model_name=model_name)
-                        result = generator.generate_case_study(cs_topic, cs_num, cs_diff)
+                        result = generator.generate_case_study(
+                            cs_topic,
+                            cs_num,
+                            cs_diff,
+                            source_context=reinforcement_source_context,
+                        )
                         st.session_state["generated_case"] = result
                         st.success("¡Caso Generado!")
                         st.rerun()
@@ -475,6 +483,8 @@ with col2:
         case_is_official = is_official_functional_payload(case_data)
         if not case_is_official:
             st.error("El caso generado no cumple el formato oficial: debe contener exactamente 3 enunciados funcionales, cada uno con opciones A, B y C y una clave valida.")
+        else:
+            st.warning("Candidato pendiente de revisión normativa. Guardarlo no lo habilita automáticamente para el simulacro ni el estudio activo.")
         
         with st.container(border=True):
             st.markdown(f"### 📂 {case_data.get('title', 'Sin Título')}")
@@ -517,6 +527,9 @@ with col2:
                     # Ensure competency is not null (DB Constraint)
                     micro_comp = q.get('micro_competencia') or q.get('competency') or "General"
                     macro_dom = q.get('macro_dominio') or "Transversal"
+                    question_hash = compute_hash(q.get("stem", ""))
+                    if db.query(Question).filter_by(hash_norm=question_hash).first():
+                        raise ValueError("El caso contiene una pregunta que ya existe en el banco.")
                     
                     new_q = Question(
                         competition_id=get_active_competition_id(db, st.session_state.get("user_id")),
@@ -536,7 +549,14 @@ with col2:
                         micro_competencia=micro_comp,
                         macro_dominio=macro_dom,
                         
-                        hash_norm=str(uuid.uuid4()) # Unique hash for these
+                        source_refs=q.get("source_ref") or reinforcement_source_context or "Candidato generado por IA",
+                        is_verified=False,
+                        quality_report={
+                            "status": "PENDING_REVIEW",
+                            "review": "reinforcement_candidate",
+                            "weak_topic": reinforcement_topic,
+                        },
+                        hash_norm=question_hash
                     )
                     db.add(new_q)
                     count_q += 1
