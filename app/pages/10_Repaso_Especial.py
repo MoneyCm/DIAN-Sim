@@ -1,6 +1,7 @@
 import datetime
 import os
 import sys
+from collections import Counter
 
 import streamlit as st
 from sqlalchemy import and_, or_
@@ -31,6 +32,7 @@ ERROR_TYPES = {
     "No vi una palabra clave": "lectura_incompleta",
     "Respondí con afán": "apuro",
 }
+ERROR_LABELS = {value: label for label, value in ERROR_TYPES.items()}
 
 
 if not AuthManager.check_auth():
@@ -74,6 +76,13 @@ with review_tab:
         "Tu respuesta, seguridad y tipo de error determinan cuándo volverás a ver cada pregunta."
     )
 
+    review_day = datetime.date.today().isoformat()
+    if st.session_state.get("native_review_day") != review_day:
+        st.session_state["native_review_day"] = review_day
+        st.session_state["native_review_completed"] = 0
+        st.session_state.pop("native_review_target", None)
+        st.session_state.pop("voluntary_review_ids", None)
+
     queue_db = SessionLocal()
     try:
         due_rows = queue_db.query(QuestionPerformance).join(Question).filter(
@@ -91,17 +100,48 @@ with review_tab:
             QuestionPerformance.misses.desc(),
         ).limit(20).all()
         review_queue = [row.question_id for row in due_rows]
+        upcoming_rows = queue_db.query(QuestionPerformance).join(Question).filter(
+            Question.competition_id == competition_id,
+            QuestionPerformance.user_id == user_id,
+            QuestionPerformance.next_review > now,
+        ).order_by(QuestionPerformance.next_review.asc()).all()
+        voluntary_ids = list(st.session_state.get("voluntary_review_ids", []))
+        if not review_queue and voluntary_ids:
+            review_queue = voluntary_ids[:20]
     finally:
         queue_db.close()
 
-    review_day = datetime.date.today().isoformat()
-    if st.session_state.get("native_review_day") != review_day:
-        st.session_state["native_review_day"] = review_day
-        st.session_state["native_review_completed"] = 0
     if not review_queue:
-        st.success("No tienes repasos vencidos. Vuelve mañana o continúa con tu plan diario.")
-        if st.button("Ir al Dashboard", type="primary"):
-            st.switch_page("pages/6_Dashboard.py")
+        st.success("No tienes repasos vencidos hoy.")
+        if upcoming_rows:
+            next_review = upcoming_rows[0].next_review
+            st.metric("Repasos programados", len(upcoming_rows))
+            st.caption(
+                f"Próximo repaso: {next_review.strftime('%d/%m/%Y')} · "
+                "hasta entonces puedes continuar con el plan diario."
+            )
+        else:
+            st.caption("Aún no hay repasos programados. Se crearán al responder y corregir preguntas.")
+
+        optional_db = SessionLocal()
+        try:
+            optional_ids = [row.question_id for row in optional_db.query(QuestionPerformance).join(Question).filter(
+                Question.competition_id == competition_id,
+                QuestionPerformance.user_id == user_id,
+                QuestionPerformance.misses > 0,
+            ).order_by(QuestionPerformance.misses.desc()).limit(5).all()]
+        finally:
+            optional_db.close()
+        action_cols = st.columns(2)
+        with action_cols[0]:
+            if optional_ids and st.button("Repasar 5 errores ahora", use_container_width=True):
+                st.session_state["voluntary_review_ids"] = optional_ids
+                st.session_state["native_review_completed"] = 0
+                st.session_state["native_review_target"] = len(optional_ids)
+                st.rerun()
+        with action_cols[1]:
+            if st.button("Continuar plan diario", type="primary", use_container_width=True):
+                st.switch_page("pages/6_Dashboard.py")
     else:
         current_question_id = review_queue[0]
         review_db = SessionLocal()
@@ -116,8 +156,11 @@ with review_tab:
                 st.rerun()
 
             completed = int(st.session_state.get("native_review_completed", 0))
-            st.progress(completed / 20)
-            st.caption(f"Repaso {completed + 1} de hasta 20 · Tema: {question.topic}")
+            target = int(st.session_state.get("native_review_target") or (completed + len(review_queue)))
+            target = max(1, min(20, target))
+            st.session_state["native_review_target"] = target
+            st.progress(min(completed / target, 1.0))
+            st.caption(f"Repaso {completed + 1} de {target} · Tema: {question.topic}")
             st.markdown(f"### {question.stem}")
 
             option_keys = list(question.options_json.keys())
@@ -226,6 +269,11 @@ with review_tab:
                         icon="✅",
                     )
                     st.session_state["native_review_completed"] = completed + 1
+                    if st.session_state.get("voluntary_review_ids"):
+                        st.session_state["voluntary_review_ids"] = [
+                            item for item in st.session_state["voluntary_review_ids"]
+                            if item != question.question_id
+                        ]
                     st.session_state.pop("native_review_feedback", None)
                     st.rerun()
 
@@ -244,6 +292,15 @@ with errors_tab:
         ).order_by(QuestionPerformance.misses.desc()).limit(50).all()
         if not error_rows:
             st.success("No tienes errores registrados.")
+        error_causes = Counter(
+            row.last_error_type for row in error_rows if row.last_error_type
+        )
+        if error_causes:
+            most_common_code, most_common_count = error_causes.most_common(1)[0]
+            st.info(
+                f"Causa más repetida: **{ERROR_LABELS.get(most_common_code, most_common_code)}** "
+                f"en {most_common_count} pregunta(s)."
+            )
         for row in error_rows:
             question = errors_db.get(Question, row.question_id)
             if question:
@@ -256,7 +313,10 @@ with errors_tab:
                     st.write(question.stem)
                     st.info(question.rationale or "Sin explicación registrada.")
                     if row.last_error_type:
-                        st.caption(f"Última causa detectada: {row.last_error_type}")
+                        st.caption(
+                            "Última causa detectada: "
+                            f"{ERROR_LABELS.get(row.last_error_type, row.last_error_type)}"
+                        )
     finally:
         errors_db.close()
 
