@@ -4,6 +4,7 @@ import argparse
 import uuid
 
 from core.curated_gap_cases import CURATED_GAP_CASES
+from core.curated_gap_cases_phase2 import CURATED_GAP_CASES_PHASE2
 from core.dedupe import compute_hash
 from db.models import CaseStudy, Question
 from db.session import SessionLocal
@@ -13,7 +14,7 @@ def seed(apply: bool = False) -> tuple[int, int]:
     db = SessionLocal()
     cases_added = questions_added = 0
     try:
-        for data in CURATED_GAP_CASES:
+        for data in CURATED_GAP_CASES + CURATED_GAP_CASES_PHASE2:
             case_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data["id"]))
             case = db.get(CaseStudy, case_id)
             if case is None:
