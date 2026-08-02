@@ -34,16 +34,17 @@ ethics_path = os.path.join(PROJECT_ROOT, "data", "codigo_etica_dian.json")
 with open(ethics_path, "r", encoding="utf-8") as f:
     ethics_data = json.load(f)
 
-st.markdown("""
-<div class="dian-card">
-    <h3>📋 Sobre esta evaluación</h3>
-    <p>Este módulo practica decisiones relacionadas con <b>Ética e Integridad</b>. Su formato y
-    ponderación deben confirmarse en la guía oficial del proceso vigente; los resultados aquí son
-    formativos y no predicen por sí solos el puntaje del examen.</p>
-    
-    <p><b>Valores Institucionales DIAN:</b> Honestidad, Respeto, Compromiso, Diligencia, Justicia, Transparencia</p>
-</div>
-""", unsafe_allow_html=True)
+with st.container(border=True):
+    st.subheader("📋 Sobre esta práctica")
+    st.write(
+        "Este módulo entrena decisiones relacionadas con **Ética e Integridad**. "
+        "Su formato y ponderación deben confirmarse en la guía oficial del proceso vigente; "
+        "los resultados son formativos y no predicen por sí solos el puntaje del examen."
+    )
+    st.markdown(
+        "**Valores institucionales:** Honestidad · Respeto · Compromiso · "
+        "Diligencia · Justicia · Transparencia"
+    )
 
 st.divider()
 
@@ -70,18 +71,27 @@ if mode == "📖 Aprender Código de Ética":
     for criterio, descripcion in ethics_data["respuestas_correctas"]["criterios"].items():
         st.markdown(f"**{criterio.replace('_', ' ').title()}:** {descripcion}")
 
-else:  # Simulacro mode
-    st.subheader("✍️ Práctica de Integridad")
-    
+else:
     # Configuration
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        categoria = st.selectbox("Categoría:", 
-            ["Todas"] + [s["categoria"] for s in ethics_data["situaciones_eticas_comunes"]])
-    with col2:
-        num_preguntas = st.slider("Número de preguntas:", 5, 30, 12)
-    with col3:
-        use_ai = st.toggle("🤖 Generar con IA", value=False, help="Usa IA para generar afirmaciones nuevas y adaptativas")
+    with st.container(border=True):
+        st.markdown("**Configura una sesión breve**")
+        col1, col2 = st.columns(2)
+        with col1:
+            categoria = st.selectbox("Categoría",
+                ["Todas"] + [s["categoria"] for s in ethics_data["situaciones_eticas_comunes"]])
+        with col2:
+            num_preguntas = st.select_slider(
+                "Duración",
+                options=[5, 10, 12, 15, 20, 25, 30],
+                value=10,
+                format_func=lambda value: f"{value} afirmaciones",
+            )
+        use_ai = st.toggle(
+            "Generar afirmaciones adicionales con IA",
+            value=False,
+            help="Opcional. El banco estático funciona sin consumir créditos de IA.",
+        )
+        st.caption("Recomendado: 10 afirmaciones, sin IA, para una práctica breve.")
     
     if st.button("🚀 Iniciar práctica de integridad", type="primary", use_container_width=True):
         for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
