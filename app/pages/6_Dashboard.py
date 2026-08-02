@@ -33,7 +33,8 @@ build_hybrid_remaining_daily_plan = getattr(
     adaptive_engine.build_remaining_daily_plan,
 )
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
-from core.motivation import build_weekly_progress, coverage_percent, topic_status
+from core.motivation import build_weekly_progress, coverage_percent
+from core.coverage import build_coverage_rows
 from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
@@ -299,26 +300,52 @@ try:
             st.balloons()
             st.toast("Sesión terminada. Hoy cumpliste lo importante.", icon="✅")
 
-    with st.expander("🗺️ Mapa de avance del temario", expanded=False):
+    with st.expander("🗺️ Control de cobertura de la OPEC", expanded=False):
         st.caption(
-            "El color refleja práctica y dominio, no solo lectura. "
-            "La cobertura aumenta cuando respondes preguntas del tema."
+            "Separa disponibilidad del banco, revisión de calidad y evidencia personal. "
+            "No equivale a una certificación oficial de cobertura de la ficha."
         )
-        topic_rows = []
-        for key in candidate_topic_keys:
-            skill = daily_skills_map.get(key)
-            mastery = float(skill.mastery_score or 0.0) if skill else 0.0
-            attempts = topic_attempts.get(key, 0)
-            label, icon = topic_status(mastery, attempts)
-            topic_rows.append((attempts == 0, mastery, key, label, icon, attempts))
-        topic_rows.sort(key=lambda row: (row[0], row[1], row[2][2]))
-        for _, mastery, key, label, icon, attempts in topic_rows[:15]:
-            st.write(
-                f"{icon} **{key[2]}** · {label} · "
-                f"dominio {mastery:.0f}% · {attempts} intento(s)"
+        opec_functions = active_opec.functions if active_opec and isinstance(active_opec.functions, list) else []
+        ficha_cols = st.columns(3)
+        ficha_cols[0].metric("Propósito cargado", "Sí" if active_opec and active_opec.purpose else "No")
+        ficha_cols[1].metric("Funciones cargadas", len(opec_functions))
+        ficha_cols[2].metric("Preguntas aptas", len(daily_candidates))
+        if not active_opec or not active_opec.purpose or not opec_functions:
+            st.warning(
+                "La ficha de la OPEC está incompleta. Agrega propósito y funciones en "
+                "Configuración OPEC antes de interpretar la cobertura."
             )
-        if len(topic_rows) > 15:
-            st.caption(f"Mostrando 15 de {len(topic_rows)} temas del concurso activo.")
+
+        coverage_rows = build_coverage_rows(daily_candidates, daily_performances)
+        if coverage_rows:
+            coverage_df = pd.DataFrame([{
+                "Macrodominio": row["area"],
+                "Preguntas aptas": row["questions"],
+                "Revisión reforzada": row["trusted"],
+                "Temas": row["topics"],
+                "Temas evaluados": row["evaluated_topics"],
+                "Estado": row["status"],
+            } for row in coverage_rows])
+            st.dataframe(coverage_df, hide_index=True, width="stretch")
+            bank_gaps = [row for row in coverage_rows if row["status"] in {"Faltan preguntas", "Revisar calidad"}]
+            practice_gaps = [row for row in coverage_rows if row["status"] in {"Pendiente de práctica", "Cobertura parcial"}]
+            if bank_gaps:
+                st.warning("Brecha del banco: " + ", ".join(row["area"] for row in bank_gaps))
+            if practice_gaps:
+                st.info("Brecha de práctica: " + ", ".join(row["area"] for row in practice_gaps))
+            action_cols = st.columns(3)
+            with action_cols[0]:
+                st.page_link("pages/7_Configuracion_OPEC.py", label="Revisar ficha OPEC", icon="📋", width="stretch")
+            with action_cols[1]:
+                st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar cobertura", icon="▶️", width="stretch")
+            with action_cols[2]:
+                st.page_link("pages/4_Generador_IA.py", label="Cubrir brecha del banco", icon="🤖", width="stretch")
+            st.caption(
+                "Criterios: al menos 5 preguntas aptas por macrodominio y 3 respuestas por tema. "
+                "La revisión reforzada exige verificación y fuente registrada."
+            )
+        else:
+            st.info("No hay preguntas aptas clasificadas para construir el control de cobertura.")
 
     # 1. User Stats & Mastery
     stats = db.query(UserStats).filter_by(user_id=u_id).first()
