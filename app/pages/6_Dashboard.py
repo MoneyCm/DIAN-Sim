@@ -578,12 +578,12 @@ try:
         else:
             st.info("No hay habilidades configuradas todavía.")
 
-    # 5. Vitrina de Trofeos y Ranking Global
+    # 5. Logros personales y siguiente meta
     col_v1, col_v2 = st.columns([2, 1])
 
     with col_v1:
         st.markdown('<div class="dian-card">', unsafe_allow_html=True)
-        st.subheader("🏆 Tu Vitrina de Trofeos")
+        st.subheader("🏆 Logros Personales")
 
         achievements = db.query(Achievement).filter_by(user_id=u_id).all()
         if achievements:
@@ -597,36 +597,50 @@ try:
                     </div>
                     """, unsafe_allow_html=True)
         else:
-            st.write("Aún no tienes trofeos. ¡Sigue estudiando para desbloquearlos!")
+            st.write("Completa tu primera sesión para desbloquear el primer logro.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_v2:
         st.markdown('<div class="dian-card">', unsafe_allow_html=True)
-        st.subheader("🥇 Ranking Global")
-        
-        # Pre-fetch for ranking
-        all_stats = db.query(UserStats).join(User).order_by(UserStats.total_points.desc()).limit(10).all()
-        
-        for i, s in enumerate(all_stats):
-            is_me = s.user_id == u_id
-            bg = "rgba(230, 0, 0, 0.1)" if is_me else "transparent"
-            icon = ["🥇", "🥈", "🥉"][i] if i < 3 else "🎖️"
-            
-            st.markdown(f"""
-            <div style="display: flex; justify-content: space-between; padding: 5px 10px; border-radius: 5px; background: {bg}; border-bottom: 1px solid rgba(0,0,0,0.05);">
-                <span>{icon} {s.user.username}</span>
-                <span style="font-weight: 800;">{s.total_points} PTS</span>
-            </div>
-            """, unsafe_allow_html=True)
+        st.subheader("🎯 Próximo Logro")
+        streak = int(stats.current_streak or 0)
+        points = int(stats.total_points or 0)
+        unlocked_names = {item.name for item in achievements}
+        if "Constancia" not in unlocked_names:
+            target_label = "Constancia"
+            target_detail = "Estudia 3 días seguidos"
+            target_progress = min(streak / 3, 1.0)
+            target_value = f"{streak}/3 días"
+        elif "Imparable" not in unlocked_names:
+            target_label = "Imparable"
+            target_detail = "Alcanza una racha de 7 días"
+            target_progress = min(streak / 7, 1.0)
+            target_value = f"{streak}/7 días"
+        elif "Veterano" not in unlocked_names:
+            target_label = "Veterano"
+            target_detail = "Acumula 1.500 puntos"
+            target_progress = min(points / 1500, 1.0)
+            target_value = f"{points}/1.500 pts"
+        else:
+            target_label = "Perfección"
+            target_detail = "Logra 10 respuestas correctas consecutivas"
+            target_progress = 0.0
+            target_value = "Nuevo desafío"
+        st.markdown(f"**{target_label}**")
+        st.caption(target_detail)
+        st.progress(target_progress)
+        st.caption(target_value)
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 6. Herramientas Administrativas
-    st.divider()
-    st.subheader("🛠️ Herramientas de Exportación")
+    is_admin_user = AuthManager.is_admin()
+    if is_admin_user:
+        st.divider()
+        st.subheader("🛠️ Respaldo administrativo del banco")
 
     all_qs = db.query(Question).filter(
         Question.competition_id == active_competition_id
-    ).all()
+    ).all() if is_admin_user else []
 
     if all_qs:
         export_data = []
@@ -691,15 +705,22 @@ try:
             )
             st.caption("Formato compatible con Copiar/Pegar (delimitado por |).")
 
-    else:
+    elif is_admin_user:
         st.warning("El banco está vacío. No hay datos para exportar.")
 
     st.divider()
-    st.subheader("🎴 Exportar a Anki (Flashcards)")
-    st.markdown("""
-    Exporta tus **preguntas falladas** o **favoritas** para importarlas a **Anki** y repasar de forma espaciada.
-    El archivo generado es un CSV estructurado con formato HTML para que tus tarjetas se vean limpias y profesionales en la aplicación.
-    """)
+    st.subheader("📦 Repaso fuera de DIAN Sim (opcional)")
+    st.caption(
+        "DIAN Sim ya programa tus repasos automáticamente. Usa Anki solamente si deseas "
+        "estudiar sin conexión o conservar una copia externa."
+    )
+    show_anki_tools = st.toggle("Mostrar exportación avanzada a Anki", value=False)
+    if not show_anki_tools:
+        st.info("Recomendado: continúa con **Repasos de hoy** dentro de la aplicación.")
+        db.close()
+        st.stop()
+
+    st.subheader("🎴 Exportar a Anki")
 
     # 1. Obtener preguntas falladas (Intentos incorrectos) - Obteniendo IDs primero para evitar DISTINCT sobre columnas JSON en Postgres
     failed_q_ids = db.query(Attempt.question_id).filter(
