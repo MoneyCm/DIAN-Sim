@@ -6,16 +6,42 @@ import uuid
 from core.curated_gap_cases import CURATED_GAP_CASES
 from core.curated_gap_cases_phase2 import CURATED_GAP_CASES_PHASE2
 from core.curated_gap_cases_phase3 import CURATED_GAP_CASES_PHASE3
+from core.curated_gap_cases_phase4 import CURATED_GAP_CASES_PHASE4
+from core.curated_gap_cases_phase5 import CURATED_GAP_CASES_PHASE5
 from core.dedupe import compute_hash
 from db.models import CaseStudy, Question
 from db.session import SessionLocal
+
+
+def balanced_question(item: dict, index: int) -> tuple[dict, str]:
+    """Rotate options so every case has one A, one B and one C key."""
+    target = ("A", "B", "C")[index]
+    options = item["options"]
+    correct_text = options[item["correct_key"]]
+    wrong = [text for key, text in options.items() if key != item["correct_key"]]
+    rotated = {}
+    wrong_index = 0
+    for key in ("A", "B", "C"):
+        if key == target:
+            rotated[key] = correct_text
+        else:
+            rotated[key] = wrong[wrong_index]
+            wrong_index += 1
+    return rotated, target
 
 
 def seed(apply: bool = False) -> tuple[int, int]:
     db = SessionLocal()
     cases_added = questions_added = 0
     try:
-        for data in CURATED_GAP_CASES + CURATED_GAP_CASES_PHASE2 + CURATED_GAP_CASES_PHASE3:
+        all_cases = (
+            CURATED_GAP_CASES
+            + CURATED_GAP_CASES_PHASE2
+            + CURATED_GAP_CASES_PHASE3
+            + CURATED_GAP_CASES_PHASE4
+            + CURATED_GAP_CASES_PHASE5
+        )
+        for data in all_cases:
             case_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data["id"]))
             case = db.get(CaseStudy, case_id)
             if case is None:
@@ -29,9 +55,16 @@ def seed(apply: bool = False) -> tuple[int, int]:
                 )
                 db.add(case)
                 cases_added += 1
-            for item in data["questions"]:
+            for index, item in enumerate(data["questions"]):
+                options, correct_key = balanced_question(item, index)
                 hash_norm = compute_hash(item["stem"])
-                if db.query(Question).filter_by(hash_norm=hash_norm).first():
+                existing = db.query(Question).filter_by(hash_norm=hash_norm).first()
+                if existing:
+                    existing.options_json = options
+                    existing.correct_key = correct_key
+                    existing.rationale = item["rationale"]
+                    existing.source_refs = item["source_ref"]
+                    existing.is_verified = True
                     continue
                 db.add(Question(
                     question_id=str(uuid.uuid4()),
@@ -45,8 +78,8 @@ def seed(apply: bool = False) -> tuple[int, int]:
                     difficulty=data["difficulty"],
                     question_type="SITUATIONAL",
                     stem=item["stem"],
-                    options_json=item["options"],
-                    correct_key=item["correct_key"],
+                    options_json=options,
+                    correct_key=correct_key,
                     rationale=item["rationale"],
                     source_refs=item["source_ref"],
                     is_verified=True,
