@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os, sys, uuid, datetime, io, time
+from collections import Counter
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -20,6 +21,7 @@ from core.competitions import get_active_competition_id
 from core.exam_format import (
     OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL, question_format_status,
 )
+from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
@@ -82,9 +84,29 @@ if action == "Consultar banco":
     pending_query = db.query(Question)
     if competition_id is not None:
         pending_query = pending_query.filter(Question.competition_id == competition_id)
-    pending_reinforcements = sum(
-        1 for item in pending_query.all() if is_reinforcement_candidate(item)
-    )
+    bank_items = pending_query.all()
+    pending_reinforcements = sum(is_reinforcement_candidate(item) for item in bank_items)
+    safe_items = sum(is_safe_for_active_study(item) for item in bank_items)
+    official_items = sum(question_format_status(item) == OFFICIAL_LABEL for item in bank_items)
+    review_items = sum(question_format_status(item) == REVIEW_LABEL for item in bank_items)
+    if is_admin_user:
+        bank_cols = st.columns(4)
+        bank_cols[0].metric("Banco total", len(bank_items))
+        bank_cols[1].metric(
+            "Aptas para estudiar", safe_items,
+            help="Preguntas con fuente revisada o una decisión conservadora de auditoría.",
+        )
+        bank_cols[2].metric("Casos GOA", official_items)
+        bank_cols[3].metric("Requieren revisión", review_items)
+        key_counts = Counter(item.correct_key for item in bank_items if item.correct_key)
+        dominant_key, dominant_count = key_counts.most_common(1)[0] if key_counts else (None, 0)
+        dominant_pct = dominant_count * 100 / len(bank_items) if bank_items else 0
+        if dominant_pct >= 60:
+            st.warning(
+                f"Sesgo psicométrico: la opción {dominant_key} es correcta en "
+                f"{dominant_count} de {len(bank_items)} preguntas ({dominant_pct:.0f}%). "
+                "No se corregirá cambiando letras mecánicamente; exige reescritura y revisión."
+            )
     if is_admin_user and pending_reinforcements:
         st.info(
             f"🧪 Hay **{pending_reinforcements} refuerzos generados** pendientes de revisión. "
@@ -262,7 +284,14 @@ if action == "Consultar banco":
         )
         offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
         questions = filtered[offset:offset+PAGE_SIZE]
-        st.info(f"🎯 **Enfoque OPEC:** Filtrando **{total_count}** preguntas pertinentes para tu cargo.")
+        if is_admin_user:
+            visible_safe = sum(is_safe_for_active_study(item) for item in filtered)
+            st.info(
+                f"🎯 **Concurso activo:** {total_count} registros coinciden con los filtros; "
+                f"{visible_safe} están habilitados para estudio."
+            )
+        else:
+            st.info(f"🎯 **Enfoque OPEC:** {total_count} preguntas aptas para tu preparación.")
     else:
         # Búsqueda global estándar (SQL)
         query = db.query(Question).filter(Question.competition_id == competition_id)
@@ -275,7 +304,6 @@ if action == "Consultar banco":
         
         filtered = query.all()
         if not is_admin_user:
-            from core.legacy_question_audit import is_safe_for_active_study
             filtered = [q for q in filtered if is_safe_for_active_study(q)]
         filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
         if format_f != "Todos":
