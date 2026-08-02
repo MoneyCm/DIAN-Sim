@@ -1,5 +1,5 @@
 import streamlit as st
-import os, sys
+import os, sys, time
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -102,19 +102,25 @@ if not AuthManager.check_auth():
 # UI Setup
 load_css()
 render_custom_sidebar()
-render_header(title="Práctica por Temas", subtitle="Configura los parámetros de tu sesión de estudio")
+render_header(title="Práctica por Temas", subtitle="Elige una sesión breve y enfócate en una habilidad")
 
 with st.container():
     st.markdown('<div class="dian-card">', unsafe_allow_html=True)
     
     # Tabs for Mode
-    tab_manual, tab_profile, tab_opec = st.tabs(["🎛️ Configuración Manual", "👤 Preparación por Cargo", "🎯 Mi Meta OPEC"])
+    tab_opec, tab_manual, tab_profile = st.tabs([
+        "✨ Práctica recomendada", "⚙️ Personalizar", "🧭 Otro cargo",
+    ])
     
     # --- MANUAL MODE ---
     with tab_manual:
         with st.form("manual_sim_form"):
-            st.markdown("**Configuración de Sesión**")
-            num_questions = st.slider("Cantidad de preguntas", 5, 200, 20, key="num_q_manual")
+            st.markdown("**Duración de la práctica**")
+            num_questions = st.select_slider(
+                "Cantidad de preguntas", options=[5, 10, 15, 20], value=10,
+                format_func=lambda value: f"{value} preguntas · aprox. {max(8, value * 2)} min",
+                key="num_q_manual",
+            )
             
             st.markdown("<br>**Filtros Opcionales** (Dejar vacío para incluir todo)", unsafe_allow_html=True)
             
@@ -136,21 +142,30 @@ with st.container():
 
             col1, col2 = st.columns(2)
             with col1:
-                track_filter = st.multiselect("Eje (Track)", sorted(all_tracks))
-                difficulty_filter = st.multiselect("Dificultad", [1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x])
+                track_filter = st.multiselect("Eje", sorted(all_tracks), placeholder="Todos los ejes")
+                difficulty_filter = st.multiselect(
+                    "Dificultad", [1, 2, 3], placeholder="Todos los niveles",
+                    format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x],
+                )
             with col2:
-                competency_filter = st.multiselect("Competencia", sorted(all_competencies))
+                competency_filter = st.multiselect(
+                    "Competencia", sorted(all_competencies), placeholder="Todas las competencias"
+                )
             
-            topic_filter = st.multiselect("Tema Específico", sorted(all_topics))
+            topic_filter = st.multiselect(
+                "Tema específico", sorted(all_topics), placeholder="Todos los temas"
+            )
             
             st.markdown("<br>", unsafe_allow_html=True)
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
-                only_situational_manual = st.toggle("Solo preguntas situacionales", value=True, help="Filtra para mostrar solo preguntas que plantean casos prácticos.", key="only_sit_manual")
-            with col_t2:
-                hardcore_mode = st.toggle("🛡️ Modo Hardcore CNSC", value=False, help="Simula el examen real: mezcla temas, oculta respuestas hasta el final y aplica tiempos estrictos.")
+            only_situational_manual = st.toggle(
+                "Usar preguntas situacionales", value=True,
+                help="Incluye casos laborales y preguntas con decisiones similares al examen.",
+                key="only_sit_manual",
+            )
+            hardcore_mode = False
+            st.caption("Para presión de tiempo y resultado ponderado usa **Simulacro Tipo Examen**.")
             
-            submitted_manual = st.form_submit_button("🚀 Iniciar Simulacro Manual", type="primary")
+            submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary")
 
     # --- PROFILE MODE ---
     with tab_profile:
@@ -173,7 +188,10 @@ with st.container():
             st.markdown("---")
             col_p1, col_p2 = st.columns([1, 1])
             with col_p1:
-                num_questions_profile = st.slider("Cantidad de preguntas", 5, 200, 20, key="num_q_profile")
+                num_questions_profile = st.select_slider(
+                    "Cantidad de preguntas", options=[5, 10, 15, 20], value=10,
+                    key="num_q_profile",
+                )
             with col_p2:
                 difficulty_profile = st.multiselect("Nivel de Dificultad", [1, 2, 3], default=[1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x], key="diff_profile")
 
@@ -203,7 +221,7 @@ with st.container():
         st.markdown("---")
         only_situational = st.toggle("Solo preguntas situacionales (Nuevas)", value=True, help="Filtra para mostrar solo preguntas que plantean casos prácticos generados con el nuevo sistema.")
 
-        if st.button("🚀 Iniciar Simulacro por Perfil", type="primary", disabled=(available_count == 0)):
+        if st.button("▶️ Iniciar práctica por cargo", type="primary", disabled=(available_count == 0)):
              submitted_profile = True
         else:
              submitted_profile = False
@@ -227,8 +245,12 @@ with st.container():
             st.divider()
             col_o1, col_o2 = st.columns(2)
             with col_o1:
-                num_q_opec = st.number_input("Preguntas para este simulacro", 5, 100, 15, key="num_opec_q_input")
-                if st.button("🚀 Iniciar Simulacro de mi OPEC", type="primary", use_container_width=True):
+                num_q_opec = st.select_slider(
+                    "Duración", options=[5, 10, 15, 20], value=10,
+                    format_func=lambda value: f"{value} preguntas · aprox. {max(8, value * 2)} min",
+                    key="num_opec_q_input",
+                )
+                if st.button("▶️ Iniciar práctica recomendada", type="primary", use_container_width=True):
                     # We will filter questions that match any function keyword or topic
                     st.session_state["opec_run"] = True
                     st.session_state["opec_n"] = num_q_opec
@@ -326,7 +348,7 @@ if run_sim:
                 continue
             # Strict Situational Filter (From Toggle)
             if final_query_filters.get("only_situational", False):
-                if "SITUACIÓN" not in q.stem.upper():
+                if str(getattr(q, "question_type", "SITUATIONAL")).upper() != "SITUATIONAL":
                     continue
             
             final_candidates.append(q)
@@ -350,7 +372,11 @@ if run_sim:
             st.session_state["exam_questions"] = [q.question_id for q in selected] # Store IDs
             st.session_state["current_idx"] = 0
             st.session_state["answers"] = {} # {q_id: chosen_key}
+            st.session_state["checked_answers"] = {}
             st.session_state["hardcore_mode"] = final_query_filters.get("hardcore", False)
+            st.session_state["study_session_kind"] = "practice"
+            st.session_state["exam_start_time"] = time.time()
+            st.session_state["total_time_limit"] = max(10 * 60, len(selected) * 120)
             
             st.switch_page("pages/2_Ejecucion.py")
     except Exception as e:
