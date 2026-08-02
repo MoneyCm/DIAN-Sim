@@ -533,8 +533,11 @@ try:
             "attempts": attempts_count,
             "hits": evidence["hits"],
             "misses": evidence["misses"],
+            "accuracy": (evidence["hits"] / attempts_count * 100) if attempts_count else None,
         })
-    evaluated_rows = [row for row in skill_rows if row["attempts"] > 0]
+    minimum_topic_attempts = 3
+    evaluated_rows = [row for row in skill_rows if row["attempts"] >= minimum_topic_attempts]
+    emerging_rows = [row for row in skill_rows if 0 < row["attempts"] < minimum_topic_attempts]
     pending_rows = [row for row in skill_rows if row["attempts"] == 0]
 
     with col_d1:
@@ -543,9 +546,12 @@ try:
             evaluated_df = pd.DataFrame(evaluated_rows)
             macro_summary = (
                 evaluated_df.groupby("macro", as_index=False)
-                .agg(Dominio=("mastery", "mean"), Intentos=("attempts", "sum"))
-                .sort_values("Dominio", ascending=True)
+                .agg(Aciertos=("hits", "sum"), Errores=("misses", "sum"), Intentos=("attempts", "sum"))
             )
+            macro_summary["Dominio"] = (
+                macro_summary["Aciertos"] / macro_summary["Intentos"] * 100
+            )
+            macro_summary = macro_summary.sort_values("Dominio", ascending=True)
             macro_colors = [
                 '#dc2626' if value < 50 else '#f59e0b' if value < 70 else '#10b981'
                 for value in macro_summary['Dominio']
@@ -569,38 +575,54 @@ try:
             st.plotly_chart(fig_macro, width="stretch", key="dashboard_macro_coverage")
             st.caption(
                 f"Cobertura evaluada: {len(evaluated_rows)} de {len(skill_rows)} habilidades. "
+                f"Se requieren al menos {minimum_topic_attempts} respuestas por tema. "
                 "Las no practicadas no se califican como debilidades."
             )
         else:
             st.info(
-                "Todavía no hay intentos suficientes para medir tus macro-dominios. "
-                "Completa el plan diario para iniciar el diagnóstico."
+                "Aún no hay evidencia suficiente para calcular tu dominio. Las respuestas del "
+                "plan diario, las prácticas y los simulacros empezarán a construir el diagnóstico."
             )
+            if emerging_rows:
+                st.caption(
+                    f"Ya comenzaste {len(emerging_rows)} tema(s), pero cada uno necesita al menos "
+                    f"{minimum_topic_attempts} respuestas para producir una estimación estable."
+                )
 
     with col_d2:
-        st.subheader("🎯 Prioridades de Refuerzo")
-        if evaluated_rows:
+        demonstrated_weaknesses = [row for row in evaluated_rows if row["accuracy"] < 70]
+        st.subheader(
+            "🎯 Prioridades de refuerzo"
+            if demonstrated_weaknesses else "📋 Pendiente de evaluación"
+        )
+        if demonstrated_weaknesses:
             priority_rows = sorted(
-                evaluated_rows, key=lambda row: (row["mastery"], -row["misses"], row["topic"])
+                demonstrated_weaknesses,
+                key=lambda row: (row["accuracy"], -row["misses"], row["topic"]),
             )[:5]
             for index, row in enumerate(priority_rows, start=1):
                 with st.container(border=True):
                     st.markdown(f"**{index}. {row['topic']}**")
-                    st.progress(min(max(row['mastery'] / 100, 0.0), 1.0))
-                    accuracy = row['hits'] / row['attempts'] * 100 if row['attempts'] else 0
+                    st.progress(min(max(row['accuracy'] / 100, 0.0), 1.0))
                     st.caption(
-                        f"Dominio {row['mastery']:.0f}% · Precisión {accuracy:.0f}% · "
+                        f"Precisión {row['accuracy']:.0f}% · "
                         f"{row['attempts']} intentos · {row['misses']} errores"
                     )
             st.page_link(
                 "pages/1_Nuevo_Simulacro.py", label="Practicar por tema", icon="▶️",
                 width="stretch",
             )
-        elif pending_rows:
-            st.info("Aún no hay debilidades demostradas; estos temas están sin evaluar:")
-            for row in pending_rows[:5]:
-                st.markdown(f"- **{row['topic']}** · pendiente de diagnóstico")
-            st.caption("El plan diario empezará a medirlos gradualmente, sin penalizarte con 0%.")
+        elif skill_rows:
+            st.info(
+                "Aún no hay debilidades demostradas. Se evaluarán progresivamente los "
+                "macrodominios del concurso; estar pendiente no significa tener bajo desempeño."
+            )
+            pending_macros = sorted({row["macro"] for row in pending_rows + emerging_rows})
+            if pending_macros:
+                for macro in pending_macros:
+                    st.markdown(f"- **{macro}** · pendiente de evidencia suficiente")
+            else:
+                st.success("Los macrodominios evaluados están actualmente sobre la meta del 70%.")
         else:
             st.info("No hay habilidades configuradas todavía.")
 
