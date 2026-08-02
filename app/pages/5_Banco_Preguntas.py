@@ -33,7 +33,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="SISC de Preguntas (Pro)", subtitle="Gestión avanzada, carga masiva y control de calidad")
+render_header(title="Banco de preguntas", subtitle="Consulta, calidad y cobertura del concurso activo")
 
 # --- INITIALIZATION ---
 if "bulk_selection" not in st.session_state:
@@ -51,30 +51,13 @@ def reset_selection():
 def reset_pagination():
     st.session_state["page_num"] = 1
 
-# --- SIDEBAR TOOLS ---
 stats_s, rank = render_custom_sidebar()
 
-with st.sidebar:
-    st.divider()
-    st.markdown("### 🛠️ Herramientas Pro")
-    if st.button("🗑️ Limpiar Selección"):
-        reset_selection()
-        st.rerun()
-    
-    st.caption("Paginación")
-    cols_page = st.columns(2)
-    if cols_page[0].button("⬅️ Ant."):
-        st.session_state["page_num"] = max(1, st.session_state["page_num"] - 1)
-        st.rerun()
-    if cols_page[1].button("Sig. ➡️"):
-        st.session_state["page_num"] += 1
-        st.rerun()
-
 is_admin_user = AuthManager.is_admin()
-available_actions = ["Explorar / Bulk"]
+available_actions = ["Consultar banco"]
 if is_admin_user:
-    available_actions.extend(["Carga Masiva (Excel/CSV)", "Crear Manualmente"])
-action = st.radio("Acción", available_actions, horizontal=True)
+    available_actions.extend(["Importar archivo", "Crear manualmente"])
+action = st.selectbox("Vista", available_actions, label_visibility="collapsed")
 st.divider()
 
 db = SessionLocal()
@@ -94,7 +77,7 @@ opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)",
                        value=has_opec, 
                        help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
 
-if action == "Explorar / Bulk":
+if action == "Consultar banco":
     competition_id = get_active_competition_id(db, u_id)
     pending_query = db.query(Question)
     if competition_id is not None:
@@ -254,7 +237,9 @@ if action == "Explorar / Bulk":
     # QUERY
     if opec_focus:
         # Usamos el servicio de alta precisión
-        questions_all = QuestionService.get_questions_for_user(db, u_id, include_review=True)
+        questions_all = QuestionService.get_questions_for_user(
+            db, u_id, include_review=is_admin_user
+        )
         # Aplicamos filtros de UI sobre el set filtrado por OPEC (Filtrado en memoria Python)
         filtered = []
         for q in questions_all:
@@ -272,12 +257,15 @@ if action == "Explorar / Bulk":
         
         total_count = len(filtered)
         PAGE_SIZE = 20
+        st.session_state["page_num"] = min(
+            st.session_state["page_num"], max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+        )
         offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
         questions = filtered[offset:offset+PAGE_SIZE]
         st.info(f"🎯 **Enfoque OPEC:** Filtrando **{total_count}** preguntas pertinentes para tu cargo.")
     else:
         # Búsqueda global estándar (SQL)
-        query = db.query(Question)
+        query = db.query(Question).filter(Question.competition_id == competition_id)
         if search:
             query = query.filter(Question.stem.ilike(f"%{search}%") | Question.rationale.ilike(f"%{search}%"))
         if track_f != "Todos":
@@ -286,11 +274,17 @@ if action == "Explorar / Bulk":
             query = query.filter(Question.difficulty.in_(diff_f))
         
         filtered = query.all()
+        if not is_admin_user:
+            from core.legacy_question_audit import is_safe_for_active_study
+            filtered = [q for q in filtered if is_safe_for_active_study(q)]
         filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
         if format_f != "Todos":
             filtered = [q for q in filtered if question_format_status(q) == format_f]
         total_count = len(filtered)
         PAGE_SIZE = 20
+        st.session_state["page_num"] = min(
+            st.session_state["page_num"], max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+        )
         offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
         questions = filtered[offset:offset+PAGE_SIZE]
         st.info(f"📚 Mostrando **{len(questions)}** de **{total_count}** preguntas totales.")
@@ -298,20 +292,18 @@ if action == "Explorar / Bulk":
     if not questions:
         st.warning("No hay preguntas que coincidan con la búsqueda.")
     else:
-        # SELECT ALL / UNSELECT ALL BUTTONS v36 Mikey
-        col_m_sel, col_m_unsel = st.columns([1, 1])
-        with col_m_sel:
-            if st.button("✅ Seleccionar todas las visibles", use_container_width=True):
-                for q in questions:
-                    st.session_state["bulk_selection"].add(q.question_id)
-                    st.session_state[f"sel_{q.question_id}"] = True # Force sync Mikey
-                st.rerun()
-        with col_m_unsel:
-            if st.button("❌ Deseleccionar visibles", use_container_width=True):
-                for q in questions:
-                    st.session_state["bulk_selection"].discard(q.question_id)
-                    st.session_state[f"sel_{q.question_id}"] = False # Force sync Mikey
-                st.rerun()
+        if is_admin_user:
+            col_m_sel, col_m_unsel = st.columns([1, 1])
+            with col_m_sel:
+                if st.button("✅ Seleccionar visibles", use_container_width=True):
+                    for q in questions:
+                        st.session_state["bulk_selection"].add(q.question_id)
+                        st.session_state[f"sel_{q.question_id}"] = True
+                    st.rerun()
+            with col_m_unsel:
+                if st.button("❌ Limpiar selección", use_container_width=True):
+                    reset_selection()
+                    st.rerun()
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -319,19 +311,20 @@ if action == "Explorar / Bulk":
             diff_tags = {1: "🟢", 2: "🟡", 3: "🔴"}
             is_selected = q.question_id in st.session_state["bulk_selection"]
             
-            # Use small columns for the selection logic
-            col_sel, col_exp = st.columns([0.05, 0.95])
-            
-            with col_sel:
-                if st.checkbox("Seleccionar", value=is_selected, key=f"sel_{q.question_id}", label_visibility="collapsed"):
-                    st.session_state["bulk_selection"].add(q.question_id)
-                else:
-                    st.session_state["bulk_selection"].discard(q.question_id)
+            if is_admin_user:
+                col_sel, col_exp = st.columns([0.05, 0.95])
+                with col_sel:
+                    if st.checkbox("Seleccionar", value=is_selected, key=f"sel_{q.question_id}", label_visibility="collapsed"):
+                        st.session_state["bulk_selection"].add(q.question_id)
+                    else:
+                        st.session_state["bulk_selection"].discard(q.question_id)
+            else:
+                col_exp = st.container()
             
             with col_exp:
                 status_icon = "✅" if getattr(q, 'is_verified', False) else "⏳"
                 format_status = question_format_status(q)
-                format_icon = "OFICIAL" if format_status == OFFICIAL_LABEL else "PRACTICA" if format_status == PRACTICE_LABEL else "REVISAR"
+                format_icon = "TIPO EXAMEN" if format_status == OFFICIAL_LABEL else "PRÁCTICA" if format_status == PRACTICE_LABEL else "REVISAR"
                 display_title = f"{status_icon} {format_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
                 with st.expander(display_title):
                     st.caption(f"Formato: {format_status}")
@@ -448,7 +441,17 @@ if action == "Explorar / Bulk":
                                 st.write(f"- {f}")
                             st.info(f"💡 **Sugerencia:** {ai_rep.get('suggestion', 'Sin sugerencias')}")
 
-elif action == "Carga Masiva (Excel/CSV)":
+        total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+        st.caption(f"Página {min(st.session_state['page_num'], total_pages)} de {total_pages}")
+        page_cols = st.columns(2)
+        if page_cols[0].button("⬅️ Anterior", disabled=st.session_state["page_num"] <= 1, use_container_width=True):
+            st.session_state["page_num"] -= 1
+            st.rerun()
+        if page_cols[1].button("➡️ Siguiente", disabled=st.session_state["page_num"] >= total_pages, use_container_width=True):
+            st.session_state["page_num"] += 1
+            st.rerun()
+
+elif action == "Importar archivo":
     st.info("Sube un archivo `.xlsx` o `.csv`. Columnas requeridas: `track, competency, topic, stem, options_A, options_B, options_C, options_D, correct_key, rationale` (opcional)")
     
     # --- TEMPLATE DOWNLOAD ---
@@ -559,7 +562,7 @@ elif action == "Carga Masiva (Excel/CSV)":
         except Exception as e:
             st.error(f"Error procesando el archivo: {e}")
 
-elif action == "Crear Manualmente":
+elif action == "Crear manualmente":
     with st.form("manual_create"):
         st.subheader("Nueva Pregunta")
         col1, col2 = st.columns(2)
