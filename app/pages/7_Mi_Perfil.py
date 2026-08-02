@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import sys
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import func
 
@@ -16,6 +15,7 @@ from db.models import User, UserStats, QuestionPerformance, Question, UserOPEC, 
 from ui_utils import load_css, render_header, metric_card
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
+from core.competitions import get_active_competition_id
 
 # pass # Removed st.set_page_config
 
@@ -33,6 +33,7 @@ try:
     # 1. User Header Info
     stats = db.query(UserStats).filter_by(user_id=u_id).first()
     user = db.query(User).get(u_id)
+    active_competition_id = get_active_competition_id(db, u_id)
     rank, next_rank = get_rank_info(stats.total_points if stats else 0)
 
     col_h1, col_h2 = st.columns([1, 3])
@@ -80,56 +81,67 @@ try:
 
     st.divider()
 
-    # 2. COMPETENCY ANALYTICS (RADAR)
-    st.subheader("📊 Radar de Competencias (Maestría)")
+    # 2. EVIDENCE-BASED COMPETENCY ANALYTICS
+    st.subheader("📊 Evidencia de desempeño por dominio")
 
-    # Query performance joined with questions to get macro_dominio Mikey (Resilient v21)
     try:
-        # Check if the class has the new attribute before querying
-        m_attr = getattr(QuestionPerformance, "mastery_level", None)
-        if m_attr is not None:
-            perf_data = db.query(
-                Question.macro_dominio, 
-                func.avg(QuestionPerformance.mastery_level).label('avg_mastery')
-            ).join(QuestionPerformance, Question.question_id == QuestionPerformance.question_id)\
-             .filter(QuestionPerformance.user_id == u_id)\
-             .group_by(Question.macro_dominio).all()
-        else:
-            perf_data = [] # Fallback safe Mikey
+        raw_perf = db.query(
+            Question.macro_dominio,
+            func.sum(QuestionPerformance.hits).label("hits"),
+            func.sum(QuestionPerformance.misses).label("misses"),
+        ).join(QuestionPerformance, Question.question_id == QuestionPerformance.question_id).filter(
+            QuestionPerformance.user_id == u_id,
+            Question.competition_id == active_competition_id,
+            Question.macro_dominio.isnot(None),
+            Question.macro_dominio != "",
+        ).group_by(Question.macro_dominio).all()
     except Exception as e:
-        print(f"⚠️ Analítica Radar no disponible (Clase stale?): {e}")
-        perf_data = []
+        print(f"Analítica de perfil no disponible: {e}")
+        raw_perf = []
 
-    if perf_data:
-        df_perf = pd.DataFrame(perf_data, columns=['Macro-Dominio', 'Nivel de Maestría'])
-        
-        col_rad1, col_rad2 = st.columns([2, 1])
-        
-        with col_rad1:
-            fig = px.line_polar(df_perf, r='Nivel de Maestría', theta='Macro-Dominio', line_close=True,
-                               color_discrete_sequence=['#E60000'])
-            fig.update_traces(fill='toself')
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 10])
-                ),
-                showlegend=False,
-                height=400,
-                margin=dict(l=20, r=20, t=20, b=20)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col_rad2:
-            st.markdown('<div class="dian-card">', unsafe_allow_html=True)
+    perf_rows = []
+    for domain, hits, misses in raw_perf:
+        hits, misses = int(hits or 0), int(misses or 0)
+        attempts = hits + misses
+        if attempts:
+            perf_rows.append({"Dominio": domain, "Aciertos": hits, "Errores": misses,
+                              "Intentos": attempts, "Precisión": hits / attempts * 100})
+
+    total_domains = db.query(func.count(func.distinct(Question.macro_dominio))).filter(
+        Question.competition_id == active_competition_id,
+        Question.macro_dominio.isnot(None), Question.macro_dominio != "",
+    ).scalar() or 0
+    perf_data = [(row["Dominio"], row["Precisión"] / 10) for row in perf_rows]
+
+    if perf_rows:
+        df_perf = pd.DataFrame(perf_rows).sort_values("Precisión")
+        col_chart, col_diagnosis = st.columns([2, 1])
+        with col_chart:
+            fig = go.Figure(go.Bar(
+                x=df_perf["Precisión"], y=df_perf["Dominio"], orientation="h",
+                marker_color=["#16a34a" if value >= 70 else "#dc2626" for value in df_perf["Precisión"]],
+                customdata=df_perf[["Aciertos", "Errores", "Intentos"]],
+                hovertemplate="%{y}<br>Precisión: %{x:.0f}%<br>Aciertos: %{customdata[0]}<br>Errores: %{customdata[1]}<br>Intentos: %{customdata[2]}<extra></extra>",
+            ))
+            fig.add_vline(x=70, line_dash="dash", line_color="#64748b")
+            fig.update_xaxes(range=[0, 100], ticksuffix="%", title=None, fixedrange=True)
+            fig.update_yaxes(title=None, fixedrange=True)
+            fig.update_layout(height=max(260, 62 * len(df_perf)), margin=dict(l=10, r=15, t=20, b=20),
+                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            st.plotly_chart(fig, width="stretch", key="profile_domain_evidence")
+
+        with col_diagnosis:
             st.subheader("🔍 Diagnóstico")
-            mejor = df_perf.loc[df_perf['Nivel de Maestría'].idxmax()]
-            peor = df_perf.loc[df_perf['Nivel de Maestría'].idxmin()]
-            
-            st.write(f"🌟 **Tu Fortaleza:** {mejor['Macro-Dominio']} ({mejor['Nivel de Maestría']:.1f}/10)")
-            st.write(f"🛑 **Por mejorar:** {peor['Macro-Dominio']} ({peor['Nivel de Maestría']:.1f}/10)")
-            st.markdown('</div>', unsafe_allow_html=True)
+            best = max(perf_rows, key=lambda row: row["Precisión"])
+            priority = min(perf_rows, key=lambda row: row["Precisión"])
+            st.metric("Cobertura evaluada", f"{len(perf_rows)}/{total_domains or len(perf_rows)} dominios")
+            st.success(f"Fortaleza observada: **{best['Dominio']}** · {best['Precisión']:.0f}% en {best['Intentos']} intentos.")
+            if len(perf_rows) > 1 or priority["Precisión"] < 70:
+                st.warning(f"Prioridad: **{priority['Dominio']}** · {priority['Precisión']:.0f}% en {priority['Intentos']} intentos.")
+            if len(perf_rows) < total_domains:
+                st.caption(f"Faltan {total_domains - len(perf_rows)} dominio(s) por evaluar; no se califican como debilidad hasta que respondas preguntas.")
     else:
-        st.info("No hay suficientes datos para generar tu radar de competencias. Realiza más simulacros para ver tu analítica. Mikey")
+        st.info("Aún no hay respuestas suficientes en este concurso para diagnosticar tu desempeño. Completa una sesión guiada o un simulacro; los dominios no evaluados no se mostrarán como debilidades.")
 
     st.divider()
 
