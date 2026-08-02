@@ -214,7 +214,7 @@ if action == "Explorar / Bulk":
     # QUERY
     if opec_focus:
         # Usamos el servicio de alta precisión
-        questions_all = QuestionService.get_questions_for_user(db, u_id)
+        questions_all = QuestionService.get_questions_for_user(db, u_id, include_review=True)
         # Aplicamos filtros de UI sobre el set filtrado por OPEC (Filtrado en memoria Python)
         filtered = []
         for q in questions_all:

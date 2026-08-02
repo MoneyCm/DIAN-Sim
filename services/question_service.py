@@ -2,10 +2,11 @@ import json
 from sqlalchemy import or_, and_, func
 from db.models import Question, UserOPEC
 from core.competitions import get_active_competition_id
+from core.legacy_question_audit import is_safe_for_active_study
 
 class QuestionService:
     @staticmethod
-    def get_questions_for_user(db, user_id):
+    def get_questions_for_user(db, user_id, include_review=False):
         """
         Calcula las preguntas pertinentes para el usuario basándose en su OPEC activa.
         Utiliza un motor de keywords dinámico v48.1 Mikey.
@@ -17,10 +18,19 @@ class QuestionService:
         query = db.query(Question)
         if competition_id is not None:
             query = query.filter(Question.competition_id == competition_id)
+
+        all_candidates = query.all()
+        if not include_review:
+            all_candidates = [q for q in all_candidates if is_safe_for_active_study(q)]
         
         # Si no hay perfil, devolvemos todo (para Administradores o usuarios nuevos)
         if not user_opec:
-            return query.all()
+            return all_candidates
+
+        # Una competencia activa ya es el filtro más preciso. No excluir casos
+        # curados solo porque su tema no repite literalmente el número OPEC.
+        if competition_id is not None:
+            return all_candidates
 
         # 1. Extracción de Keywords de la OPEC
         functions = user_opec.functions if isinstance(user_opec.functions, list) else []
@@ -34,7 +44,6 @@ class QuestionService:
         is_aduanera = any(w in opec_text for w in ['aduan', 'arancel', 'import', 'export', 'tránsito', 'cabotaje', 'zona franca'])
 
         # 3. Aplicación de Filtros Maestro
-        all_candidates = query.all()
         final_questions = []
 
         # [0] PRIORIDAD ABSOLUTA V50: Coincidencia Exacta de OPEC

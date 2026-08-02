@@ -25,3 +25,15 @@ def legacy_audit_decision(topic: str) -> tuple[str, str]:
     if topic in RETIRE_TOPICS:
         return RETIRE, RETIRE_TOPICS[topic]
     return REWRITE, "No es segura para uso activo sin reescritura y verificación normativa específica."
+
+
+def is_safe_for_active_study(question) -> bool:
+    """Allow only grounded GOA questions or legacy items explicitly retained."""
+    if not bool(getattr(question, "is_verified", False)):
+        return False
+    report = getattr(question, "quality_report", None)
+    if not isinstance(report, dict):
+        return False
+    if report.get("review") in {"human_source_grounded", "source_grounded"}:
+        return True
+    return (report.get("legacy_audit") or {}).get("decision") == KEEP_PRACTICE
