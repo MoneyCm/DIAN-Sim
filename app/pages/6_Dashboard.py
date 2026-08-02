@@ -35,7 +35,9 @@ build_hybrid_remaining_daily_plan = getattr(
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent, topic_status
 from services.question_service import QuestionService
-from core.study_resume import load_daily_run, restore_daily_run_to_session, save_daily_run
+from core.study_resume import (
+    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
+)
 
 # pass # Removed st.set_page_config
 
@@ -96,8 +98,9 @@ try:
         local_day_start + datetime.timedelta(days=1)
     ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
-    today_attempt_rows = db.query(Attempt.question_id, Attempt.is_correct).filter(
+    today_attempt_rows = db.query(Attempt.question_id, Attempt.is_correct).join(Question).filter(
         Attempt.user_id == u_id,
+        Question.competition_id == active_competition_id,
         Attempt.created_at >= utc_day_start,
         Attempt.created_at < utc_day_end,
     ).all()
@@ -141,6 +144,10 @@ try:
         now=bogota_now,
     )
     active_daily_run = load_daily_run(db, u_id)
+    if completed_today >= daily_goal and active_daily_run:
+        clear_daily_run(db, u_id)
+        db.commit()
+        active_daily_run = None
 
     exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
 
@@ -187,7 +194,11 @@ try:
         mission_cols[0].metric(
             "Sesiones", f"{weekly_progress.completed_days}/{weekly_progress.target_days}"
         )
-        mission_cols[1].metric("Cobertura", f"{topic_coverage:.0f}%")
+        mission_cols[1].metric(
+            "Temas practicados",
+            f"{studied_topic_count}/{len(candidate_topic_keys)}",
+            f"{topic_coverage:.0f}% de cobertura",
+        )
         mission_cols[2].metric("Meta de hoy", f"{daily_goal} preguntas")
         mission_cols[3].metric("Días al examen", exam_days if exam_days is not None else "—")
         st.progress(weekly_progress.ratio)
@@ -216,6 +227,8 @@ try:
         )
         if exam_days is not None:
             st.caption(f"Examen en {exam_days} días · Etapa: {preparation_phase(exam_days)}")
+        else:
+            st.caption("Configura la fecha estimada del examen para organizar las etapas del plan.")
         if not is_study_day:
             st.info("Hoy está configurado como descanso. Puedes estudiar si lo deseas o retomar el próximo día disponible.")
         time_col.metric("Tiempo", f"{timed_session.total_minutes} min")
@@ -253,28 +266,32 @@ try:
         ):
             st.switch_page("pages/10_Repaso_Especial.py")
         with action_col:
-            action_label = (
-                "Reanudar sesión interrumpida" if active_daily_run
-                else "Continuar plan diario" if completed_today
-                else "Iniciar plan diario"
-            )
-            if st.button(
-                action_label,
-                type="primary",
-                use_container_width=True,
-                disabled=not daily_plan and not active_daily_run,
-            ):
-                if active_daily_run:
-                    restore_daily_run_to_session(st.session_state, active_daily_run)
-                else:
-                    active_daily_run = save_daily_run(db, u_id, {
-                        "question_ids": [item.question.question_id for item in daily_plan],
-                        "answers": {}, "checked_answers": {}, "current_idx": 0,
-                        "total_time_limit": timed_session.total_minutes * 60,
-                        "started_at": datetime.datetime.now().timestamp(),
-                    })
-                    restore_daily_run_to_session(st.session_state, active_daily_run)
-                st.switch_page("pages/2_Ejecucion.py")
+            if completed_today >= daily_goal:
+                st.success("✅ Sesión cumplida")
+                st.caption("Lo adicional de hoy es opcional.")
+            else:
+                action_label = (
+                    "Reanudar sesión interrumpida" if active_daily_run
+                    else "Continuar plan diario" if completed_today
+                    else "Iniciar plan diario"
+                )
+                if st.button(
+                    action_label,
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not daily_plan and not active_daily_run,
+                ):
+                    if active_daily_run:
+                        restore_daily_run_to_session(st.session_state, active_daily_run)
+                    else:
+                        active_daily_run = save_daily_run(db, u_id, {
+                            "question_ids": [item.question.question_id for item in daily_plan],
+                            "answers": {}, "checked_answers": {}, "current_idx": 0,
+                            "total_time_limit": timed_session.total_minutes * 60,
+                            "started_at": datetime.datetime.now().timestamp(),
+                        })
+                        restore_daily_run_to_session(st.session_state, active_daily_run)
+                    st.switch_page("pages/2_Ejecucion.py")
     if completed_today >= daily_goal:
         celebration_key = f"daily_completion_{bogota_now.date().isoformat()}"
         if not st.session_state.get(celebration_key):
