@@ -70,10 +70,17 @@ with st.sidebar:
         st.session_state["page_num"] += 1
         st.rerun()
 
-action = st.radio("Acción", ["Explorar / Bulk", "Carga Masiva (Excel/CSV)", "Crear Manualmente"], horizontal=True)
+is_admin_user = AuthManager.is_admin()
+available_actions = ["Explorar / Bulk"]
+if is_admin_user:
+    available_actions.extend(["Carga Masiva (Excel/CSV)", "Crear Manualmente"])
+action = st.radio("Acción", available_actions, horizontal=True)
 st.divider()
 
 db = SessionLocal()
+
+if not is_admin_user:
+    st.info("Modo consulta: solo los administradores pueden crear, auditar o eliminar preguntas.")
 
 # OPEC Focus Toggle Mikey v6.4
 u_id = st.session_state.get("user_id")
@@ -95,7 +102,7 @@ if action == "Explorar / Bulk":
     pending_reinforcements = sum(
         1 for item in pending_query.all() if is_reinforcement_candidate(item)
     )
-    if AuthManager.is_admin() and pending_reinforcements:
+    if is_admin_user and pending_reinforcements:
         st.info(
             f"🧪 Hay **{pending_reinforcements} refuerzos generados** pendientes de revisión. "
             "Selecciónalos en el filtro Calidad."
@@ -126,7 +133,11 @@ if action == "Explorar / Bulk":
             
             with col_audit:
                 # v34.1 Bulk Audit Button Mikey
-                if st.button(f"🛡️ Auditar Selección", type="primary", use_container_width=True, help="Certifica la calidad de todas las preguntas seleccionadas."):
+                if st.button(
+                    f"🛡️ Auditar Selección", type="primary", use_container_width=True,
+                    disabled=not is_admin_user,
+                    help="Solo administradores. La IA orienta la revisión, pero no certifica la pregunta.",
+                ):
                     try:
                         provider = st.session_state.get("current_provider", "Gemini")
                         api_key = get_api_key(provider)
@@ -163,7 +174,11 @@ if action == "Explorar / Bulk":
                         st.error(f"Error en auditoría masiva: {e}")
 
             with col_del_real:
-                if st.button(f"🗑️ Borrar Selección", type="secondary", use_container_width=True):
+                if st.button(
+                    f"🗑️ Borrar Selección", type="secondary", use_container_width=True,
+                    disabled=not is_admin_user,
+                    help="Solo los administradores pueden eliminar preguntas.",
+                ):
                     try:
                         for qid in st.session_state["bulk_selection"]:
                             q_to_del = db.query(Question).get(qid)
@@ -338,7 +353,7 @@ if action == "Explorar / Bulk":
                         validation_error = candidate_validation_error(q)
                         if validation_error:
                             st.error(validation_error)
-                        elif AuthManager.is_admin():
+                        elif is_admin_user:
                             confirmation = st.checkbox(
                                 "Revisé el enunciado, la clave, la justificación y la fuente.",
                                 key=f"confirm_candidate_{q.question_id}",
@@ -370,7 +385,11 @@ if action == "Explorar / Bulk":
                     col_act1, col_act2, col_act3 = st.columns([1, 1, 1])
                     
                     with col_act1:
-                        if st.button("🛡️ Auditar con IA", key=f"audit_{q.question_id}", use_container_width=True):
+                        if st.button(
+                            "🛡️ Auditar con IA", key=f"audit_{q.question_id}",
+                            use_container_width=True, disabled=not is_admin_user,
+                            help="Solo administradores. El resultado no activa automáticamente la pregunta.",
+                        ):
                             with st.spinner("Realizando auditoría técnica..."):
                                 try:
                                     provider = st.session_state.get("current_provider", "Gemini")
@@ -400,7 +419,11 @@ if action == "Explorar / Bulk":
                                     st.error(f"Error: {e}")
 
                     with col_act2:
-                        if st.button("🗑️ Eliminar", key=f"del_single_{q.question_id}", type="secondary", use_container_width=True):
+                        if st.button(
+                            "🗑️ Eliminar", key=f"del_single_{q.question_id}", type="secondary",
+                            use_container_width=True, disabled=not is_admin_user,
+                            help="Solo los administradores pueden eliminar preguntas.",
+                        ):
                             db.delete(q)
                             db.commit()
                             st.rerun()
