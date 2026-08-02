@@ -23,7 +23,7 @@ from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
 from core.config import get_api_key
 from core.user_keys import get_user_key
-from core.adaptive import build_remaining_daily_plan
+from core.adaptive import build_hybrid_remaining_daily_plan
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent, topic_status
 from services.question_service import QuestionService
@@ -123,7 +123,7 @@ try:
     daily_performance_map = {
         item.question_id: item for item in daily_performances
     }
-    daily_plan = build_remaining_daily_plan(
+    daily_plan = build_hybrid_remaining_daily_plan(
         daily_candidates,
         daily_skills_map,
         daily_performance_map,

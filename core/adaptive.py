@@ -5,6 +5,7 @@ import random
 from typing import List, Mapping, Optional, Tuple
 
 from db.models import Question, QuestionPerformance, Skill
+from core.exam_format import official_question_groups
 
 
 SkillKey = Tuple[str, str, str]
@@ -103,7 +104,7 @@ def build_daily_plan(
     if n <= 0 or not all_questions:
         return []
 
-    now = now or datetime.utcnow()
+    now = now or datetime.now()
     ranked = []
     for question in all_questions:
         key = (question.track, question.competency, question.topic)
@@ -174,6 +175,76 @@ def build_remaining_daily_plan(
         n=remaining_count,
         now=now,
     )
+
+
+def build_hybrid_remaining_daily_plan(
+    all_questions: List[Question],
+    skills_map: Mapping[SkillKey, Skill],
+    performance_map: Mapping[str, QuestionPerformance],
+    completed_question_ids: set[str],
+    daily_goal: int = 20,
+    now: Optional[datetime] = None,
+    max_official_cases: int = 2,
+) -> List[DailyRecommendation]:
+    """Mix complete GOA cases with adaptive individual reinforcement."""
+    remaining_count = max(daily_goal - min(len(completed_question_ids), max(daily_goal, 0)), 0)
+    if remaining_count == 0:
+        return []
+
+    eligible = [
+        question for question in all_questions
+        if question.question_id not in completed_question_ids
+    ]
+    ranked = build_daily_plan(
+        eligible, skills_map, performance_map, n=len(eligible), now=now
+    )
+    by_id = {item.question.question_id: item for item in ranked}
+    eligible_ids = set(by_id)
+    selected = []
+    selected_ids = set()
+    selected_cases = set()
+
+    if remaining_count >= 3 and max_official_cases > 0:
+        for item in ranked:
+            case = getattr(item.question, "case_study", None)
+            case_id = getattr(case, "id", None)
+            if case is None or case_id in selected_cases:
+                continue
+            matching_group = next(
+                (
+                    group for group in official_question_groups(case)
+                    if item.question.question_id in {q.question_id for q in group}
+                ),
+                None,
+            )
+            if not matching_group:
+                continue
+            group_ids = [question.question_id for question in matching_group]
+            if not set(group_ids).issubset(eligible_ids):
+                continue
+            if len(selected) + len(group_ids) > remaining_count:
+                continue
+            for question_id in group_ids:
+                recommendation = by_id[question_id]
+                selected.append(
+                    DailyRecommendation(
+                        recommendation.question,
+                        recommendation.score,
+                        ("caso tipo examen",) + recommendation.reasons,
+                    )
+                )
+                selected_ids.add(question_id)
+            selected_cases.add(case_id)
+            if len(selected_cases) >= max_official_cases:
+                break
+
+    for item in ranked:
+        if len(selected) >= remaining_count:
+            break
+        if item.question.question_id not in selected_ids:
+            selected.append(item)
+            selected_ids.add(item.question.question_id)
+    return selected
 
 def select_daily_questions(
     all_questions: List[Question],

@@ -12,6 +12,7 @@ from core.adaptive import calculate_mastery_update, update_priority
 from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
+from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
 from core.generators.llm import LLMGenerator
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
 
@@ -281,6 +282,30 @@ if time_left <= 0:
 st.markdown('<div class="dian-card">', unsafe_allow_html=True)
 st.caption(f"Eje: {question.track} | Macro: {question.macro_dominio or 'General'}")
 st.markdown(f"### {question.topic}")
+
+case = getattr(question, "case_study", None)
+if case is not None and question_format_status(question) == OFFICIAL_LABEL:
+    group = next(
+        (
+            items for items in official_question_groups(case)
+            if question.question_id in {item.question_id for item in items}
+        ),
+        [],
+    )
+    position = next(
+        (index for index, item in enumerate(group, start=1) if item.question_id == question.question_id),
+        1,
+    )
+    st.markdown(
+        "<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid "
+        "var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; "
+        "margin-bottom: 24px;'>"
+        "<div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; "
+        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen · "
+        f"Pregunta {position} de {len(group)}</div>"
+        f"<div style='font-size: 1.1rem; line-height: 1.7;'>{escape_html(case.text)}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 stem_text = question.stem
 if "SITUACIÓN:" in stem_text and "PREGUNTA:" in stem_text:

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from core.adaptive import (
     build_daily_plan,
+    build_hybrid_remaining_daily_plan,
     build_remaining_daily_plan,
     select_daily_questions,
 )
@@ -118,3 +119,34 @@ def test_remaining_daily_plan_stops_at_completed_goal():
         daily_goal=3,
     )
     assert plan == []
+
+
+def test_hybrid_daily_plan_includes_complete_official_cases():
+    official_questions = [question(f"official-{i}", "Normativa") for i in range(6)]
+    for index, item in enumerate(official_questions):
+        item.options_json = {"A": "Uno", "B": "Dos", "C": "Tres"}
+        item.correct_key = "A"
+        item.question_type = "SITUATIONAL"
+        item.stem = f"Pregunta {index}"
+        item.is_verified = True
+        item.quality_report = {"status": "APPROVED", "review": "human_source_grounded"}
+        item.created_at = str(index).zfill(2)
+    cases = []
+    for case_index in range(2):
+        group = official_questions[case_index * 3:(case_index + 1) * 3]
+        case = SimpleNamespace(id=f"case-{case_index}", text="Caso laboral", questions=group)
+        cases.append(case)
+        for item in group:
+            item.case_study = case
+
+    individual = [question(f"practice-{i}", "Refuerzo") for i in range(4)]
+    for item in individual:
+        item.case_study = None
+    plan = build_hybrid_remaining_daily_plan(
+        official_questions + individual, {}, {}, set(), daily_goal=8, max_official_cases=2
+    )
+    selected_ids = {item.question.question_id for item in plan}
+
+    assert len(plan) == 8
+    assert all(question.question_id in selected_ids for question in official_questions)
+    assert sum("caso tipo examen" in item.reasons for item in plan) == 6
