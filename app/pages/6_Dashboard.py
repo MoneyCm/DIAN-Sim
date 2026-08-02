@@ -329,9 +329,13 @@ try:
     mastered_qs = 0
     total_qs = 0
     try:
-        total_qs = db.query(QuestionPerformance).filter_by(user_id=u_id).count()
+        performance_query = db.query(QuestionPerformance).join(Question).filter(
+            QuestionPerformance.user_id == u_id,
+            Question.competition_id == active_competition_id,
+        )
+        total_qs = performance_query.count()
         if hasattr(QuestionPerformance, "is_mastered"):
-            mastered_qs = db.query(QuestionPerformance).filter_by(user_id=u_id, is_mastered=True).count()
+            mastered_qs = performance_query.filter(QuestionPerformance.is_mastered.is_(True)).count()
         else:
             # Fallback: estimate mastery if field is missing Mikey
             mastered_qs = 0 
@@ -341,8 +345,9 @@ try:
     mastery_pct = (mastered_qs / total_qs * 100) if total_qs > 0 else 0
 
     # Quality Metrics v32 Mikey
-    total_bank = db.query(Question).count()
-    verified_bank = db.query(Question).filter_by(is_verified=True).count()
+    bank_query = db.query(Question).filter(Question.competition_id == active_competition_id)
+    total_bank = bank_query.count()
+    verified_bank = bank_query.filter(Question.is_verified.is_(True)).count()
     quality_idx = (verified_bank / total_bank * 100) if total_bank > 0 else 0
 
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
@@ -353,7 +358,11 @@ try:
     with col_s3:
         st.metric("🏆 Puntos Totales", f"{stats.total_points} pts")
     with col_s4:
-        fav_count = db.query(QuestionPerformance).filter_by(user_id=u_id, is_favorite=True).count()
+        fav_count = db.query(QuestionPerformance).join(Question).filter(
+            QuestionPerformance.user_id == u_id,
+            QuestionPerformance.is_favorite.is_(True),
+            Question.competition_id == active_competition_id,
+        ).count()
         st.metric("⭐ Favoritas", f"{fav_count} Qs", "Para repasar")
 
     # Quality Indicator Mikey
@@ -363,7 +372,7 @@ try:
         <div style="background: #e0e0e0; height: 6px; border-radius: 3px; margin-top: 5px;">
             <div style="background: #4CAF50; width: {quality_idx}%; height: 100%; border-radius: 3px;"></div>
         </div>
-        <small style="color: #666;">{verified_bank} de {total_bank} preguntas auditadas y certificadas con IA.</small>
+        <small style="color: #666;">{verified_bank} de {total_bank} preguntas con revisión de calidad registrada.</small>
     </div>
     """, unsafe_allow_html=True)
 

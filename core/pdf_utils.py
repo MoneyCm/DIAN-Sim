@@ -89,7 +89,7 @@ def generate_exam_pdf(results_data, questions_details):
 
 def generate_certificate_pdf(user_name, opec_title, score):
     """
-    Genera un Certificado de Mérito por completar un simulacro con éxito. Mikey
+    Genera una constancia personal de práctica sin validez oficial.
     """
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -101,11 +101,11 @@ def generate_certificate_pdf(user_name, opec_title, score):
     # Title
     pdf.set_font('helvetica', 'B', 40)
     pdf.set_y(40)
-    pdf.cell(0, 20, "CERTIFICADO DE MÉRITO", 0, 1, 'C')
+    pdf.cell(0, 20, "CONSTANCIA DE PRÁCTICA", 0, 1, 'C')
     
     pdf.set_font('helvetica', '', 20)
     pdf.ln(10)
-    pdf.cell(0, 10, "Otorgado a:", 0, 1, 'C')
+    pdf.cell(0, 10, "Registro personal de:", 0, 1, 'C')
     
     # User Name
     pdf.set_font('helvetica', 'B', 30)
@@ -128,7 +128,9 @@ def generate_certificate_pdf(user_name, opec_title, score):
     pdf.set_font('helvetica', 'I', 12)
     pdf.set_y(170)
     date_str = datetime.datetime.now().strftime("%d de %B de %Y")
-    pdf.cell(0, 10, f"Generado por DIAN Sim el {date_str}", 0, 1, 'C')
+    pdf.cell(0, 6, f"Generado por DIAN Sim el {date_str}", 0, 1, 'C')
+    pdf.set_font('helvetica', '', 9)
+    pdf.cell(0, 5, "Documento formativo sin validez oficial ante la DIAN o la CNSC.", 0, 1, 'C')
     
     import io
     raw_pdf = pdf.output()

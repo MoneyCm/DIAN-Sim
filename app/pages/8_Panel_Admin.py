@@ -20,7 +20,7 @@ from core.config import get_api_key
 require_admin()
 
 load_css()
-render_header(title="Panel de Administración Maestro", subtitle="Gestión global de usuarios, leyes e inteligencia. Mikey")
+render_header(title="Panel de administración", subtitle="Usuarios, banco y recursos normativos")
 
 tab_stats, tab_users, tab_normativa, tab_anki = st.tabs(["📊 Estadísticas Globales", "👥 Gestión de Usuarios", "🏛️ Inteligencia Normativa", "🎴 Enriquecimiento Anki"])
 
@@ -46,7 +46,7 @@ with tab_stats:
     st.divider()
     st.subheader("Uso del Sistema")
     # Here we could add a plot of usage over time if needed.
-    st.info("El sistema está operando bajo el Protocolo CNSC 2667 con Inteligencia RAG Activa. Mikey")
+    st.info("Estas cifras son globales y abarcan todos los concursos registrados.")
 
 # --- TAB: USERS ---
 with tab_users:
@@ -69,9 +69,7 @@ with tab_users:
     df_users = pd.DataFrame(user_data)
     st.dataframe(df_users, use_container_width=True)
     
-    selected_user = st.selectbox("Gestionar Usuario", [u.username for u in users])
-    if st.button("Hacer Administrador (Simulado)"):
-        st.info(f"Funcionalidad para promover a {selected_user} a Admin lista para implementar. Mikey")
+    st.caption("La modificación de roles no está disponible desde esta pantalla.")
 
 # --- TAB: NORMATIVA ---
 with tab_normativa:
@@ -138,7 +136,7 @@ with tab_normativa:
         manager = NormativaManager()
         try:
             indexed = manager.index_all()
-            st.success(f"¡{uploaded_file.name} subido e indexado! Se crearon {indexed} fragmentos. Haz clic en 'Calcular Vectores Semánticos' para activar la búsqueda vectorial sobre esta nueva ley. Mikey")
+            st.success(f"¡{uploaded_file.name} subido e indexado! Se crearon {indexed} fragmentos. Haz clic en 'Calcular Vectores Semánticos' para activar la búsqueda vectorial sobre este documento.")
             st.balloons()
         except Exception as e:
             st.error(f"Error indexando automáticamente el nuevo PDF: {e}")
@@ -203,4 +201,4 @@ with tab_anki:
                 st.success(f"Se enriquecieron {result['generated']} preguntas.")
             st.rerun()
 st.divider()
-st.caption("🔒 Este panel es de uso exclusivo para el propietario de la plataforma. Mikey")
+st.caption("🔒 Panel restringido a administradores.")

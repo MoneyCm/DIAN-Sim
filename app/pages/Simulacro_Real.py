@@ -194,7 +194,9 @@ def load_exam_cases():
             return []
 
         # Prefer weak topics, while preserving a random mix when no match exists.
-        smart_topics = StatsService.get_smart_mix_topics(user_id, count=2) if user_id else []
+        smart_topics = StatsService.get_smart_mix_topics(
+            user_id, count=2, competition_id=competition_id
+        ) if user_id else []
         selected = []
         for topic in smart_topics:
             match = next(

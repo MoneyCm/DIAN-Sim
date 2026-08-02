@@ -24,7 +24,10 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Módulo de Ética e Integridad", subtitle="Preparación para evaluación de valores institucionales (10-15% del examen)")
+render_header(
+    title="Módulo de Ética e Integridad",
+    subtitle="Entrenamiento complementario de juicio ético y valores institucionales",
+)
 
 # Load ethics data
 ethics_path = os.path.join(PROJECT_ROOT, "data", "codigo_etica_dian.json")
@@ -34,8 +37,9 @@ with open(ethics_path, "r", encoding="utf-8") as f:
 st.markdown("""
 <div class="dian-card">
     <h3>📋 Sobre esta evaluación</h3>
-    <p>Las preguntas de <b>Ética e Integridad</b> representan el <b>10-15% del examen</b> de la DIAN. 
-    Utilizan la metodología de <b>Escala Likert</b> para medir tu alineación con los valores institucionales.</p>
+    <p>Este módulo practica decisiones relacionadas con <b>Ética e Integridad</b>. Su formato y
+    ponderación deben confirmarse en la guía oficial del proceso vigente; los resultados aquí son
+    formativos y no predicen por sí solos el puntaje del examen.</p>
     
     <p><b>Valores Institucionales DIAN:</b> Honestidad, Respeto, Compromiso, Diligencia, Justicia, Transparencia</p>
 </div>

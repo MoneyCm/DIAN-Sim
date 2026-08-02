@@ -33,13 +33,17 @@ class StatsService:
             if q:
                 # Find or Create Skill entry for this topic
                 skill = db.query(Skill).filter_by(
-                    user_id=user_id, 
-                    topic=q.topic
+                    user_id=user_id,
+                    competition_id=q.competition_id,
+                    track=q.track,
+                    competency=q.competency,
+                    topic=q.topic,
                 ).first()
                 
                 if not skill:
                     skill = Skill(
                         user_id=user_id,
+                        competition_id=q.competition_id,
                         track=q.track,
                         competency=q.competency,
                         topic=q.topic,
@@ -65,17 +69,20 @@ class StatsService:
             db.close()
 
     @staticmethod
-    def get_weakest_topics(user_id, limit=5):
+    def get_weakest_topics(user_id, limit=5, competition_id=None):
         """Returns list of skills with mastery < 70"""
         db = SessionLocal()
-        skills = db.query(Skill).filter(
+        query = db.query(Skill).filter(
             Skill.user_id == user_id,
             Skill.mastery_score < 70
-        ).order_by(Skill.mastery_score.asc()).limit(limit).all()
+        )
+        if competition_id is not None:
+            query = query.filter(Skill.competition_id == competition_id)
+        skills = query.order_by(Skill.mastery_score.asc()).limit(limit).all()
         db.close()
         return skills
     @staticmethod
-    def get_smart_mix_topics(user_id, count=3):
+    def get_smart_mix_topics(user_id, count=3, competition_id=None):
         """
         Retorna una mezcla inteligente de temas para simulacros:
         - 70% Debilidades (< 70 mastery)
@@ -92,7 +99,10 @@ class StatsService:
         for attempt in range(retries):
             try:
                 db = SessionLocal()
-                all_skills = db.query(Skill).filter_by(user_id=user_id).all()
+                query = db.query(Skill).filter_by(user_id=user_id)
+                if competition_id is not None:
+                    query = query.filter(Skill.competition_id == competition_id)
+                all_skills = query.all()
                 break # Success
             except OperationalError as e:
                 # v5.6 Retry on any OperationalError (Postgres timeout, SQLite lock, etc)

@@ -13,6 +13,7 @@ from db.models import Question
 from ui_utils import load_css, render_header, metric_card, render_custom_sidebar, render_favorite_button
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
 from core.legacy_question_audit import is_safe_for_active_study
+from core.competitions import get_active_competition_id
 from services.stats_service import StatsService
 
 from core.auth import AuthManager
@@ -107,19 +108,22 @@ with col4:
 
 st.divider()
 
-# --- v4.2 WEAKNESS RADAR (Adaptive Learning) ---
-st.subheader("📉 Radar de Debilidades (Histórico)")
+# Evidence-based reinforcement summary
+st.subheader("🎯 Prioridades de refuerzo")
 user_id = st.session_state.get("user_id")
 if user_id:
-    weak_skills = StatsService.get_weakest_topics(user_id, limit=3)
+    scope_db = SessionLocal()
+    active_competition_id = get_active_competition_id(scope_db, user_id)
+    scope_db.close()
+    weak_skills = StatsService.get_weakest_topics(
+        user_id, limit=3, competition_id=active_competition_id
+    )
     
     if weak_skills:
         c_radar, c_recommend = st.columns([1, 1])
         with c_radar:
-            st.markdown("##### ⚠️ Tus temas más críticos:")
+            st.markdown("##### Temas que conviene reforzar")
             for w in weak_skills:
-                # Heatmap color logic
-                color = "#ff4b4b" if w.mastery_score < 40 else "#ffa500"
                 st.markdown(f"**{w.topic}** ({w.mastery_score:.0f}%)")
                 st.progress(int(max(w.mastery_score, 0)) / 100)
                 
@@ -133,6 +137,7 @@ if user_id:
                 # Find a reference from the bank for this topic
                 db_ref = SessionLocal()
                 topic_refs = db_ref.query(Question).filter(
+                    Question.competition_id == active_competition_id,
                     Question.topic == top_weak.topic,
                     Question.source_refs != None,
                 ).all()
@@ -155,7 +160,7 @@ if user_id:
                  st.session_state["ai_default_diff"] = 3 if top_weak.mastery_score < 40 else 2
                  st.switch_page("pages/4_Generador_IA.py")
     else:
-        st.success("¡Tu mapa de calor está verde! Sigue así.")
+        st.info("Todavía no hay temas evaluados por debajo de la meta en este concurso.")
 else:
     st.info("Inicia sesión para ver tu rastreo de debilidades.")
 
@@ -180,8 +185,7 @@ for qid in q_ids:
 # Botones de Acción
 col_b1, col_b2, col_b3 = st.columns(3)
 with col_b1:
-    if st.button("📋 Ver Detalles", use_container_width=True):
-        st.session_state["show_details"] = not st.session_state.get("show_details", False)
+    st.button("📋 Detalle incluido abajo", disabled=True, use_container_width=True)
 with col_b2:
     try:
         pdf_bytes = generate_exam_pdf(data, details)
@@ -201,9 +205,16 @@ with col_b3:
         db_o.close()
         
         cert_pdf = generate_certificate_pdf(user_name, o_title, total_weighted)
-        st.download_button("🎓 Mi Certificado", data=cert_pdf, file_name=f"Certificado_DIAN_{user_name}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button(
+            "🎓 Constancia de práctica",
+            data=cert_pdf,
+            file_name=f"Constancia_practica_{user_name}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            help="Documento personal de seguimiento; no es un certificado oficial de la DIAN ni de la CNSC.",
+        )
     else:
-        st.button("🎯 Meta: 70%", disabled=True, use_container_width=True, help="Supera el 70% ponderado para obtener tu certificado.")
+        st.button("🎯 Meta: 70%", disabled=True, use_container_width=True, help="Supera el 70% ponderado para generar una constancia personal de práctica.")
 
 st.divider()
 

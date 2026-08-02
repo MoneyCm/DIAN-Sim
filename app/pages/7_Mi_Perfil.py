@@ -24,7 +24,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Perfil del Aspirante", subtitle="Analítica avanzada de compatibilidad y maestría. Mikey")
+render_header(title="Perfil del aspirante", subtitle="Tu progreso y evidencia de desempeño en el concurso activo")
 
 u_id = st.session_state.get("user_id")
 db = SessionLocal()
@@ -65,7 +65,7 @@ try:
             pct = min(100, int((current_progress / total_needed) * 100))
             st.progress(pct/100, text=f"{pct}% completado")
         else:
-            st.success("¡Has alcanzado el rango máximo de Comisionado Elite! Mikey 👑")
+            st.success("¡Has alcanzado el rango máximo de Comisionado Elite! 👑")
         
         st.divider()
         st.subheader("🎖️ Logros Recientes")

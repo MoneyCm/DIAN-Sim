@@ -412,7 +412,7 @@ if action == "Explorar / Bulk":
                                             st.success(f"Auditoría completada: {report.get('score')}/10")
                                             st.rerun()
                                         else:
-                                            st.warning("⏳ El servidor está actualizando el motor de IA. Por favor, espera 30 segundos y vuelve a intentar. Mikey")
+                                            st.warning("⏳ El motor de IA no respondió. Espera 30 segundos y vuelve a intentar.")
                                     else:
                                         st.error("Falta API Key")
                                 except Exception as e:
