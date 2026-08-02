@@ -20,6 +20,10 @@ from core.competitions import get_active_competition_id
 from core.exam_format import (
     OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL, question_format_status,
 )
+from core.question_review import (
+    approve_candidate, candidate_validation_error, is_reinforcement_candidate,
+    record_ai_audit, reject_candidate,
+)
 
 # pass # Removed st.set_page_config
 
@@ -122,9 +126,9 @@ if action == "Explorar / Bulk":
                                             "correct_key": q_aud.correct_key, 
                                             "rationale": q_aud.rationale
                                         })
-                                        q_aud.quality_report = report
-                                        if report.get("status") == "APPROVED":
-                                            q_aud.is_verified = True
+                                        record_ai_audit(q_aud, report)
+                                        # El dictamen de IA se conserva como ayuda; la aprobación
+                                        # para estudiar requiere comprobación normativa separada.
                                     
                                     # Delay to avoid 429 Rate Limit Mikey v39
                                     time.sleep(1.5) 
@@ -311,6 +315,41 @@ if action == "Explorar / Bulk":
                     st.markdown(f"**Respuesta Correcta:** :green[{q.correct_key}]")
                     if q.rationale:
                         st.caption(f"Justificación: {q.rationale}")
+                    if q.source_refs:
+                        st.caption(f"Fuente: {q.source_refs}")
+
+                    if is_reinforcement_candidate(q):
+                        st.warning("Refuerzo generado por IA: pendiente de comprobación normativa.")
+                        validation_error = candidate_validation_error(q)
+                        if validation_error:
+                            st.error(validation_error)
+                        elif AuthManager.is_admin():
+                            confirmation = st.checkbox(
+                                "Revisé el enunciado, la clave, la justificación y la fuente.",
+                                key=f"confirm_candidate_{q.question_id}",
+                            )
+                            approve_col, reject_col = st.columns(2)
+                            if approve_col.button(
+                                "✅ Aprobar para práctica",
+                                key=f"approve_candidate_{q.question_id}",
+                                disabled=not confirmation,
+                                use_container_width=True,
+                            ):
+                                approve_candidate(q, st.session_state.get("username", "admin"))
+                                db.commit()
+                                st.success("Refuerzo aprobado. Ya puede entrar en la práctica activa.")
+                                st.rerun()
+                            if reject_col.button(
+                                "⛔ Descartar candidato",
+                                key=f"reject_candidate_{q.question_id}",
+                                use_container_width=True,
+                            ):
+                                reject_candidate(q, st.session_state.get("username", "admin"))
+                                db.commit()
+                                st.success("Candidato descartado y conservado para trazabilidad.")
+                                st.rerun()
+                        else:
+                            st.info("Solo un administrador puede aprobar o descartar este candidato.")
                     
                     st.divider()
                     col_act1, col_act2, col_act3 = st.columns([1, 1, 1])
@@ -332,9 +371,9 @@ if action == "Explorar / Bulk":
                                                 "correct_key": q.correct_key, 
                                                 "rationale": q.rationale
                                             })
-                                            q.quality_report = report
-                                            if report.get("status") == "APPROVED":
-                                                q.is_verified = True
+                                            record_ai_audit(q, report)
+                                            # La IA orienta la revisión, pero no habilita por sí
+                                            # sola una pregunta para el estudio activo.
                                             db.commit()
                                             st.success(f"Auditoría completada: {report.get('score')}/10")
                                             st.rerun()
@@ -362,12 +401,14 @@ if action == "Explorar / Bulk":
                     if getattr(q, 'quality_report', None):
                         with st.expander("📄 Ver Reporte de Auditoría", expanded=False):
                             rep = q.quality_report
-                            st.markdown(f"**Score:** {rep.get('score')}/10 | **Status:** {rep.get('status')}")
-                            st.write(f"**Crítica:** {rep.get('critique')}")
+                            ai_rep = rep.get("ai_audit") if isinstance(rep.get("ai_audit"), dict) else rep
+                            score = ai_rep.get("score", "Sin calificar")
+                            st.markdown(f"**Score IA:** {score}/10 | **Estado de control:** {rep.get('status')}")
+                            st.write(f"**Crítica:** {ai_rep.get('critique', 'Sin observaciones')}")
                             st.write("**Hallazgos:**")
-                            for f in rep.get('findings', []):
+                            for f in ai_rep.get('findings', []):
                                 st.write(f"- {f}")
-                            st.info(f"💡 **Sugerencia:** {rep.get('suggestion')}")
+                            st.info(f"💡 **Sugerencia:** {ai_rep.get('suggestion', 'Sin sugerencias')}")
 
 elif action == "Carga Masiva (Excel/CSV)":
     st.info("Sube un archivo `.xlsx` o `.csv`. Columnas requeridas: `track, competency, topic, stem, options_A, options_B, options_C, options_D, correct_key, rationale` (opcional)")
