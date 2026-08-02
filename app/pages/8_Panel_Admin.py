@@ -217,41 +217,92 @@ with tab_normativa:
 
 # --- TAB: ANKI ENRICHMENT ---
 with tab_anki:
-    st.subheader("🎴 Enriquecimiento pedagógico para Anki")
+    st.subheader("🧠 Material de repaso explicado")
+    st.caption(
+        "La IA prepara para cada pregunta una regla clave, una excepción y el distractor más engañoso. "
+        "Este contenido mejora el repaso dentro de la app y también puede acompañar una exportación a Anki."
+    )
+    flash_anki = st.session_state.pop("admin_anki_result", None)
+    if flash_anki:
+        if flash_anki["errors"]:
+            st.warning(
+                f"Se prepararon {flash_anki['generated']} de {flash_anki['total']} preguntas; "
+                f"{flash_anki['errors']} requieren otro intento."
+            )
+        else:
+            st.success(f"Se prepararon {flash_anki['generated']} preguntas correctamente.")
+
     db_anki = SessionLocal()
     try:
-        generated_count = db_anki.query(QuestionAnkiEnrichment).filter(
+        ready_count = db_anki.query(QuestionAnkiEnrichment).filter(
             QuestionAnkiEnrichment.status.in_(["generated", "reviewed"])
         ).count()
+        reviewed_count = db_anki.query(QuestionAnkiEnrichment).filter_by(status="reviewed").count()
         error_count = db_anki.query(QuestionAnkiEnrichment).filter_by(status="error").count()
         total_questions_anki = db_anki.query(Question).count()
+        recent_errors = (
+            db_anki.query(QuestionAnkiEnrichment)
+            .filter_by(status="error")
+            .order_by(QuestionAnkiEnrichment.id.desc())
+            .limit(10)
+            .all()
+        )
+        error_rows = [
+            {
+                "Pregunta": item.question_id,
+                "Intentos": item.attempt_count,
+                "Motivo": item.error_message or "Error no especificado",
+            }
+            for item in recent_errors
+        ]
     finally:
         db_anki.close()
 
+    waiting_count = max(total_questions_anki - ready_count - error_count, 0)
+    coverage = round(ready_count * 100 / total_questions_anki) if total_questions_anki else 0
     col_a1, col_a2, col_a3, col_a4 = st.columns(4)
-    col_a1.metric("Preguntas", total_questions_anki)
-    col_a2.metric("Enriquecidas", generated_count)
-    col_a3.metric("Pendientes", max(total_questions_anki - generated_count, 0))
-    col_a4.metric("Errores", error_count)
+    col_a1.metric("Cobertura", f"{coverage}%", help=f"{ready_count} de {total_questions_anki} preguntas listas.")
+    col_a2.metric("Listas para repaso", ready_count, help=f"{reviewed_count} fueron revisadas manualmente.")
+    col_a3.metric("Sin preparar", waiting_count)
+    col_a4.metric("Reintentar", error_count)
+
+    st.progress(coverage / 100 if coverage else 0, text=f"Cobertura pedagógica: {coverage}%")
+    if error_rows:
+        with st.expander(f"Ver los últimos errores ({error_count})"):
+            st.dataframe(pd.DataFrame(error_rows), use_container_width=True, hide_index=True)
+            st.caption("Estos registros se vuelven a intentar automáticamente en la siguiente ejecución.")
 
     provider_anki = st.selectbox(
-        "Proveedor LLM", ["Gemini", "OpenAI", "Groq", "Mistral"], key="admin_anki_provider"
+        "Proveedor de IA", ["Gemini", "OpenAI", "Groq", "Mistral"], key="admin_anki_provider",
+        help="Se utiliza la clave global configurada por el administrador.",
     )
-    batch_limit = st.number_input(
-        "Máximo de preguntas en esta ejecución", min_value=1, max_value=500, value=25, step=5
-    )
-    force_regeneration = st.checkbox(
-        "Regenerar contenido no revisado",
-        value=False,
-        help="Los enriquecimientos revisados nunca se sobrescriben.",
-    )
+    provider_key = provider_anki.lower()
+    api_key_anki = get_api_key(provider_key)
+    if api_key_anki:
+        st.caption(f"✅ {provider_anki} está configurado. Solo se enviará el lote seleccionado.")
+    else:
+        st.warning(f"Falta configurar la API key global de {provider_anki}.")
 
-    if st.button("🧠 Ejecutar backfill Anki", type="primary", use_container_width=True):
-        provider_key = provider_anki.lower()
-        api_key_anki = get_api_key(provider_key)
-        if not api_key_anki:
-            st.error(f"No hay una API key global configurada para {provider_anki}.")
-        else:
+    batch_limit = st.number_input(
+        "Preguntas para preparar ahora", min_value=1, max_value=100, value=25, step=5,
+        help="Conviene trabajar en lotes pequeños para controlar costo y detectar fallos pronto.",
+    )
+    with st.expander("Opciones avanzadas"):
+        force_regeneration = st.checkbox(
+            "Volver a generar contenido existente que aún no ha sido revisado",
+            value=False,
+            help="Puede consumir más API. El contenido marcado como revisado se conserva.",
+        )
+
+    available_work = total_questions_anki - reviewed_count if force_regeneration else waiting_count + error_count
+    run_count = min(int(batch_limit), max(available_work, 0))
+    if st.button(
+        f"🧠 Preparar siguiente lote ({run_count})",
+        type="primary",
+        use_container_width=True,
+        disabled=not api_key_anki or run_count == 0,
+    ):
+        if api_key_anki:
             progress_anki = st.progress(0)
             status_anki = st.empty()
 
@@ -267,12 +318,7 @@ with tab_anki:
                 force=force_regeneration,
                 progress_callback=progress_anki_cb,
             )
-            if result["errors"]:
-                st.warning(
-                    f"Generadas: {result['generated']} de {result['total']}. Errores: {result['errors']}."
-                )
-            else:
-                st.success(f"Se enriquecieron {result['generated']} preguntas.")
+            st.session_state["admin_anki_result"] = result
             st.rerun()
 st.divider()
 st.caption("🔒 Panel restringido a administradores.")
