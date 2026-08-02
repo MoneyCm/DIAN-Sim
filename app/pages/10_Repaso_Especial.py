@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import os
 import sys
 from collections import Counter
@@ -11,6 +11,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from core.adaptive import calculate_mastery_update, update_priority
+from core.attempt_service import record_attempt
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
 from core.spaced_repetition import schedule_review
@@ -20,23 +21,23 @@ from ui_utils import load_css, render_custom_sidebar, render_favorite_button, re
 
 
 CONFIDENCE_OPTIONS = {
-    "Adiviné": "guess",
-    "Dudé entre opciones": "unsure",
+    "AdivinÃ©": "guess",
+    "DudÃ© entre opciones": "unsure",
     "Estaba seguro": "confident",
 }
 
 ERROR_TYPES = {
-    "No conocía la regla": "desconocimiento",
-    "Confundí conceptos": "confusion_conceptual",
-    "Interpreté mal el caso": "mala_interpretacion",
+    "No conocÃ­a la regla": "desconocimiento",
+    "ConfundÃ­ conceptos": "confusion_conceptual",
+    "InterpretÃ© mal el caso": "mala_interpretacion",
     "No vi una palabra clave": "lectura_incompleta",
-    "Respondí con afán": "apuro",
+    "RespondÃ­ con afÃ¡n": "apuro",
 }
 ERROR_LABELS = {value: label for label, value in ERROR_TYPES.items()}
 
 
 if not AuthManager.check_auth():
-    st.warning("Inicia sesión para acceder a tus repasos.")
+    st.warning("Inicia sesiÃ³n para acceder a tus repasos.")
     st.stop()
 
 load_css()
@@ -67,13 +68,13 @@ finally:
     db.close()
 
 review_tab, errors_tab, favorites_tab = st.tabs(
-    [f"🧠 Repasos de hoy ({due_count})", "❌ Banco de errores", "⭐ Favoritas"]
+    [f"ðŸ§  Repasos de hoy ({due_count})", "âŒ Banco de errores", "â­ Favoritas"]
 )
 
 with review_tab:
     st.markdown("### Cola de repaso espaciado")
     st.caption(
-        "Tu respuesta, seguridad y tipo de error determinan cuándo volverás a ver cada pregunta."
+        "Tu respuesta, seguridad y tipo de error determinan cuÃ¡ndo volverÃ¡s a ver cada pregunta."
     )
 
     review_day = datetime.date.today().isoformat()
@@ -117,11 +118,11 @@ with review_tab:
             next_review = upcoming_rows[0].next_review
             st.metric("Repasos programados", len(upcoming_rows))
             st.caption(
-                f"Próximo repaso: {next_review.strftime('%d/%m/%Y')} · "
+                f"PrÃ³ximo repaso: {next_review.strftime('%d/%m/%Y')} Â· "
                 "hasta entonces puedes continuar con el plan diario."
             )
         else:
-            st.caption("Aún no hay repasos programados. Se crearán al responder y corregir preguntas.")
+            st.caption("AÃºn no hay repasos programados. Se crearÃ¡n al responder y corregir preguntas.")
 
         optional_db = SessionLocal()
         try:
@@ -140,9 +141,18 @@ with review_tab:
                 st.session_state["native_review_target"] = len(optional_ids)
                 st.rerun()
         with action_cols[1]:
-            if st.button("Continuar plan diario", type="primary", use_container_width=True):
+            continue_label = (
+                "Continuar al estudio guiado"
+                if st.session_state.get("continue_daily_after_review")
+                else "Continuar plan diario"
+            )
+            if st.button(continue_label, type="primary", use_container_width=True):
+                if st.session_state.pop("continue_daily_after_review", None):
+                    st.session_state["start_daily_after_review"] = True
                 st.switch_page("pages/6_Dashboard.py")
     else:
+        if st.session_state.get("continue_daily_after_review"):
+            st.progress(0.05, text="Paso previo · Repasos vencidos")
         current_question_id = review_queue[0]
         review_db = SessionLocal()
         try:
@@ -160,7 +170,7 @@ with review_tab:
             target = max(1, min(20, target))
             st.session_state["native_review_target"] = target
             st.progress(min(completed / target, 1.0))
-            st.caption(f"Repaso {completed + 1} de {target} · Tema: {question.topic}")
+            st.caption(f"Repaso {completed + 1} de {target} Â· Tema: {question.topic}")
             st.markdown(f"### {question.stem}")
 
             option_keys = list(question.options_json.keys())
@@ -197,76 +207,35 @@ with review_tab:
                 st.info(question.rationale or "Revisa la regla asociada antes de continuar.")
 
                 confidence_label = st.selectbox(
-                    "¿Qué tan seguro estabas?",
+                    "Â¿QuÃ© tan seguro estabas?",
                     list(CONFIDENCE_OPTIONS.keys()),
                     index=1,
                 )
                 error_label = None
                 if not is_correct:
                     error_label = st.selectbox(
-                        "¿Cuál fue la causa principal del error?",
+                        "Â¿CuÃ¡l fue la causa principal del error?",
                         list(ERROR_TYPES.keys()),
                     )
 
                 if st.button("Guardar aprendizaje y continuar", type="primary"):
                     review_time = datetime.datetime.utcnow()
                     chosen_key = feedback["selected_key"]
-                    review_db.add(
-                        Attempt(
-                            question_id=question.question_id,
-                            user_id=user_id,
-                            chosen_key=chosen_key,
-                            is_correct=is_correct,
-                            created_at=review_time,
-                        )
-                    )
-
-                    performance.hits = int(performance.hits or 0) + (1 if is_correct else 0)
-                    performance.misses = int(performance.misses or 0) + (0 if is_correct else 1)
-                    performance.last_attempt = review_time
-                    schedule = schedule_review(
-                        performance,
-                        is_correct=is_correct,
+                    schedule = record_attempt(
+                        review_db, user_id=user_id, question=question,
+                        chosen_key=chosen_key,
                         confidence=CONFIDENCE_OPTIONS[confidence_label],
                         error_type=ERROR_TYPES.get(error_label) if error_label else None,
-                        now=review_time,
+                        when=review_time,
                     )
-
-                    skill = review_db.query(Skill).filter_by(
-                        user_id=user_id,
-                        competition_id=question.competition_id,
-                        track=question.track,
-                        competency=question.competency,
-                        topic=question.topic,
-                    ).first()
-                    if not skill:
-                        skill = Skill(
-                            user_id=user_id,
-                            competition_id=question.competition_id,
-                            track=question.track,
-                            competency=question.competency,
-                            topic=question.topic,
-                            mastery_score=0.0,
-                            priority_weight=1.0,
-                        )
-                        review_db.add(skill)
-                    skill.mastery_score = calculate_mastery_update(
-                        is_correct, float(skill.mastery_score or 0.0)
-                    )
-                    skill.priority_weight = update_priority(
-                        float(skill.priority_weight or 1.0), is_correct
-                    )
-                    skill.last_seen = review_time
-
                     if is_correct:
                         question.global_hits = int(question.global_hits or 0) + 1
                     else:
                         question.global_misses = int(question.global_misses or 0) + 1
-
                     review_db.commit()
                     st.toast(
-                        f"Próximo repaso en {schedule.interval_days:.0f} día(s).",
-                        icon="✅",
+                        "Aprendizaje guardado y repaso actualizado.",
+                        icon="âœ…",
                     )
                     st.session_state["native_review_completed"] = completed + 1
                     if st.session_state.get("voluntary_review_ids"):
@@ -298,7 +267,7 @@ with errors_tab:
         if error_causes:
             most_common_code, most_common_count = error_causes.most_common(1)[0]
             st.info(
-                f"Causa más repetida: **{ERROR_LABELS.get(most_common_code, most_common_code)}** "
+                f"Causa mÃ¡s repetida: **{ERROR_LABELS.get(most_common_code, most_common_code)}** "
                 f"en {most_common_count} pregunta(s)."
             )
         for row in error_rows:
@@ -308,13 +277,13 @@ with errors_tab:
                     row.next_review.strftime("%Y-%m-%d") if row.next_review else "pendiente"
                 )
                 with st.expander(
-                    f"{question.topic} · {row.misses} fallo(s) · próximo: {next_text}"
+                    f"{question.topic} Â· {row.misses} fallo(s) Â· prÃ³ximo: {next_text}"
                 ):
                     st.write(question.stem)
-                    st.info(question.rationale or "Sin explicación registrada.")
+                    st.info(question.rationale or "Sin explicaciÃ³n registrada.")
                     if row.last_error_type:
                         st.caption(
-                            "Última causa detectada: "
+                            "Ãšltima causa detectada: "
                             f"{ERROR_LABELS.get(row.last_error_type, row.last_error_type)}"
                         )
     finally:
@@ -343,3 +312,4 @@ with favorites_tab:
                     render_favorite_button(question.question_id, user_id)
     finally:
         favorites_db.close()
+

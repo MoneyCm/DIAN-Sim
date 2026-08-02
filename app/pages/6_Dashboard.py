@@ -151,6 +151,23 @@ try:
         db.commit()
         active_daily_run = None
 
+    if st.session_state.pop("start_daily_after_review", False):
+        if active_daily_run:
+            restore_daily_run_to_session(st.session_state, active_daily_run)
+            st.switch_page("pages/2_Ejecucion.py")
+        elif daily_plan:
+            active_daily_run = save_daily_run(db, u_id, {
+                "question_ids": [item.question.question_id for item in daily_plan],
+                "answers": {}, "checked_answers": {}, "confidences": {},
+                "error_types": {}, "current_idx": 0,
+                "total_time_limit": timed_session.total_minutes * 60,
+                "started_at": datetime.datetime.now().timestamp(),
+                "learning_complete": False,
+                "learning_minutes": timed_session.learning_minutes,
+            })
+            restore_daily_run_to_session(st.session_state, active_daily_run)
+            st.switch_page("pages/2_Ejecucion.py")
+
     exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
 
     week_start_date = bogota_now.date() - datetime.timedelta(days=bogota_now.weekday())
@@ -285,6 +302,9 @@ try:
                 ):
                     if active_daily_run:
                         restore_daily_run_to_session(st.session_state, active_daily_run)
+                    elif due_review_count:
+                        st.session_state["continue_daily_after_review"] = True
+                        st.switch_page("pages/10_Repaso_Especial.py")
                     else:
                         active_daily_run = save_daily_run(db, u_id, {
                             "question_ids": [item.question.question_id for item in daily_plan],

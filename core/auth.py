@@ -91,6 +91,13 @@ class AuthManager:
 
     @staticmethod
     def login(username, password):
+        # Limitación básica por sesión para frenar intentos automatizados sin
+        # introducir una tabla nueva ni bloquear permanentemente al usuario.
+        now = time.time()
+        attempts = st.session_state.setdefault("_login_attempts", {})
+        state = attempts.get(str(username), {"count": 0, "locked_until": 0.0})
+        if now < float(state.get("locked_until", 0.0)):
+            return False
         from db.session import engine
         try:
             with engine.connect() as conn:
@@ -105,9 +112,15 @@ class AuthManager:
                     AuthManager._persist_login(row[0], row[1], row[3])
                     if "is_pro_cache" in st.session_state:
                         del st.session_state["is_pro_cache"]
+                    attempts.pop(str(username), None)
                     return True
         except Exception as e:
             print(f"🔥 Auth Error: {e}", file=sys.stderr)
+        state["count"] = int(state.get("count", 0)) + 1
+        if state["count"] >= 5:
+            state["locked_until"] = now + 60
+            state["count"] = 0
+        attempts[str(username)] = state
         return False
 
     @staticmethod

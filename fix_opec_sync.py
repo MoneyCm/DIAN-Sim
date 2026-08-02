@@ -1,16 +1,22 @@
-from sqlalchemy import create_engine, text
+﻿from sqlalchemy import create_engine, text
+import os
 import sys
+from dotenv import load_dotenv
 
-# URL de Neon del usuario
-DATABASE_URL = "postgresql://neondb_owner:npg_2rViwYLTN3bM@ep-empty-paper-ai2z00om-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def fix_user_opec_mismatch():
-    print("🚀 Ajustando Mismatch de OPEC en Neon...")
+    if not DATABASE_URL:
+        raise SystemExit("DATABASE_URL no está configurada; no se realizará ninguna modificación.")
+    if "sqlite" in DATABASE_URL.lower():
+        raise SystemExit("Este script está destinado a PostgreSQL/Neon, no a SQLite local.")
+    print("ðŸš€ Ajustando Mismatch de OPEC en Neon...")
     try:
         engine = create_engine(DATABASE_URL)
         with engine.connect() as conn:
-            # 1. Corregir el número de OPEC para el usuario Cesar (ID 2)
-            # El usuario reportó 236769 en los requisitos pero el diagnóstico dice 236739
+            # 1. Corregir el nÃºmero de OPEC para el usuario Cesar (ID 2)
+            # El usuario reportÃ³ 236769 en los requisitos pero el diagnÃ³stico dice 236739
             conn.execute(text("""
                 UPDATE user_opec 
                 SET opec_number = '236769' 
@@ -18,7 +24,7 @@ def fix_user_opec_mismatch():
             """))
             
             # 2. Asegurar que los Requisitos de NBC sean los correctos
-            req_text = "Título de PROFESIONAL en NBC: ADMINISTRACION ,O, NBC: CIENCIA POLITICA, RELACIONES INTERNACIONALES ,O, NBC: CONTADURIA PUBLICA ,O, NBC: DERECHO Y AFINES ,O, NBC: ECONOMIA ,O, NBC: INGENIERIA ADMINISTRATIVA Y AFINES ,O, NBC: INGENIERIA DE SISTEMAS, TELEMATICA Y AFINES ,O, NBC: INGENIERIA INDUSTRIAL Y AFINES ,O, NBC: INGENIERIA QUIMICA Y AFINES ,O, NBC: MATEMATICAS, ESTADISTICA Y AFINES."
+            req_text = "TÃ­tulo de PROFESIONAL en NBC: ADMINISTRACION ,O, NBC: CIENCIA POLITICA, RELACIONES INTERNACIONALES ,O, NBC: CONTADURIA PUBLICA ,O, NBC: DERECHO Y AFINES ,O, NBC: ECONOMIA ,O, NBC: INGENIERIA ADMINISTRATIVA Y AFINES ,O, NBC: INGENIERIA DE SISTEMAS, TELEMATICA Y AFINES ,O, NBC: INGENIERIA INDUSTRIAL Y AFINES ,O, NBC: INGENIERIA QUIMICA Y AFINES ,O, NBC: MATEMATICAS, ESTADISTICA Y AFINES."
             conn.execute(text("""
                 UPDATE user_opec 
                 SET requirements = :req
@@ -26,10 +32,12 @@ def fix_user_opec_mismatch():
             """), {"req": req_text})
             
             conn.commit()
-            print("✅ OPEC y Requisitos sincronizados en Neon.")
+            print("âœ… OPEC y Requisitos sincronizados en Neon.")
             
     except Exception as e:
-        print(f"❌ Error: {e}", file=sys.stderr)
+        print(f"âŒ Error: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     fix_user_opec_mismatch()
+
+

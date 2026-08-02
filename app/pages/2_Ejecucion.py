@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import os, sys, time
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
@@ -9,12 +9,14 @@ from db.session import SessionLocal
 from db.models import Question, Attempt, Skill
 import datetime
 from core.adaptive import calculate_mastery_update, update_priority
+from core.attempt_service import record_attempt
+from core.session_results import save_last_result
 from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
 from core.study_resume import (
-    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
+    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run, active_elapsed_seconds, pause_daily_run, resume_daily_run, resume_daily_run,
 )
 from core.generators.llm import LLMGenerator
 from core.guided_learning import build_guided_learning_brief
@@ -55,85 +57,16 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
             if is_right:
                 eje_results[track][0] += 1
 
-            # Create Attempt
-            att = Attempt(
-                question_id=qid,
-                user_id=u_id,
-                chosen_key=key_chosen,
-                is_correct=is_right,
-                created_at=datetime.datetime.utcnow()
-            )
-            db.add(att)
-            
-            # Update Records with resilient assignment v32 Mikey
-            if is_right:
-                safe_setattr(q_obj, 'global_hits', getattr(q_obj, 'global_hits', 0) + 1)
-            else:
-                safe_setattr(q_obj, 'global_misses', getattr(q_obj, 'global_misses', 0) + 1)
-            skill = db.query(Skill).filter_by(user_id=u_id, competition_id=q_obj.competition_id, track=q_obj.track, competency=q_obj.competency, topic=q_obj.topic).first()
-            if not skill:
-                skill = Skill()
-                safe_setattr(skill, "user_id", u_id)
-                safe_setattr(skill, "competition_id", q_obj.competition_id)
-                safe_setattr(skill, "track", q_obj.track)
-                safe_setattr(skill, "competency", q_obj.competency)
-                safe_setattr(skill, "topic", q_obj.topic)
-                safe_setattr(skill, "mastery_score", 0.0)
-                safe_setattr(skill, "priority_weight", 1.0)
-                db.add(skill)
-                db.flush()
-            
-            # Sync taxonomy & weights safely
-            safe_setattr(skill, "macro_dominio", q_obj.macro_dominio)
-            safe_setattr(skill, "micro_competencia", q_obj.micro_competencia)
-            
-            # Update Mastery Record (Fase 2 OPEC)
-            from db.models import QuestionPerformance
-            perf = db.query(QuestionPerformance).filter_by(user_id=u_id, question_id=qid).first()
-            if not perf:
-                perf = QuestionPerformance()
-                safe_setattr(perf, "user_id", u_id)
-                safe_setattr(perf, "question_id", qid)
-                safe_setattr(perf, "hits", 0)
-                safe_setattr(perf, "misses", 0)
-                safe_setattr(perf, "mastery_level", 0.0)
-                db.add(perf)
-            
-            # Safety check for Nulls
-            if perf.hits is None: perf.hits = 0
-            if perf.misses is None: perf.misses = 0
-            
-            if is_right:
-                perf.hits += 1
-            else:
-                perf.misses += 1
-            
-            total_attempts = perf.hits + perf.misses
-            if total_attempts > 0:
-                safe_setattr(perf, "mastery_level", (perf.hits / total_attempts) * 10.0)
-                
-            review_now = datetime.datetime.utcnow()
-            safe_setattr(perf, "last_attempt", review_now)
-            schedule_review(
-                perf,
-                is_correct=is_right,
+            # Registro Ãºnico: historial, rendimiento, dominio y repaso espaciado.
+            record_attempt(
+                db, user_id=u_id, question=q_obj, chosen_key=key_chosen,
                 confidence=confidences.get(qid, "unsure" if is_right else "guess"),
                 error_type=error_types.get(qid),
-                now=review_now,
             )
-            
-            # Threshold logic v21
-            m_lvl = getattr(perf, "mastery_level", 0.0)
-            if total_attempts >= 5 and m_lvl >= 7.5:
-                safe_setattr(perf, "is_mastered", True)
-            
-            skill.mastery_score = calculate_mastery_update(is_right, skill.mastery_score)
-            
-            # Update priority weight safely
-            new_weight = update_priority(getattr(skill, "priority_weight", 1.0), is_right)
-            safe_setattr(skill, "priority_weight", new_weight)
-            
-            safe_setattr(skill, "last_seen", datetime.datetime.utcnow())
+            if is_right:
+                safe_setattr(q_obj, "global_hits", getattr(q_obj, "global_hits", 0) + 1)
+            else:
+                safe_setattr(q_obj, "global_misses", getattr(q_obj, "global_misses", 0) + 1)
         
         # Breakdown into dict of tuples for update_user_stats
         breakdown = {k: (v[0], v[1]) for k,v in eje_results.items()}
@@ -148,6 +81,15 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
         st.session_state["exam_mode"] = False
         st.session_state["last_results"] = {
             "session_kind": st.session_state.get("study_session_kind", "simulation"),
+            "duration_seconds": int(
+                float(st.session_state.get("active_seconds", 0.0))
+                + max(
+                    0.0,
+                    time.time() - float(
+                        st.session_state.get("last_resumed_at", st.session_state.get("exam_start_time", time.time()))
+                    ),
+                )
+            ),
             "total": total_q,
             "correct": correct_count,
             "score": (correct_count / total_q) * 100 if total_q > 0 else 0,
@@ -159,10 +101,12 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
             "new_achievements": [a.name for a in new_achievements],
             "breakdown": breakdown
         }
+        save_last_result(db, u_id, st.session_state["last_results"])
+        db.commit()
         return True
     except Exception as e:
         db.rollback()
-        st.error(f"❌ Error al guardar resultados: {e}")
+        st.error(f"Ã¢ÂÅ’ Error al guardar resultados: {e}")
         return False
 
 # --- UI Setup ---
@@ -176,7 +120,7 @@ from core.auth import AuthManager
 # pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
-    st.warning("Sesión expirada. Por favor inicia sesión.")
+    st.warning("SesiÃƒÂ³n expirada. Por favor inicia sesiÃƒÂ³n.")
     st.stop()
 
 load_css()
@@ -197,6 +141,7 @@ st.markdown("""
 
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     resume_db = SessionLocal()
+
     resumed_run = load_daily_run(resume_db, st.session_state.get("user_id"))
     resume_db.close()
     if resumed_run:
@@ -222,15 +167,27 @@ def current_daily_payload(question_ids, position):
         "started_at": st.session_state["exam_start_time"],
         "learning_complete": st.session_state.get("daily_learning_complete", False),
         "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
+        "active_seconds": st.session_state.get("active_seconds", 0.0),
+        "last_resumed_at": st.session_state.get("last_resumed_at", st.session_state["exam_start_time"]),
+        "paused": st.session_state.get("daily_run_paused", False),
     }
 
-render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
+render_header(title="SesiÃƒÂ³n diaria guiada" if is_daily_session else "Simulacro en curso")
 
 q_ids = st.session_state["exam_questions"]
 current_idx = st.session_state["current_idx"]
 total_q = len(q_ids)
 
 db = SessionLocal()
+
+if is_daily_session and st.session_state.get("daily_run_paused", False):
+    st.info("Sesión pausada. El cronómetro no está contando tiempo.")
+    if st.button("▶️ Reanudar sesión", type="primary", use_container_width=True):
+        resumed = resume_daily_run(current_daily_payload(st.session_state["exam_questions"], st.session_state["current_idx"]))
+        save_daily_run(db, st.session_state.get("user_id"), resumed)
+        restore_daily_run_to_session(st.session_state, resumed)
+        st.rerun()
+
 current_q_id = q_ids[current_idx]
 question = db.query(Question).filter(Question.question_id == current_q_id).first()
 
@@ -242,10 +199,10 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
         session_questions,
         st.session_state.get("daily_learning_minutes", 8),
     )
-    st.progress(0.25, text="Paso 2 de 4 · Estudio guiado")
+    st.progress(0.15, text="Paso 1 de 3 · Estudio guiado")
     with st.container(border=True):
-        st.subheader(f"📖 Estudia durante {brief.get('minutes', 8)} minutos")
-        st.markdown(f"### {brief.get('topic', 'Tema de la sesión')}")
+        st.subheader(f"Ã°Å¸â€œâ€“ Estudia durante {brief.get('minutes', 8)} minutos")
+        st.markdown(f"### {brief.get('topic', 'Tema de la sesiÃƒÂ³n')}")
         st.caption(f"Macrodominio: {brief.get('macro', 'General')}")
         st.write(f"**Objetivo:** {brief.get('objective', '')}")
         sources = brief.get("sources", [])
@@ -255,15 +212,15 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
                 st.markdown(f"- {source}")
         else:
             st.warning(
-                "Este bloque no tiene una fuente precisa registrada. No memorices una explicación "
-                "sin respaldo; continúa con la práctica y revisa la fuente al corregir."
+                "Este bloque no tiene una fuente precisa registrada. No memorices una explicaciÃƒÂ³n "
+                "sin respaldo; continÃƒÂºa con la prÃƒÂ¡ctica y revisa la fuente al corregir."
             )
         st.markdown(
-            "**Recuperación activa:** cierra el material y explica en voz alta la regla, "
-            "una excepción y cómo actuarías en un caso laboral."
+            "**RecuperaciÃƒÂ³n activa:** cierra el material y explica en voz alta la regla, "
+            "una excepciÃƒÂ³n y cÃƒÂ³mo actuarÃƒÂ­as en un caso laboral."
         )
         ready = st.checkbox(
-            "Ya estudié la fuente y puedo explicarla sin mirarla",
+            "Ya estudiÃƒÂ© la fuente y puedo explicarla sin mirarla",
             key="daily_learning_ready",
         )
         if st.button(
@@ -273,7 +230,6 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
             disabled=not ready,
         ):
             st.session_state["daily_learning_complete"] = True
-            st.session_state["daily_learning_complete"] = True
             save_daily_run(
                 db, st.session_state.get("user_id"),
                 current_daily_payload(q_ids, current_idx),
@@ -282,13 +238,23 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
     db.close()
     st.stop()
 
+if is_daily_session:
+    st.caption("Paso 2 de 3 · Práctica situacional adaptativa")
+
 # --- v2.0 NEW: Chronometer / Timer ---
 if "total_time_limit" not in st.session_state:
     # GOA Rule: 2.5 minutes per situational question
     st.session_state["total_time_limit"] = 150 * total_q 
 
 # Calculate real-time remaining
-elapsed = time.time() - st.session_state.get("exam_start_time", time.time())
+if is_daily_session:
+    elapsed = active_elapsed_seconds(current_daily_payload(q_ids, current_idx))
+else:
+    now = time.time()
+    elapsed = float(st.session_state.get("active_seconds", 0.0)) + max(
+        0.0,
+        now - float(st.session_state.get("last_resumed_at", st.session_state.get("exam_start_time", now))),
+    )
 time_left = max(0, int(st.session_state["total_time_limit"] - elapsed))
 
 # Hardcore Mode Check
@@ -302,7 +268,7 @@ with st.container():
     col_prog1, col_prog2 = st.columns([3, 1])
     with col_prog1:
         progress = (current_idx / total_q)
-        label = "🚨 MODO REALISTA (HARDCORE)" if is_hardcore else f"Progreso: {int(progress*100)}%"
+        label = "Ã°Å¸Å¡Â¨ MODO REALISTA (HARDCORE)" if is_hardcore else f"Progreso: {int(progress*100)}%"
         st.progress(progress, text=label)
     with col_prog2:
         color = "#D90000" if time_left < (total_q * 20) else "#ffa500"
@@ -324,7 +290,7 @@ with st.container():
                 for (const btn of buttons) {{
                     if (btn.innerText && btn.innerText.includes(labelText)) {{
                         btn.click();
-                        return true;
+
                     }}
                 }}
                 return false;
@@ -362,7 +328,7 @@ with st.container():
         st.components.v1.html(js_code, height=0, width=0)
 
 if time_left <= 0:
-    st.error("⏳ ¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")
+    st.error("Ã¢ÂÂ³ Ã‚Â¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")
 
 # Question Card
 st.markdown('<div class="dian-card">', unsafe_allow_html=True)
@@ -387,19 +353,19 @@ if case is not None and question_format_status(question) == OFFICIAL_LABEL:
         "var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; "
         "margin-bottom: 24px;'>"
         "<div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; "
-        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen · "
+        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen Ã‚Â· "
         f"Pregunta {position} de {len(group)}</div>"
         f"<div style='font-size: 1.1rem; line-height: 1.7;'>{escape_html(case.text)}</div></div>",
         unsafe_allow_html=True,
     )
 
 stem_text = question.stem
-if "SITUACIÓN:" in stem_text and "PREGUNTA:" in stem_text:
+if "SITUACIÃƒâ€œN:" in stem_text and "PREGUNTA:" in stem_text:
     try:
         parts = stem_text.split("PREGUNTA:")
-        sit_part = escape_html(parts[0].replace("SITUACIÓN:", "").strip())
+        sit_part = escape_html(parts[0].replace("SITUACIÃƒâ€œN:", "").strip())
         q_part = escape_html(parts[1].strip())
-        st.markdown(f"<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; margin-bottom: 24px; backdrop-filter: blur(5px);'><div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'><span style='background: var(--dian-red); width: 8px; height: 8px; border-radius: 50%;'></span>Caso / Situación Laboral</div><div style='font-size: 1.1rem; line-height: 1.7; color: #334155;'>{sit_part}</div></div><div class='question-stem'>{q_part}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; margin-bottom: 24px; backdrop-filter: blur(5px);'><div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'><span style='background: var(--dian-red); width: 8px; height: 8px; border-radius: 50%;'></span>Caso / SituaciÃƒÂ³n Laboral</div><div style='font-size: 1.1rem; line-height: 1.7; color: #334155;'>{sit_part}</div></div><div class='question-stem'>{q_part}</div>", unsafe_allow_html=True)
     except:
         st.markdown(f"<div class='question-stem'>{escape_html(stem_text)}</div>", unsafe_allow_html=True)
 else:
@@ -427,12 +393,12 @@ if selected_val and not is_answer_checked:
         save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
 if is_daily_session and not is_answer_checked:
     confidence_labels = {
-        "guess": "Adiviné",
+        "guess": "AdivinÃƒÂ©",
         "unsure": "Tengo dudas",
         "confident": "Estoy seguro",
     }
     selected_confidence = st.radio(
-        "Antes de comprobar: ¿qué tan seguro estás?",
+        "Antes de comprobar: Ã‚Â¿quÃƒÂ© tan seguro estÃƒÂ¡s?",
         list(confidence_labels),
         format_func=confidence_labels.get,
         index=(
@@ -448,9 +414,18 @@ if is_daily_session and not is_answer_checked:
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
 
+if is_daily_session:
+    if st.button("⏸️ Pausar y salir", use_container_width=True):
+        payload = pause_daily_run(current_daily_payload(q_ids, current_idx))
+        save_daily_run(db, st.session_state.get("user_id"), payload)
+        st.session_state["daily_run_paused"] = True
+        st.session_state["exam_mode"] = False
+        db.close()
+        st.switch_page("pages/6_Dashboard.py")
+
 col1, col2, col3 = st.columns([1, 4, 1])
 with col1:
-    if st.button("⬅️ Anterior", use_container_width=True):
+    if st.button("Ã¢Â¬â€¦Ã¯Â¸Â Anterior", use_container_width=True):
         st.session_state["current_idx"] = max(0, st.session_state["current_idx"] - 1)
         if is_daily_session:
             save_daily_run(
@@ -464,7 +439,7 @@ with col2:
     if is_daily_session:
         if not is_answer_checked:
             if st.button(
-                "✅ Comprobar respuesta", use_container_width=True,
+                "Ã¢Å“â€¦ Comprobar respuesta", use_container_width=True,
                 disabled=(
                     current_q_id not in st.session_state["answers"]
                     or current_q_id not in st.session_state["confidences"]
@@ -483,14 +458,14 @@ with col2:
                     f"La respuesta correcta es {question.correct_key}) {correct_text}"
                 )
                 error_labels = {
-                    "desconocimiento": "No conocía la regla",
-                    "confusion_conceptual": "Confundí conceptos",
-                    "mala_interpretacion": "Interpreté mal el caso",
+                    "desconocimiento": "No conocÃƒÂ­a la regla",
+                    "confusion_conceptual": "ConfundÃƒÂ­ conceptos",
+                    "mala_interpretacion": "InterpretÃƒÂ© mal el caso",
                     "lectura_incompleta": "No vi una palabra clave",
-                    "apuro": "Respondí con afán",
+                    "apuro": "RespondÃƒÂ­ con afÃƒÂ¡n",
                 }
                 selected_error = st.radio(
-                    "¿Cuál fue la causa principal?",
+                    "Ã‚Â¿CuÃƒÂ¡l fue la causa principal?",
                     list(error_labels),
                     format_func=error_labels.get,
                     index=(
@@ -503,11 +478,11 @@ with col2:
                 if selected_error and st.session_state["error_types"].get(current_q_id) != selected_error:
                     st.session_state["error_types"][current_q_id] = selected_error
                     save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
-            st.info(f"💡 {question.rationale or 'No hay explicación disponible.'}")
+            st.info(f"Ã°Å¸â€™Â¡ {question.rationale or 'No hay explicaciÃƒÂ³n disponible.'}")
             if question.source_refs:
-                st.caption(f"📖 Fuente: {question.source_refs}")
+                st.caption(f"Ã°Å¸â€œâ€“ Fuente: {question.source_refs}")
     elif not is_hardcore:
-        if st.button("🤖 Tutor IA (Socrático)", use_container_width=True):
+        if st.button("Ã°Å¸Â¤â€“ Tutor IA (SocrÃƒÂ¡tico)", use_container_width=True):
             with st.spinner("Analizando..."):
                 try:
                     from core.config import get_api_key
@@ -518,7 +493,7 @@ with col2:
                         gen = LLMGenerator(current_provider, api_key, model_name=model_name)
                         q_data = {"stem": question.stem, "options_json": question.options_json, "correct_key": question.correct_key, "rationale": question.rationale}
                         st.session_state["tutor_explanation"] = gen.explain_question(q_data)
-                    else: st.warning(f"⚠️ API Key de {current_provider} no configurada.")
+                    else: st.warning(f"Ã¢Å¡Â Ã¯Â¸Â API Key de {current_provider} no configurada.")
                 except Exception as e: st.error(f"Error: {e}")
     if st.session_state.get("tutor_explanation"):
         st.info(st.session_state["tutor_explanation"])
@@ -528,7 +503,7 @@ with col3:
     time_spent = current_time - st.session_state.get("last_answer_time", current_time)
     if current_idx < total_q - 1:
         if st.button(
-            "Siguiente ➡️", type="primary", use_container_width=True,
+            "Siguiente Ã¢Å¾Â¡Ã¯Â¸Â", type="primary", use_container_width=True,
             disabled=is_daily_session and (
                 not is_answer_checked
                 or (
@@ -538,7 +513,7 @@ with col3:
             ),
         ):
             if time_spent < 45 and not is_hardcore:
-                st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
+                st.toast("Ã¢Å¡Â Ã¯Â¸Â EstÃƒÂ¡s respondiendo muy rÃƒÂ¡pido.", icon="Ã¢ÂÂ±Ã¯Â¸Â")
             st.session_state["current_idx"] += 1
             if is_daily_session:
                 save_daily_run(
@@ -549,7 +524,7 @@ with col3:
             st.session_state["tutor_explanation"] = None
             st.rerun()
     else:
-        finish_label = "🏁 Finalizar" if time_left > 0 else "⌛ Resultados"
+        finish_label = "Ã°Å¸ÂÂ Finalizar" if time_left > 0 else "Ã¢Å’â€º Resultados"
         if st.button(
             finish_label, type="primary", use_container_width=True,
             disabled=is_daily_session and (
@@ -569,3 +544,11 @@ with col3:
                 st.switch_page("pages/3_Resultados.py")
 
 db.close()
+
+
+
+
+
+
+
+
