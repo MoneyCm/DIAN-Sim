@@ -358,21 +358,38 @@ try:
     with col_b1:
         st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
         st.subheader("📊 Balance Global")
-        total_hits = db.query(func.sum(QuestionPerformance.hits)).filter_by(user_id=u_id).scalar() or 0
-        total_misses = db.query(func.sum(QuestionPerformance.misses)).filter_by(user_id=u_id).scalar() or 0
+        performance_scope = db.query(QuestionPerformance).join(Question).filter(
+            QuestionPerformance.user_id == u_id,
+            Question.competition_id == active_competition_id,
+        )
+        total_hits = performance_scope.with_entities(func.sum(QuestionPerformance.hits)).scalar() or 0
+        total_misses = performance_scope.with_entities(func.sum(QuestionPerformance.misses)).scalar() or 0
         
         if total_hits + total_misses > 0:
-            fig_pie = px.pie(
-                names=['Aciertos', 'Fallos'],
-                values=[total_hits, total_misses],
-                color=['Aciertos', 'Fallos'],
-                color_discrete_map={'Aciertos': '#10b981', 'Fallos': '#ef4444'},
-                hole=0.6
+            global_accuracy = total_hits / (total_hits + total_misses) * 100
+            fig_balance = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=global_accuracy,
+                number={"suffix": "%", "font": {"size": 36}},
+                delta={"reference": 70, "suffix": " pp", "increasing": {"color": "#059669"}},
+                title={"text": "Precisión acumulada", "font": {"size": 15}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickwidth": 1},
+                    "bar": {"color": "#1f4e79", "thickness": 0.28},
+                    "steps": [
+                        {"range": [0, 50], "color": "#fee2e2"},
+                        {"range": [50, 70], "color": "#fef3c7"},
+                        {"range": [70, 100], "color": "#d1fae5"},
+                    ],
+                    "threshold": {"line": {"color": "#dc2626", "width": 4}, "value": 70},
+                },
+            ))
+            fig_balance.update_layout(
+                height=270, margin=dict(t=45, b=10, l=25, r=25),
+                paper_bgcolor='rgba(0,0,0,0)',
             )
-            fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)')
-            fig_pie.add_annotation(text=f"{int((total_hits/(total_hits+total_misses))*100)}%", showarrow=False, font_size=20, font_weight="bold")
-            st.plotly_chart(fig_pie, use_container_width=True, key="dashboard_pie_chart")
-            st.markdown(f"<p style='text-align:center; color:gray;'>{total_hits} Acertadas / {total_misses} Falladas</p>", unsafe_allow_html=True)
+            st.plotly_chart(fig_balance, width="stretch", key="dashboard_balance_gauge")
+            st.caption(f"✅ {total_hits} aciertos · ❌ {total_misses} errores · Meta: 70%")
         else:
             st.info("No hay datos de intentos.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -380,7 +397,9 @@ try:
     with col_b2:
         st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
         st.subheader("🎯 Nivel de Dominio por Eje")
-        skills = db.query(Skill).filter_by(user_id=u_id).all()
+        skills = db.query(Skill).filter_by(
+            user_id=u_id, competition_id=active_competition_id
+        ).all()
         if skills:
             df_skills = pd.DataFrame([{
                 'Eje': s.track,
@@ -389,11 +408,36 @@ try:
                 'Dominio': s.mastery_score
             } for s in skills])
             
-            fig = px.sunburst(df_skills, path=['Eje', 'Macro-Dominio', 'Micro-Competencia'], values='Dominio',
-                          color='Dominio', color_continuous_scale='RdYlGn',
-                          range_color=[0, 100])
-            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=0, b=0, l=0, r=0))
-            st.plotly_chart(fig, use_container_width=True, key="dashboard_sunburst_chart")
+            eje_mastery = (
+                df_skills.groupby('Eje', as_index=False)['Dominio'].mean()
+                .sort_values('Dominio', ascending=True)
+            )
+            bar_colors = [
+                '#dc2626' if value < 50 else '#f59e0b' if value < 70 else '#10b981'
+                for value in eje_mastery['Dominio']
+            ]
+            fig = go.Figure(go.Bar(
+                x=eje_mastery['Dominio'], y=eje_mastery['Eje'], orientation='h',
+                marker_color=bar_colors,
+                text=[f"{value:.0f}%" for value in eje_mastery['Dominio']],
+                textposition='outside', cliponaxis=False,
+                hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+            ))
+            fig.add_vline(x=70, line_dash="dash", line_color="#991b1b",
+                          annotation_text="Meta 70%", annotation_position="top")
+            fig.update_xaxes(range=[0, 105], title=None, ticksuffix="%", fixedrange=True)
+            fig.update_yaxes(title=None, fixedrange=True)
+            fig.update_layout(
+                height=max(250, 75 * len(eje_mastery)), showlegend=False,
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=35, b=25, l=10, r=35),
+            )
+            st.plotly_chart(fig, width="stretch", key="dashboard_axis_mastery")
+            weakest_skill = min(skills, key=lambda item: item.mastery_score or 0)
+            st.warning(
+                f"Prioridad actual: **{weakest_skill.topic}** "
+                f"({(weakest_skill.mastery_score or 0):.0f}% de dominio)."
+            )
         else:
             st.info("¡Realiza tu primer simulacro!")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -401,7 +445,10 @@ try:
     # 3. Rendimiento en el Tiempo
     st.markdown('<div class="dian-card">', unsafe_allow_html=True)
     st.subheader("📈 Rendimiento de los últimos intentos")
-    attempts = db.query(Attempt).filter_by(user_id=u_id).order_by(Attempt.created_at.desc()).limit(50).all()
+    attempts = db.query(Attempt).join(Question).filter(
+        Attempt.user_id == u_id,
+        Question.competition_id == active_competition_id,
+    ).order_by(Attempt.created_at.desc()).limit(50).all()
     if attempts:
         df_att = pd.DataFrame([{
             'Fecha': a.created_at,
@@ -410,14 +457,33 @@ try:
         
         # Agrupar por fecha
         df_att['Fecha'] = df_att['Fecha'].dt.date
-        df_daily = df_att.groupby('Fecha').agg({'Resultado': 'mean'}).reset_index()
+        df_daily = df_att.groupby('Fecha').agg(
+            Resultado=('Resultado', 'mean'), Intentos=('Resultado', 'size')
+        ).reset_index()
         df_daily['Porcentaje'] = df_daily['Resultado'] * 100
-        
-        fig_line = px.line(df_daily, x='Fecha', y='Porcentaje', title="Precisión Diaria (%)",
-                           markers=True, line_shape='spline')
-        fig_line.update_yaxes(range=[0, 105])
-        fig_line.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_line, use_container_width=True, key="dashboard_line_chart")
+        df_daily['Promedio móvil'] = df_daily['Porcentaje'].rolling(3, min_periods=1).mean()
+
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Bar(
+            x=df_daily['Fecha'], y=df_daily['Porcentaje'], name='Precisión diaria',
+            marker_color='#bfdbfe',
+            customdata=df_daily['Intentos'],
+            hovertemplate="%{x}<br>Precisión: %{y:.0f}%<br>Intentos: %{customdata}<extra></extra>",
+        ))
+        fig_line.add_trace(go.Scatter(
+            x=df_daily['Fecha'], y=df_daily['Promedio móvil'], name='Promedio móvil (3 días)',
+            mode='lines+markers', line=dict(color='#1d4ed8', width=3),
+        ))
+        fig_line.add_hline(y=70, line_dash='dash', line_color='#dc2626',
+                           annotation_text='Meta 70%', annotation_position='top left')
+        fig_line.update_yaxes(range=[0, 105], ticksuffix='%', title=None, fixedrange=True)
+        fig_line.update_xaxes(title=None, fixedrange=True)
+        fig_line.update_layout(
+            height=330, hovermode='x unified', legend=dict(orientation='h', y=1.12),
+            margin=dict(t=55, b=20, l=20, r=20),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_line, width="stretch", key="dashboard_progress_chart")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 4. Radar de Habilidades & Refuerzo
