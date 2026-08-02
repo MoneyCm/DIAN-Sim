@@ -3,8 +3,9 @@ from types import SimpleNamespace
 import pytest
 
 from core.question_review import (
+    QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    record_ai_audit, reject_candidate,
+    matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
 
@@ -59,3 +60,15 @@ def test_ai_audit_never_verifies_or_loses_candidate_state():
     assert question.is_verified is False
     assert is_reinforcement_candidate(question)
     assert question.quality_report["ai_audit"]["score"] == 10
+
+
+def test_quality_filters_separate_reinforcements_from_other_pending_items():
+    reinforcement = candidate()
+    legacy_pending = candidate(quality_report=None)
+    verified = candidate(is_verified=True, quality_report={"status": "APPROVED"})
+    assert matches_quality_filter(reinforcement, QUALITY_REINFORCEMENTS)
+    assert not matches_quality_filter(legacy_pending, QUALITY_REINFORCEMENTS)
+    assert matches_quality_filter(reinforcement, QUALITY_PENDING)
+    assert matches_quality_filter(legacy_pending, QUALITY_PENDING)
+    assert matches_quality_filter(verified, QUALITY_VERIFIED)
+    assert all(matches_quality_filter(q, QUALITY_ALL) for q in (reinforcement, legacy_pending, verified))

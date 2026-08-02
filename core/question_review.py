@@ -6,6 +6,10 @@ from typing import Optional
 
 
 REINFORCEMENT_REVIEW = "reinforcement_candidate"
+QUALITY_ALL = "Todas"
+QUALITY_VERIFIED = "Solo verificadas ✅"
+QUALITY_PENDING = "Pendientes generales ⏳"
+QUALITY_REINFORCEMENTS = "Refuerzos por revisar 🧪"
 
 
 def is_reinforcement_candidate(question) -> bool:
@@ -81,3 +85,13 @@ def record_ai_audit(question, audit_report: dict) -> None:
             "ai_audit": audit_report,
         }
     question.is_verified = False
+
+
+def matches_quality_filter(question, selected: str) -> bool:
+    if selected == QUALITY_VERIFIED:
+        return bool(getattr(question, "is_verified", False))
+    if selected == QUALITY_PENDING:
+        return not bool(getattr(question, "is_verified", False))
+    if selected == QUALITY_REINFORCEMENTS:
+        return is_reinforcement_candidate(question)
+    return True

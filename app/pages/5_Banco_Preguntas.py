@@ -21,8 +21,9 @@ from core.exam_format import (
     OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL, question_format_status,
 )
 from core.question_review import (
+    QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    record_ai_audit, reject_candidate,
+    matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
 # pass # Removed st.set_page_config
@@ -46,6 +47,9 @@ def reset_selection():
     for key in list(st.session_state.keys()):
         if key.startswith("sel_"):
             st.session_state[key] = False
+
+def reset_pagination():
+    st.session_state["page_num"] = 1
 
 # --- SIDEBAR TOOLS ---
 stats_s, rank = render_custom_sidebar()
@@ -84,6 +88,19 @@ opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)",
                        help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
 
 if action == "Explorar / Bulk":
+    competition_id = get_active_competition_id(db, u_id)
+    pending_query = db.query(Question)
+    if competition_id is not None:
+        pending_query = pending_query.filter(Question.competition_id == competition_id)
+    pending_reinforcements = sum(
+        1 for item in pending_query.all() if is_reinforcement_candidate(item)
+    )
+    if AuthManager.is_admin() and pending_reinforcements:
+        st.info(
+            f"🧪 Hay **{pending_reinforcements} refuerzos generados** pendientes de revisión. "
+            "Selecciónalos en el filtro Calidad."
+        )
+
     # FILTERS
     col_filters = st.columns([2, 1, 1, 1, 1, 1])
     with col_filters[0]:
@@ -94,7 +111,11 @@ if action == "Explorar / Bulk":
         diff_f = st.multiselect("Dificultad", [1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x])
     with col_filters[3]:
         # Quality Filter Mikey v36
-        quality_f = st.selectbox("Calidad", ["Todas", "Solo Verificadas ✅", "Pendientes ⏳"])
+        quality_f = st.selectbox(
+            "Calidad",
+            [QUALITY_ALL, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED, QUALITY_PENDING],
+            on_change=reset_pagination,
+        )
     with col_filters[4]:
         format_f = st.selectbox("Formato", ["Todos", OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL])
     with col_filters[5]:
@@ -228,9 +249,7 @@ if action == "Explorar / Bulk":
                 continue
             if diff_f and q.difficulty not in diff_f:
                 continue
-            if quality_f == "Solo Verificadas ✅" and not q.is_verified:
-                continue
-            if quality_f == "Pendientes ⏳" and q.is_verified:
+            if not matches_quality_filter(q, quality_f):
                 continue
             if format_f != "Todos" and question_format_status(q) != format_f:
                 continue
@@ -251,12 +270,8 @@ if action == "Explorar / Bulk":
         if diff_f:
             query = query.filter(Question.difficulty.in_(diff_f))
         
-        if quality_f == "Solo Verificadas ✅":
-            query = query.filter(Question.is_verified == True)
-        elif quality_f == "Pendientes ⏳":
-            query = query.filter(Question.is_verified == False)
-        
         filtered = query.all()
+        filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
         if format_f != "Todos":
             filtered = [q for q in filtered if question_format_status(q) == format_f]
         total_count = len(filtered)
