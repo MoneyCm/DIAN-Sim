@@ -1,10 +1,77 @@
 import bcrypt
 import os
 import sys
+import time
 import streamlit as st
 from sqlalchemy import text
+from datetime import datetime, timedelta
+
+from core.auth_session import create_session_token, verify_session_token
+
+
+AUTH_COOKIE = "dian_sim_session"
+AUTH_TTL_SECONDS = 30 * 24 * 60 * 60
+
+
+def _cookie_secret() -> str:
+    try:
+        return str(st.secrets["auth"]["cookie_secret"])
+    except Exception:
+        return os.getenv("AUTH_COOKIE_SECRET", "")
+
+
+@st.cache_resource
+def _cookie_manager():
+    try:
+        import extra_streamlit_components as stx
+        return stx.CookieManager(key="dian_sim_auth_cookies")
+    except ImportError:
+        return None
 
 class AuthManager:
+    @staticmethod
+    def _persist_login(user_id, username, role) -> None:
+        manager = _cookie_manager()
+        secret = _cookie_secret()
+        if manager is None or not secret:
+            return
+        token = create_session_token(user_id, username, role, secret, AUTH_TTL_SECONDS)
+        manager.set(
+            AUTH_COOKIE,
+            token,
+            expires_at=datetime.now() + timedelta(seconds=AUTH_TTL_SECONDS),
+            key="set_dian_sim_session",
+        )
+
+    @staticmethod
+    def _restore_login() -> bool:
+        manager = _cookie_manager()
+        secret = _cookie_secret()
+        if manager is None or not secret:
+            return False
+        token = manager.get(AUTH_COOKIE)
+        payload = verify_session_token(token, secret)
+        if not payload:
+            return False
+        from db.session import engine
+        try:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT username, role FROM users WHERE id = :uid"),
+                    {"uid": payload["uid"]},
+                ).first()
+            if not row or row[0] != payload["username"]:
+                return False
+            st.session_state["logged_in"] = True
+            st.session_state["user_id"] = payload["uid"]
+            st.session_state["username"] = row[0]
+            st.session_state["user_role"] = row[1]
+            st.session_state["logout_manual_flag"] = False
+            return True
+        except Exception as exc:
+            print(f"Persistent session restore error: {exc}", file=sys.stderr)
+            return False
+
     @staticmethod
     def hash_password(password: str) -> str:
         salt = bcrypt.gensalt()
@@ -32,6 +99,7 @@ class AuthManager:
                     st.session_state["username"] = row[1]
                     st.session_state["user_role"] = row[3]
                     st.session_state["logout_manual_flag"] = False
+                    AuthManager._persist_login(row[0], row[1], row[3])
                     if "is_pro_cache" in st.session_state:
                         del st.session_state["is_pro_cache"]
                     return True
@@ -86,6 +154,13 @@ class AuthManager:
     @staticmethod
     def logout():
         """Bala de Plata v7.21: Logout Nativo Streamlit (Sin JS Hacks)"""
+        manager = _cookie_manager()
+        if manager is not None:
+            try:
+                manager.delete(AUTH_COOKIE, key="delete_dian_sim_session")
+                time.sleep(0.15)
+            except Exception:
+                pass
         # 1. Limpieza de estado local (Borrar todo PRIMERO)
         for key in list(st.session_state.keys()):
             del st.session_state[key]
@@ -126,6 +201,10 @@ class AuthManager:
 
         # 1. Sesión Local
         if st.session_state.get("logged_in"):
+            return True
+
+        # Recupera el login local tras una reconexión móvil o suspensión de pestaña.
+        if not st.session_state.get("logout_manual_flag") and AuthManager._restore_login():
             return True
 
         # 2. Sesión Nativa (Google OIDC)

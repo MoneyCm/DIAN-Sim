@@ -16,6 +16,7 @@ mistralai>=1.0.0
 httpx>=0.25.0
 cryptography
 Authlib
+extra-streamlit-components>=0.1.71
 stripe
 genanki==0.13.0
 # Force rebuild v5
