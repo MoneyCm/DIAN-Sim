@@ -1,5 +1,7 @@
 import streamlit as st
 import os, sys, datetime
+from collections import defaultdict
+from zoneinfo import ZoneInfo
 
 # Add root to python path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -9,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 # For now, I will assume the instruction was to ensure the existing block is present.
 
 from db.session import SessionLocal
-from db.models import Question
+from db.models import Attempt, Question
 from ui_utils import load_css, render_header, metric_card, render_custom_sidebar, render_favorite_button
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
 from core.legacy_question_audit import is_safe_for_active_study
@@ -28,8 +30,13 @@ load_css()
 render_custom_sidebar()
 result_preview = st.session_state.get("last_results", {})
 is_daily_session = result_preview.get("session_kind") == "daily"
+has_recent_result = bool(result_preview)
 render_header(
-    title="Resumen del plan diario" if is_daily_session else "Resultados del Simulacro",
+    title=(
+        "Resumen del plan diario" if is_daily_session
+        else "Resultados del simulacro" if has_recent_result
+        else "Resultados y progreso"
+    ),
     subtitle=(
         "Lo aprendido hoy y los temas que debes reforzar"
         if is_daily_session else "Análisis de tu desempeño reciente"
@@ -37,11 +44,65 @@ render_header(
 )
 # v2.5.1 - Fix PDF Binary
 
-if "last_results" not in st.session_state:
-    st.info("No hay resultados recientes para mostrar.")
-    with st.container():
-         if st.button("⬅️ Volver al Inicio"):
-             st.switch_page("pages/6_Dashboard.py")
+if not result_preview:
+    user_id = st.session_state.get("user_id")
+    history_db = SessionLocal()
+    try:
+        active_competition_id = get_active_competition_id(history_db, user_id)
+        attempts = history_db.query(Attempt).join(Question).filter(
+            Attempt.user_id == user_id,
+            Question.competition_id == active_competition_id,
+        ).order_by(Attempt.created_at.desc()).all()
+
+        if not attempts:
+            st.info(
+                "Todavía no hay intentos guardados en este concurso. Completa el plan diario "
+                "o una práctica para comenzar tu historial."
+            )
+        else:
+            total_attempts = len(attempts)
+            total_correct = sum(1 for item in attempts if item.is_correct)
+            overall_accuracy = total_correct / total_attempts * 100
+            practiced_questions = len({item.question_id for item in attempts})
+            error_count = total_attempts - total_correct
+            metric_cols = st.columns(4)
+            metric_cols[0].metric("Intentos guardados", total_attempts)
+            metric_cols[1].metric("Precisión acumulada", f"{overall_accuracy:.0f}%")
+            metric_cols[2].metric("Preguntas practicadas", practiced_questions)
+            metric_cols[3].metric("Errores para aprender", error_count)
+
+            bogota = ZoneInfo("America/Bogota")
+            daily = defaultdict(lambda: {"correct": 0, "total": 0})
+            for item in attempts:
+                created_at = item.created_at
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+                day = created_at.astimezone(bogota).date()
+                daily[day]["total"] += 1
+                daily[day]["correct"] += int(bool(item.is_correct))
+            recent_days = sorted(daily.items(), reverse=True)[:7]
+            st.subheader("📅 Últimos días con actividad")
+            history_rows = [{
+                "Fecha": day.strftime("%d/%m/%Y"),
+                "Preguntas": values["total"],
+                "Correctas": values["correct"],
+                "Precisión": f"{values['correct'] / values['total'] * 100:.0f}%",
+            } for day, values in recent_days]
+            st.dataframe(history_rows, hide_index=True, width="stretch")
+            st.caption(
+                "Este historial permanece aunque cierres sesión o cambies de dispositivo. "
+                "El detalle pregunta por pregunta aparece inmediatamente al terminar una sesión."
+            )
+    finally:
+        history_db.close()
+
+    action_cols = st.columns(2)
+    with action_cols[0]:
+        if st.button("🎯 Continuar plan diario", type="primary", use_container_width=True):
+            st.switch_page("pages/6_Dashboard.py")
+    with action_cols[1]:
+        if st.button("▶️ Iniciar práctica", use_container_width=True):
+            st.switch_page("pages/1_Nuevo_Simulacro.py")
     st.stop()
 
 data = st.session_state["last_results"]
