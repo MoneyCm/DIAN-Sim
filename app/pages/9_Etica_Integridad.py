@@ -51,7 +51,7 @@ st.divider()
 stats_s, rank = render_custom_sidebar()
 
 # Mode selection
-mode = st.radio("Modo de Práctica:", ["📖 Aprender Código de Ética", "✍️ Simulacro de Integridad"], horizontal=True)
+mode = st.radio("Modo de práctica", ["📖 Aprender Código de Ética", "✍️ Práctica de Integridad"], horizontal=True)
 
 if mode == "📖 Aprender Código de Ética":
     st.subheader("📚 Código de Ética DIAN")
@@ -71,7 +71,7 @@ if mode == "📖 Aprender Código de Ética":
         st.markdown(f"**{criterio.replace('_', ' ').title()}:** {descripcion}")
 
 else:  # Simulacro mode
-    st.subheader("✍️ Simulacro de Integridad")
+    st.subheader("✍️ Práctica de Integridad")
     
     # Configuration
     col1, col2, col3 = st.columns(3)
@@ -83,14 +83,16 @@ else:  # Simulacro mode
     with col3:
         use_ai = st.toggle("🤖 Generar con IA", value=False, help="Usa IA para generar afirmaciones nuevas y adaptativas")
     
-    if st.button("🚀 Iniciar Simulacro de Integridad", type="primary", use_container_width=True):
+    if st.button("🚀 Iniciar práctica de integridad", type="primary", use_container_width=True):
+        for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
+            del st.session_state[widget_key]
         all_afirmaciones = []
         
         if use_ai:
             # Generar con IA
             with st.spinner("🤖 Generando afirmaciones éticas con IA..."):
                 try:
-                    from core.generators.ethics_generator import generate_ethics_statements, detect_weak_categories
+                    from core.generators.ethics_generator import generate_ethics_statements
                     from core.generators.llm import LLMGenerator
                     from core.config import get_api_key
                     
@@ -102,14 +104,9 @@ else:  # Simulacro mode
                         st.error("⚠️ No se encontró API key. Configura tu API key en el Generador IA primero.")
                         st.stop()
                     
-                    # Detectar categorías débiles del usuario
-                    db = SessionLocal()
-                    user_id = st.session_state.get("user_id")
-                    weak_categories = detect_weak_categories(user_id, db)
-                    db.close()
-                    
-                    if weak_categories:
-                        st.info(f"🎯 **Enfoque adaptativo:** Generando más preguntas en tus áreas de mejora: {', '.join(weak_categories)}")
+                    # En una escala de integridad sin clave correcta no se infieren
+                    # debilidades a partir de niveles de acuerdo.
+                    weak_categories = []
                     
                     # Crear generador LLM
                     llm_gen = LLMGenerator(provider=provider, api_key=api_key)
@@ -119,31 +116,12 @@ else:  # Simulacro mode
                         # Generar para todas las categorías proporcionalmente
                         categorias = [s["categoria"] for s in ethics_data["situaciones_eticas_comunes"]]
                         
-                        # Priorizar categorías débiles
-                        if weak_categories:
-                            # 60% de preguntas en categorías débiles, 40% en el resto
-                            weak_count = int(num_preguntas * 0.6)
-                            normal_count = num_preguntas - weak_count
-                            
-                            # Generar para categorías débiles
-                            per_weak = max(2, weak_count // len(weak_categories))
-                            for cat in weak_categories:
-                                statements = generate_ethics_statements(llm_gen, cat, per_weak, weak_categories)
-                                all_afirmaciones.extend(statements)
-                            
-                            # Generar para otras categorías
-                            other_cats = [c for c in categorias if c not in weak_categories]
-                            if other_cats:
-                                per_other = max(1, normal_count // len(other_cats))
-                                for cat in other_cats:
-                                    statements = generate_ethics_statements(llm_gen, cat, per_other)
-                                    all_afirmaciones.extend(statements)
-                        else:
-                            # Sin debilidades detectadas, distribución uniforme
-                            per_category = max(2, num_preguntas // len(categorias))
-                            for cat in categorias:
-                                statements = generate_ethics_statements(llm_gen, cat, per_category)
-                                all_afirmaciones.extend(statements)
+                        # Distribución uniforme: no hay una clave que justifique
+                        # clasificar categorías como fuertes o débiles.
+                        per_category = max(2, num_preguntas // len(categorias))
+                        for cat in categorias:
+                            statements = generate_ethics_statements(llm_gen, cat, per_category)
+                            all_afirmaciones.extend(statements)
                     else:
                         # Generar solo para la categoría seleccionada
                         statements = generate_ethics_statements(llm_gen, categoria, num_preguntas, weak_categories)
@@ -180,10 +158,12 @@ else:  # Simulacro mode
         st.session_state["ethics_answers"] = {}
         st.session_state["ethics_started"] = True
         st.session_state["ethics_ai_generated"] = use_ai
+        st.session_state["ethics_completed"] = False
+        st.session_state["ethics_saved"] = False
         st.rerun()
     
     # Display questions if started
-    if st.session_state.get("ethics_started"):
+    if st.session_state.get("ethics_started") and not st.session_state.get("ethics_completed"):
         questions = st.session_state.get("ethics_questions", [])
         ai_generated = st.session_state.get("ethics_ai_generated", False)
         
@@ -203,11 +183,13 @@ else:  # Simulacro mode
             answer = st.radio(
                 "Tu respuesta:",
                 options=LIKERT_OPTIONS,
+                index=None,
                 key=f"ethics_q_{i}",
-                horizontal=False
+                horizontal=False,
+                on_change=lambda question_index=i: st.session_state["ethics_answers"].update(
+                    {question_index: st.session_state.get(f"ethics_q_{question_index}")}
+                ),
             )
-            
-            st.session_state["ethics_answers"][i] = answer
         
         st.markdown("---")
         
@@ -258,13 +240,13 @@ else:  # Simulacro mode
             except Exception as e:
                 st.error(f"Error al guardar respuestas: {e}")
         
-        st.success("✅ Simulacro completado")
+        st.success("✅ Práctica completada")
         st.markdown("### Registro de respuestas")
         
         st.info("""
-        **Formato oficial GOA:** estas afirmaciones no tienen respuestas correctas o incorrectas.
-        La práctica sirve para familiarizarte con la escala forzada de cuatro niveles y responder
-        de forma honesta y consistente.
+        **Práctica provisional:** estas afirmaciones no tienen respuestas correctas o incorrectas.
+        Sirven para familiarizarte con una escala forzada de cuatro niveles y responder de forma
+        honesta y consistente. El formato deberá ajustarse a la guía vigente cuando sea publicada.
         """)
         
         questions = st.session_state.get("ethics_questions", [])
@@ -293,41 +275,42 @@ else:  # Simulacro mode
                 elif "Imparcialidad" in cat:
                     st.info(f"💡 **Criterio:** {criterios['imparcialidad']}")
         
-        # Análisis de Debilidades
+        # Resumen descriptivo, sin convertir niveles de acuerdo en aciertos.
         st.divider()
-        st.subheader("📊 Análisis de Desempeño")
-        
-        try:
-            from core.generators.ethics_generator import detect_weak_categories
-            
-            db = SessionLocal()
-            user_id = st.session_state.get("user_id")
-            weak_cats = detect_weak_categories(user_id, db)
-            db.close()
-            
-            if weak_cats:
-                st.warning(f"**⚠️ Áreas de mejora detectadas:** {', '.join(weak_cats)}")
-                st.info("💡 **Recomendación:** Practica más en estas categorías o usa el generador IA enfocado en tus debilidades.")
-            else:
-                st.success("✅ ¡Excelente! No se detectaron debilidades significativas en tus respuestas.")
-                st.info("💡 Continúa practicando para mantener tu nivel de comprensión del Código de Ética.")
-        except Exception as e:
-            st.warning(f"No se pudo analizar el desempeño: {e}")
+        st.subheader("📊 Resumen de la práctica")
+        answer_values = [
+            int(value.split(" - ")[0]) for value in answers.values() if value
+        ]
+        category_counts = {}
+        for item in questions:
+            category_counts[item["categoria"]] = category_counts.get(item["categoria"], 0) + 1
+        st.metric("Afirmaciones respondidas", len(answer_values))
+        st.write("**Cobertura por categoría:**")
+        for category_name, count in sorted(category_counts.items()):
+            st.write(f"- {category_name}: {count}")
+        st.info(
+            "Este resumen no asigna puntaje ni diagnostica debilidades. Revisa si comprendiste "
+            "cada criterio y si mantuviste una respuesta atenta y coherente."
+        )
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 Nuevo Simulacro"):
-                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed"]:
+            if st.button("🔄 Nueva práctica"):
+                for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
+                    del st.session_state[widget_key]
+                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
         
         with col2:
             if st.button("📚 Revisar Código de Ética"):
-                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed"]:
+                for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
+                    del st.session_state[widget_key]
+                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
 
 st.divider()
-st.caption("⚖️ **Fuente:** Código de Ética DIAN y Guía de Orientación al Aspirante (GOA) - CNSC")
+st.caption("⚖️ **Base formativa:** principios y valores institucionales DIAN. Formato pendiente de confirmación con la guía vigente de la CNSC.")
