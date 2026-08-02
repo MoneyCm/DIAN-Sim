@@ -52,3 +52,13 @@ Este sesgo permite aprender un patrón artificial y reduce el valor psicométric
 - Alta: las 48 que actualmente aparecen como `Oficial GOA`, porque la etiqueta puede inducir al estudiante a creer que replican el examen.
 - Media: las 141 en `Requiere revisión`; conservarlas únicamente en práctica.
 - Posterior: seleccionar los mejores conceptos antiguos y convertirlos en nuevos casos de tres enunciados, evitando rehabilitación masiva automática.
+
+## Resultado de la revisión conservadora
+
+La revisión posterior dejó una decisión registrada en `quality_report` para las 189 preguntas antiguas:
+
+- `KEEP_PRACTICE`: 43. Reglas claras comprobadas para firmeza general (artículo 714), facultad de fiscalización (artículo 684) y valor probatorio condicionado de libros (artículo 772).
+- `REWRITE`: 96. Se conservan en la base, pero no son seguras para uso activo sin reescritura y verificación normativa específica.
+- `RETIRE`: 50. Deben excluirse del uso activo. Incluyen la familia que confundía la fecha de notificación electrónica con el inicio del término del artículo 566-1, categorías internas no sustentadas y afirmaciones absolutas sin fuente suficiente.
+
+Las decisiones son conservadoras: una pregunta dudosa se mantiene fuera del estudio activo aunque su concepto pudiera recuperarse posteriormente. No se borraron preguntas ni intentos históricos.
