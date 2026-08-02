@@ -2,7 +2,7 @@ import streamlit as st
 import os, sys, pandas as pd
 import datetime
 from pathlib import Path
-from sqlalchemy import func
+from sqlalchemy import Integer, func
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -115,26 +115,110 @@ with tab_stats:
 
 # --- TAB: USERS ---
 with tab_users:
+    st.subheader("👥 Seguimiento de usuarios")
+    st.caption("Consulta actividad y avance sin modificar cuentas, contraseñas ni permisos.")
     db = SessionLocal()
-    users = db.query(User).all()
-    user_data = []
-    for u in users:
-        stats = db.query(UserStats).filter_by(user_id=u.id).first()
-        opecs = db.query(UserOPEC).filter_by(user_id=u.id).count()
-        user_data.append({
-            "ID": u.id,
-            "Usuario": u.username,
-            "Rol": u.role,
-            "Puntos": stats.total_points if stats else 0,
-            "Cargos (OPECs)": opecs,
-            "Fecha Registro": u.created_at.strftime("%Y-%m-%d") if u.created_at else "N/A"
-        })
-    db.close()
-    
+    try:
+        users = db.query(User).order_by(User.username).all()
+        stats_by_user = {item.user_id: item for item in db.query(UserStats).all()}
+        opec_rows = db.query(UserOPEC).order_by(UserOPEC.updated_at.desc()).all()
+        opecs_by_user = {}
+        for item in opec_rows:
+            opecs_by_user.setdefault(item.user_id, []).append(item)
+        attempt_summary = {
+            row.user_id: {"answers": row.answers, "hits": row.hits or 0, "last": row.last_attempt}
+            for row in (
+                db.query(
+                    Attempt.user_id,
+                    func.count(Attempt.attempt_id).label("answers"),
+                    func.sum(func.cast(Attempt.is_correct, Integer)).label("hits"),
+                    func.max(Attempt.created_at).label("last_attempt"),
+                )
+                .filter(Attempt.user_id.isnot(None))
+                .group_by(Attempt.user_id)
+                .all()
+            )
+        }
+        user_data = []
+        now_users = datetime.datetime.now()
+        for user in users:
+            stats = stats_by_user.get(user.id)
+            activity = attempt_summary.get(user.id, {"answers": 0, "hits": 0, "last": None})
+            last_attempt = activity["last"]
+            if last_attempt and last_attempt >= now_users - datetime.timedelta(days=7):
+                activity_label = "Activo"
+            elif last_attempt and last_attempt >= now_users - datetime.timedelta(days=30):
+                activity_label = "Inactivo 7+ días"
+            elif last_attempt:
+                activity_label = "Inactivo 30+ días"
+            else:
+                activity_label = "Sin iniciar"
+            accuracy = round(activity["hits"] * 100 / activity["answers"]) if activity["answers"] else None
+            user_data.append({
+                "ID": user.id,
+                "Usuario": user.username,
+                "Rol": user.role,
+                "Plan": user.subscription_tier or "free",
+                "Estado": activity_label,
+                "Respuestas": activity["answers"],
+                "Precisión": f"{accuracy}%" if accuracy is not None else "—",
+                "Racha": stats.current_streak if stats else 0,
+                "Puntos": stats.total_points if stats else 0,
+                "OPEC": len(opecs_by_user.get(user.id, [])),
+                "Última práctica": last_attempt.strftime("%Y-%m-%d") if last_attempt else "—",
+                "Registro": user.created_at.strftime("%Y-%m-%d") if user.created_at else "—",
+            })
+    finally:
+        db.close()
+
     df_users = pd.DataFrame(user_data)
-    st.dataframe(df_users, use_container_width=True)
-    
-    st.caption("La modificación de roles no está disponible desde esta pantalla.")
+    filter_col1, filter_col2 = st.columns([2, 1])
+    search_user = filter_col1.text_input("Buscar usuario", placeholder="Escribe el nombre...")
+    role_options = ["Todos"] + sorted(df_users["Rol"].dropna().unique().tolist()) if not df_users.empty else ["Todos"]
+    role_filter = filter_col2.selectbox("Rol", role_options)
+    filtered_users = df_users.copy()
+    if search_user:
+        filtered_users = filtered_users[
+            filtered_users["Usuario"].str.contains(search_user, case=False, na=False)
+        ]
+    if role_filter != "Todos":
+        filtered_users = filtered_users[filtered_users["Rol"] == role_filter]
+
+    st.dataframe(filtered_users, use_container_width=True, hide_index=True)
+    st.caption(f"Mostrando {len(filtered_users)} de {len(df_users)} usuarios.")
+
+    if user_data:
+        with st.expander("Ver detalle de un usuario"):
+            selected_username = st.selectbox(
+                "Usuario",
+                [item["Usuario"] for item in user_data],
+                key="admin_user_detail",
+            )
+            selected = next(item for item in user_data if item["Usuario"] == selected_username)
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Estado", selected["Estado"])
+            d2.metric("Respuestas", selected["Respuestas"])
+            d3.metric("Precisión", selected["Precisión"])
+            d4.metric("Racha", f"{selected['Racha']} días")
+            selected_opecs = opecs_by_user.get(selected["ID"], [])
+            if selected_opecs:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "OPEC": item.opec_number,
+                            "Cargo": item.job_title,
+                            "Nivel": item.level or "—",
+                            "Activa": "Sí" if item.is_active else "No",
+                        }
+                        for item in selected_opecs
+                    ]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("Este usuario todavía no ha configurado una OPEC.")
+
+    st.caption("🔒 Los roles y las cuentas no se modifican desde esta pantalla.")
 
 # --- TAB: NORMATIVA ---
 with tab_normativa:
