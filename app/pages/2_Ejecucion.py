@@ -16,8 +16,30 @@ from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
 from core.study_resume import (
-    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run, active_elapsed_seconds, pause_daily_run, resume_daily_run, resume_daily_run,
+    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
 )
+try:
+    from core.study_resume import active_elapsed_seconds, pause_daily_run, resume_daily_run
+except ImportError:
+    # Streamlit Cloud puede conservar durante una recarga el módulo anterior.
+    def active_elapsed_seconds(payload, now=None):
+        if payload.get("paused"):
+            return float(payload.get("active_seconds", 0.0))
+        return float(payload.get("active_seconds", 0.0)) + max(
+            0.0, (now or time.time()) - float(payload.get("last_resumed_at", time.time()))
+        )
+
+    def pause_daily_run(payload, now=None):
+        paused = dict(payload)
+        paused["active_seconds"] = active_elapsed_seconds(paused, now)
+        paused["paused"] = True
+        return paused
+
+    def resume_daily_run(payload, now=None):
+        resumed = dict(payload)
+        resumed["last_resumed_at"] = now or time.time()
+        resumed["paused"] = False
+        return resumed
 from core.generators.llm import LLMGenerator
 from core.guided_learning import build_guided_learning_brief
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
