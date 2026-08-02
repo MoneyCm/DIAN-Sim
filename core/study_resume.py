@@ -22,11 +22,21 @@ def normalize_daily_run(payload: dict) -> dict:
         str(key): bool(value) for key, value in (payload.get("checked_answers") or {}).items()
         if key and value
     }
+    confidences = {
+        str(key): str(value) for key, value in (payload.get("confidences") or {}).items()
+        if key and value in {"guess", "unsure", "confident"}
+    }
+    error_types = {
+        str(key): str(value) for key, value in (payload.get("error_types") or {}).items()
+        if key and value
+    }
     current_idx = max(0, min(int(payload.get("current_idx", 0)), max(len(question_ids) - 1, 0)))
     return {
         "question_ids": question_ids,
         "answers": answers,
         "checked_answers": checked,
+        "confidences": confidences,
+        "error_types": error_types,
         "current_idx": current_idx,
         "total_time_limit": max(60, int(payload.get("total_time_limit", 1800))),
         "started_at": float(payload.get("started_at", time.time())),
@@ -69,6 +79,8 @@ def restore_daily_run_to_session(session_state, payload: dict) -> None:
     session_state["current_idx"] = payload["current_idx"]
     session_state["answers"] = dict(payload["answers"])
     session_state["checked_answers"] = dict(payload["checked_answers"])
+    session_state["confidences"] = dict(payload.get("confidences", {}))
+    session_state["error_types"] = dict(payload.get("error_types", {}))
     session_state["hardcore_mode"] = False
     session_state["study_session_kind"] = "daily"
     session_state["total_time_limit"] = payload["total_time_limit"]

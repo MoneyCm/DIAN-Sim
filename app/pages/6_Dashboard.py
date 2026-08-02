@@ -288,7 +288,8 @@ try:
                     else:
                         active_daily_run = save_daily_run(db, u_id, {
                             "question_ids": [item.question.question_id for item in daily_plan],
-                            "answers": {}, "checked_answers": {}, "current_idx": 0,
+                            "answers": {}, "checked_answers": {}, "confidences": {},
+                            "error_types": {}, "current_idx": 0,
                             "total_time_limit": timed_session.total_minutes * 60,
                             "started_at": datetime.datetime.now().timestamp(),
                             "learning_complete": False,

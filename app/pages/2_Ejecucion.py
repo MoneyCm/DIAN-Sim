@@ -29,7 +29,7 @@ def safe_setattr(obj, attr, value):
         pass
 
 # --- v22: Exam Termination Function ---
-def finalize_exam(db, q_ids, answers_dict):
+def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
     """Processes all answers and saves to DB."""
     try:
         correct_count = 0
@@ -37,6 +37,8 @@ def finalize_exam(db, q_ids, answers_dict):
         u_id = st.session_state.get("user_id")
         eje_results = {} # {"FUNCIONAL": [correct, total], ...}
         
+        confidences = confidences or {}
+        error_types = error_types or {}
         for qid in q_ids:
             q_obj = db.query(Question).get(qid)
             key_chosen = answers_dict.get(qid, "NONE")
@@ -115,7 +117,8 @@ def finalize_exam(db, q_ids, answers_dict):
             schedule_review(
                 perf,
                 is_correct=is_right,
-                confidence="unsure" if is_right else "guess",
+                confidence=confidences.get(qid, "unsure" if is_right else "guess"),
+                error_type=error_types.get(qid),
                 now=review_now,
             )
             
@@ -204,6 +207,23 @@ if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     st.stop()
 
 is_daily_session = st.session_state.get("study_session_kind") == "daily"
+st.session_state.setdefault("confidences", {})
+st.session_state.setdefault("error_types", {})
+
+def current_daily_payload(question_ids, position):
+    return {
+        "question_ids": question_ids,
+        "answers": st.session_state.get("answers", {}),
+        "checked_answers": st.session_state.get("checked_answers", {}),
+        "confidences": st.session_state.get("confidences", {}),
+        "error_types": st.session_state.get("error_types", {}),
+        "current_idx": position,
+        "total_time_limit": st.session_state["total_time_limit"],
+        "started_at": st.session_state["exam_start_time"],
+        "learning_complete": st.session_state.get("daily_learning_complete", False),
+        "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
+    }
+
 render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
 
 q_ids = st.session_state["exam_questions"]
@@ -253,16 +273,11 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
             disabled=not ready,
         ):
             st.session_state["daily_learning_complete"] = True
-            save_daily_run(db, st.session_state.get("user_id"), {
-                "question_ids": q_ids,
-                "answers": st.session_state.get("answers", {}),
-                "checked_answers": st.session_state.get("checked_answers", {}),
-                "current_idx": current_idx,
-                "total_time_limit": st.session_state["total_time_limit"],
-                "started_at": st.session_state["exam_start_time"],
-                "learning_complete": True,
-                "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
-            })
+            st.session_state["daily_learning_complete"] = True
+            save_daily_run(
+                db, st.session_state.get("user_id"),
+                current_daily_payload(q_ids, current_idx),
+            )
             st.rerun()
     db.close()
     st.stop()
@@ -409,14 +424,27 @@ selected_val = st.radio(
 if selected_val and not is_answer_checked:
     st.session_state["answers"][current_q_id] = selected_val.split(")")[0]
     if is_daily_session:
-        save_daily_run(db, st.session_state.get("user_id"), {
-            "question_ids": q_ids, "answers": st.session_state["answers"],
-            "checked_answers": st.session_state["checked_answers"],
-            "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
-            "started_at": st.session_state["exam_start_time"],
-            "learning_complete": st.session_state.get("daily_learning_complete", False),
-            "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
-        })
+        save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
+if is_daily_session and not is_answer_checked:
+    confidence_labels = {
+        "guess": "Adiviné",
+        "unsure": "Tengo dudas",
+        "confident": "Estoy seguro",
+    }
+    selected_confidence = st.radio(
+        "Antes de comprobar: ¿qué tan seguro estás?",
+        list(confidence_labels),
+        format_func=confidence_labels.get,
+        index=(
+            list(confidence_labels).index(st.session_state["confidences"][current_q_id])
+            if current_q_id in st.session_state["confidences"] else None
+        ),
+        key=f"confidence_{current_q_id}",
+        horizontal=True,
+    )
+    if selected_confidence and st.session_state["confidences"].get(current_q_id) != selected_confidence:
+        st.session_state["confidences"][current_q_id] = selected_confidence
+        save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
 
@@ -425,15 +453,10 @@ with col1:
     if st.button("⬅️ Anterior", use_container_width=True):
         st.session_state["current_idx"] = max(0, st.session_state["current_idx"] - 1)
         if is_daily_session:
-            save_daily_run(db, st.session_state.get("user_id"), {
-                "question_ids": q_ids, "answers": st.session_state["answers"],
-                "checked_answers": st.session_state["checked_answers"],
-                "current_idx": st.session_state["current_idx"],
-                "total_time_limit": st.session_state["total_time_limit"],
-                "started_at": st.session_state["exam_start_time"],
-                "learning_complete": st.session_state.get("daily_learning_complete", False),
-                "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
-            })
+            save_daily_run(
+                db, st.session_state.get("user_id"),
+                current_daily_payload(q_ids, st.session_state["current_idx"]),
+            )
         st.session_state["tutor_explanation"] = None
         st.rerun()
 
@@ -442,17 +465,13 @@ with col2:
         if not is_answer_checked:
             if st.button(
                 "✅ Comprobar respuesta", use_container_width=True,
-                disabled=current_q_id not in st.session_state["answers"],
+                disabled=(
+                    current_q_id not in st.session_state["answers"]
+                    or current_q_id not in st.session_state["confidences"]
+                ),
             ):
                 st.session_state["checked_answers"][current_q_id] = True
-                save_daily_run(db, st.session_state.get("user_id"), {
-                    "question_ids": q_ids, "answers": st.session_state["answers"],
-                    "checked_answers": st.session_state["checked_answers"],
-                    "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
-                    "started_at": st.session_state["exam_start_time"],
-                    "learning_complete": st.session_state.get("daily_learning_complete", False),
-                    "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
-                })
+                save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
                 st.rerun()
         else:
             chosen_key = st.session_state["answers"].get(current_q_id)
@@ -463,6 +482,27 @@ with col2:
                 st.error(
                     f"La respuesta correcta es {question.correct_key}) {correct_text}"
                 )
+                error_labels = {
+                    "desconocimiento": "No conocía la regla",
+                    "confusion_conceptual": "Confundí conceptos",
+                    "mala_interpretacion": "Interpreté mal el caso",
+                    "lectura_incompleta": "No vi una palabra clave",
+                    "apuro": "Respondí con afán",
+                }
+                selected_error = st.radio(
+                    "¿Cuál fue la causa principal?",
+                    list(error_labels),
+                    format_func=error_labels.get,
+                    index=(
+                        list(error_labels).index(st.session_state["error_types"][current_q_id])
+                        if current_q_id in st.session_state["error_types"] else None
+                    ),
+                    key=f"error_type_{current_q_id}",
+                    horizontal=True,
+                )
+                if selected_error and st.session_state["error_types"].get(current_q_id) != selected_error:
+                    st.session_state["error_types"][current_q_id] = selected_error
+                    save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
             st.info(f"💡 {question.rationale or 'No hay explicación disponible.'}")
             if question.source_refs:
                 st.caption(f"📖 Fuente: {question.source_refs}")
@@ -489,21 +529,22 @@ with col3:
     if current_idx < total_q - 1:
         if st.button(
             "Siguiente ➡️", type="primary", use_container_width=True,
-            disabled=is_daily_session and not is_answer_checked,
+            disabled=is_daily_session and (
+                not is_answer_checked
+                or (
+                    st.session_state["answers"].get(current_q_id) != question.correct_key
+                    and current_q_id not in st.session_state["error_types"]
+                )
+            ),
         ):
             if time_spent < 45 and not is_hardcore:
                 st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
             st.session_state["current_idx"] += 1
             if is_daily_session:
-                save_daily_run(db, st.session_state.get("user_id"), {
-                    "question_ids": q_ids, "answers": st.session_state["answers"],
-                    "checked_answers": st.session_state["checked_answers"],
-                    "current_idx": st.session_state["current_idx"],
-                    "total_time_limit": st.session_state["total_time_limit"],
-                    "started_at": st.session_state["exam_start_time"],
-                    "learning_complete": st.session_state.get("daily_learning_complete", False),
-                    "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
-                })
+                save_daily_run(
+                    db, st.session_state.get("user_id"),
+                    current_daily_payload(q_ids, st.session_state["current_idx"]),
+                )
             st.session_state["last_answer_time"] = time.time()
             st.session_state["tutor_explanation"] = None
             st.rerun()
@@ -511,9 +552,19 @@ with col3:
         finish_label = "🏁 Finalizar" if time_left > 0 else "⌛ Resultados"
         if st.button(
             finish_label, type="primary", use_container_width=True,
-            disabled=is_daily_session and not is_answer_checked,
+            disabled=is_daily_session and (
+                not is_answer_checked
+                or (
+                    st.session_state["answers"].get(current_q_id) != question.correct_key
+                    and current_q_id not in st.session_state["error_types"]
+                )
+            ),
         ):
-            if finalize_exam(db, q_ids, st.session_state["answers"]):
+            if finalize_exam(
+                db, q_ids, st.session_state["answers"],
+                st.session_state.get("confidences") if is_daily_session else None,
+                st.session_state.get("error_types") if is_daily_session else None,
+            ):
                 db.close()
                 st.switch_page("pages/3_Resultados.py")
 
