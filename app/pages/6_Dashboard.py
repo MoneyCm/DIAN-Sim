@@ -256,8 +256,13 @@ try:
                 ]
                 st.session_state["current_idx"] = 0
                 st.session_state["answers"] = {}
+                st.session_state["checked_answers"] = {}
                 st.session_state["hardcore_mode"] = False
                 st.session_state["study_session_kind"] = "daily"
+                st.session_state["total_time_limit"] = timed_session.total_minutes * 60
+                st.session_state["exam_start_time"] = datetime.datetime.now().timestamp()
+                st.session_state["last_answer_time"] = datetime.datetime.now().timestamp()
+                st.session_state["tutor_explanation"] = None
                 st.switch_page("pages/2_Ejecucion.py")
     if completed_today >= daily_goal:
         celebration_key = f"daily_completion_{bogota_now.date().isoformat()}"

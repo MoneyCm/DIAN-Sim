@@ -210,6 +210,10 @@ time_left = max(0, int(st.session_state["total_time_limit"] - elapsed))
 
 # Hardcore Mode Check
 is_hardcore = st.session_state.get("hardcore_mode", False)
+is_daily_session = st.session_state.get("study_session_kind") == "daily"
+if "checked_answers" not in st.session_state:
+    st.session_state["checked_answers"] = {}
+is_answer_checked = bool(st.session_state["checked_answers"].get(current_q_id))
 
 # Progress Area
 with st.container():
@@ -331,7 +335,12 @@ for k, v in options.items():
         opts_values.append(f"{k}) {clean_v}")
 existing_ans = st.session_state["answers"].get(current_q_id)
 index_ans = opts_keys.index(existing_ans) if existing_ans else None
-selected_val = st.radio("Selecciona la mejor respuesta:", opts_values, index=index_ans, key=f"q_{current_idx}")
+selected_val = st.radio(
+    "Selecciona la mejor respuesta:", opts_values, index=index_ans,
+    key=f"q_{current_idx}", disabled=is_daily_session and is_answer_checked,
+)
+if selected_val and not is_answer_checked:
+    st.session_state["answers"][current_q_id] = selected_val.split(")")[0]
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
 
@@ -343,7 +352,27 @@ with col1:
         st.rerun()
 
 with col2:
-    if not is_hardcore:
+    if is_daily_session:
+        if not is_answer_checked:
+            if st.button(
+                "✅ Comprobar respuesta", use_container_width=True,
+                disabled=current_q_id not in st.session_state["answers"],
+            ):
+                st.session_state["checked_answers"][current_q_id] = True
+                st.rerun()
+        else:
+            chosen_key = st.session_state["answers"].get(current_q_id)
+            if chosen_key == question.correct_key:
+                st.success("Respuesta correcta.")
+            else:
+                correct_text = question.options_json.get(question.correct_key, "")
+                st.error(
+                    f"La respuesta correcta es {question.correct_key}) {correct_text}"
+                )
+            st.info(f"💡 {question.rationale or 'No hay explicación disponible.'}")
+            if question.source_refs:
+                st.caption(f"📖 Fuente: {question.source_refs}")
+    elif not is_hardcore:
         if st.button("🤖 Tutor IA (Socrático)", use_container_width=True):
             with st.spinner("Analizando..."):
                 try:
@@ -363,10 +392,11 @@ with col2:
 with col3:
     current_time = time.time()
     time_spent = current_time - st.session_state.get("last_answer_time", current_time)
-    if selected_val:
-        st.session_state["answers"][current_q_id] = selected_val.split(")")[0]
     if current_idx < total_q - 1:
-        if st.button("Siguiente ➡️", type="primary", use_container_width=True):
+        if st.button(
+            "Siguiente ➡️", type="primary", use_container_width=True,
+            disabled=is_daily_session and not is_answer_checked,
+        ):
             if time_spent < 45 and not is_hardcore:
                 st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
             st.session_state["current_idx"] += 1
@@ -375,7 +405,10 @@ with col3:
             st.rerun()
     else:
         finish_label = "🏁 Finalizar" if time_left > 0 else "⌛ Resultados"
-        if st.button(finish_label, type="primary", use_container_width=True):
+        if st.button(
+            finish_label, type="primary", use_container_width=True,
+            disabled=is_daily_session and not is_answer_checked,
+        ):
             if finalize_exam(db, q_ids, st.session_state["answers"]):
                 db.close()
                 st.switch_page("pages/3_Resultados.py")
