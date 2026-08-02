@@ -20,11 +20,14 @@ def _cookie_secret() -> str:
         return os.getenv("AUTH_COOKIE_SECRET", "")
 
 
-@st.cache_resource
 def _cookie_manager():
     try:
         import extra_streamlit_components as stx
-        return stx.CookieManager(key="dian_sim_auth_cookies")
+        if "_auth_cookie_manager" not in st.session_state:
+            st.session_state["_auth_cookie_manager"] = stx.CookieManager(
+                key="dian_sim_auth_cookies"
+            )
+        return st.session_state["_auth_cookie_manager"]
     except ImportError:
         return None
 
