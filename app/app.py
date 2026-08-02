@@ -34,15 +34,6 @@ if st.session_state.get("current_model") == "gemini-1.5-flash":
 if st.session_state.get("current_model") == "models/gemini-1.5-flash":
     st.session_state["current_model"] = "models/gemini-flash-latest"
 
-# Debug Google Auth
-if st.query_params.get("debug") == "1":
-    try:
-        st.write("Google User Info:", st.user)
-        st.write("Query Params:", dict(st.query_params))
-        st.write("Session Keys:", list(st.session_state.keys()))
-    except:
-        st.write("Debug info incomplete")
-
 # --- CRITICAL AUTH FIX v8.0 ---
 # Force Logout Logic moved to top-level app.py to prevent caching issues
 # and handle native Google Session persistence.
@@ -188,8 +179,6 @@ p_etica = st.Page("pages/9_Etica_Integridad.py", title="Ética e Integridad", ic
 
 # Grupo: Administración (Sistemas)
 p_admin = st.Page("pages/8_Panel_Admin.py", title="Panel de Control", icon="🛡️")
-p_debug_opec = st.Page("pages/98_Debug_OPEC.py", title="Debug OPEC", icon="🐛")
-p_debug_cfg = st.Page("pages/99_Debug_Config.py", title="Debug Config", icon="🔧")
 
 # Agrupar menú
 pages = {
@@ -214,7 +203,7 @@ else:
         pass
         
     if is_admin():
-        pages["Sistemas (Admin)"] = [p_admin, p_ia, p_debug_opec, p_debug_cfg]
+        pages["Sistemas (Admin)"] = [p_admin, p_ia]
     pg = st.navigation(pages)
 
 # Ejecutar la página seleccionada por el router
