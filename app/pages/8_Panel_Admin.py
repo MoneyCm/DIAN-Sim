@@ -1,5 +1,6 @@
 import streamlit as st
 import os, sys, pandas as pd
+import datetime
 from pathlib import Path
 from sqlalchemy import func
 
@@ -31,26 +32,86 @@ tab_stats, tab_users, tab_normativa, tab_anki = st.tabs(["📊 Estadísticas Glo
 # --- TAB: STATS ---
 with tab_stats:
     db = SessionLocal()
-    total_users = db.query(User).count()
-    total_attempts = db.query(Attempt).count()
-    total_points = db.query(func.sum(UserStats.total_points)).scalar() or 0
-    total_questions = db.query(Question).count()
-    db.close()
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Usuarios Totales", total_users)
-    with col2:
-        st.metric("Simulacros Realizados", total_attempts)
-    with col3:
-        st.metric("Puntos Globales", f"{total_points:,}")
-    with col4:
-        st.metric("Banco de Preguntas", total_questions)
+    try:
+        now = datetime.datetime.now()
+        cutoff_7d = now - datetime.timedelta(days=7)
+        cutoff_30d = now - datetime.timedelta(days=30)
+        total_users = db.query(User).count()
+        active_users_7d = (
+            db.query(Attempt.user_id)
+            .filter(Attempt.created_at >= cutoff_7d, Attempt.user_id.isnot(None))
+            .distinct()
+            .count()
+        )
+        total_attempts = db.query(Attempt).count()
+        attempts_30d = db.query(Attempt).filter(Attempt.created_at >= cutoff_30d).count()
+        correct_30d = db.query(Attempt).filter(
+            Attempt.created_at >= cutoff_30d, Attempt.is_correct.is_(True)
+        ).count()
+        total_points = db.query(func.sum(UserStats.total_points)).scalar() or 0
+        total_questions = db.query(Question).count()
+        verified_questions = db.query(Question).filter(Question.is_verified.is_(True)).count()
+        situational_questions = db.query(Question).filter_by(question_type="SITUATIONAL").count()
+        sourced_questions = db.query(Question).filter(
+            Question.source_refs.isnot(None), Question.source_refs != ""
+        ).count()
+        recent_attempts = db.query(Attempt).filter(
+            Attempt.created_at >= cutoff_30d
+        ).order_by(Attempt.created_at.asc()).all()
+    finally:
+        db.close()
 
-    st.divider()
-    st.subheader("Uso del Sistema")
-    # Here we could add a plot of usage over time if needed.
-    st.info("Estas cifras son globales y abarcan todos los concursos registrados.")
+    accuracy_30d = round(correct_30d * 100 / attempts_30d) if attempts_30d else 0
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Usuarios registrados", total_users)
+    col2.metric("Activos en 7 días", active_users_7d, help="Usuarios distintos que respondieron al menos una pregunta.")
+    col3.metric("Respuestas en 30 días", attempts_30d, help=f"{total_attempts} respuestas acumuladas.")
+    col4.metric("Precisión en 30 días", f"{accuracy_30d}%" if attempts_30d else "Sin datos")
+
+    st.subheader("📈 Actividad de los últimos 30 días")
+    if recent_attempts:
+        activity_rows = [
+            {"Fecha": item.created_at.date(), "Correcta": int(bool(item.is_correct))}
+            for item in recent_attempts
+        ]
+        activity_df = pd.DataFrame(activity_rows)
+        daily_activity = activity_df.groupby("Fecha").agg(
+            Respuestas=("Correcta", "size"), Aciertos=("Correcta", "sum")
+        )
+        daily_activity["Precisión (%)"] = (
+            daily_activity["Aciertos"] * 100 / daily_activity["Respuestas"]
+        ).round(1)
+        st.bar_chart(daily_activity[["Respuestas"]], height=220)
+        st.dataframe(
+            daily_activity.reset_index().sort_values("Fecha", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("Todavía no hay respuestas registradas en los últimos 30 días.")
+
+    st.subheader("📚 Estado del banco de preguntas")
+    bank1, bank2, bank3 = st.columns(3)
+    bank1.metric("Preguntas", total_questions)
+    bank2.metric(
+        "Verificadas",
+        f"{round(verified_questions * 100 / total_questions) if total_questions else 0}%",
+        help=f"{verified_questions} preguntas marcadas como verificadas.",
+    )
+    bank3.metric(
+        "Situacionales",
+        f"{round(situational_questions * 100 / total_questions) if total_questions else 0}%",
+        help=f"{situational_questions} preguntas tienen formato situacional.",
+    )
+    missing_sources = max(total_questions - sourced_questions, 0)
+    if missing_sources:
+        st.warning(f"Hay {missing_sources} preguntas sin referencia documental registrada.")
+    else:
+        st.success("Todas las preguntas tienen una referencia documental registrada.")
+    st.caption(
+        f"Puntos acumulados por todos los usuarios: {total_points:,}. "
+        "Las cifras de esta pestaña abarcan todos los concursos registrados."
+    )
 
 # --- TAB: USERS ---
 with tab_users:
