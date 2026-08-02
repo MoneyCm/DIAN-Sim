@@ -195,7 +195,7 @@ p_debug_cfg = st.Page("pages/99_Debug_Config.py", title="Debug Config", icon="�
 pages = {
     "Mi Cuenta": [p_dashboard, p_perfil, p_config, p_study_plan, p_logout],
     "Práctica DIAN": [p_simulacro, p_ejecucion, p_sim_real, p_repaso, p_resultados],
-    "Herramientas y Recursos": [p_banco, p_ia, p_etica]
+    "Herramientas y Recursos": [p_banco, p_etica]
 }
 
 # Determinar Navegación Activa (Condicional)
@@ -214,7 +214,7 @@ else:
         pass
         
     if is_admin():
-        pages["Sistemas (Admin)"] = [p_admin, p_debug_opec, p_debug_cfg]
+        pages["Sistemas (Admin)"] = [p_admin, p_ia, p_debug_opec, p_debug_cfg]
     pg = st.navigation(pages)
 
 # Ejecutar la página seleccionada por el router

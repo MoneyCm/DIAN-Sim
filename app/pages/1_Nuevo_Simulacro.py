@@ -152,9 +152,14 @@ with st.container():
                     "Competencia", sorted(all_competencies), placeholder="Todas las competencias"
                 )
             
+            recommended_topic = st.session_state.get("practice_recommended_topic")
+            default_topics = [recommended_topic] if recommended_topic in all_topics else []
             topic_filter = st.multiselect(
-                "Tema específico", sorted(all_topics), placeholder="Todos los temas"
+                "Tema específico", sorted(all_topics), default=default_topics,
+                placeholder="Todos los temas"
             )
+            if default_topics:
+                st.caption(f"Recomendación aplicada desde tus resultados: {recommended_topic}")
             
             st.markdown("<br>", unsafe_allow_html=True)
             only_situational_manual = st.toggle(
@@ -206,12 +211,13 @@ with st.container():
                 
                 if available_count < 5:
                     st.warning(f"⚠️ Solo hay {available_count} preguntas disponibles para estos temas en tu banco local.")
-                    st.markdown("Recomendación: Usa el **Generador IA** para crear preguntas específicas para este cargo.")
-                    if st.button("Ir al Generador IA (Preguntas Situacionales)"):
+                    if AuthManager.is_admin() and st.button("Crear candidatos para cubrir la brecha"):
                         st.session_state["ai_default_text"] = profile_data["raw_text"]
                         st.session_state["ai_default_topic"] = selected_profile_name
                         st.session_state["ai_default_diff"] = difficulty_profile[0] if len(difficulty_profile) == 1 else 2
                         st.switch_page("pages/4_Generador_IA.py")
+                    elif not AuthManager.is_admin():
+                        st.info("La brecha fue identificada. Continúa con los temas disponibles mientras el banco se amplía y revisa.")
                 else:
                     st.success(f"✅ Hay {available_count} preguntas disponibles para este perfil.")
             except Exception as e:
@@ -258,8 +264,10 @@ with st.container():
             
             with col_o2:
                 st.info("¿No hay suficientes preguntas?")
-                if st.button("🤖 Generar nuevas preguntas para mi OPEC", use_container_width=True):
+                if AuthManager.is_admin() and st.button("🤖 Crear candidatos para la OPEC", use_container_width=True):
                     st.switch_page("pages/4_Generador_IA.py")
+                elif not AuthManager.is_admin():
+                    st.caption("El administrador puede cubrir las brechas detectadas sin interrumpir tu plan diario.")
         else:
             st.warning("No has configurado una OPEC todavía.")
             if st.button("Configurar mi OPEC ahora"):

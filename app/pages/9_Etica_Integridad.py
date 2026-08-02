@@ -111,7 +111,7 @@ else:
                     api_key = get_api_key(provider)
                     
                     if not api_key:
-                        st.error("⚠️ No se encontró API key. Configura tu API key en el Generador IA primero.")
+                        st.error("⚠️ No hay un proveedor de IA configurado. Desactiva la IA para usar el banco estático.")
                         st.stop()
                     
                     # En una escala de integridad sin clave correcta no se infieren

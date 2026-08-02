@@ -342,7 +342,10 @@ try:
             with action_cols[1]:
                 st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar cobertura", icon="▶️", width="stretch")
             with action_cols[2]:
-                st.page_link("pages/4_Generador_IA.py", label="Cubrir brecha del banco", icon="🤖", width="stretch")
+                if AuthManager.is_admin():
+                    st.page_link("pages/4_Generador_IA.py", label="Cubrir brecha del banco", icon="🤖", width="stretch")
+                else:
+                    st.caption("Las brechas del banco se remiten al administrador para crear y revisar material.")
             st.caption(
                 "Criterios: al menos 5 preguntas aptas por macrodominio y 3 respuestas por tema. "
                 "La revisión reforzada exige verificación y fuente registrada."

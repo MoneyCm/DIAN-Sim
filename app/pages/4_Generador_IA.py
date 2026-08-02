@@ -21,12 +21,11 @@ from core.auth import AuthManager
 from core.competitions import get_active_competition_id
 from core.generated_questions import candidate_issues, extract_candidates
 from core.user_keys import get_user_key, save_user_key
+from core.access_control import require_admin
 
 # pass # Removed st.set_page_config
 
-if not AuthManager.check_auth():
-    st.warning("Por favor inicia sesión.")
-    st.stop()
+require_admin()
 
 # --- v40: IA Limits Setup Mikey ---
 from datetime import date

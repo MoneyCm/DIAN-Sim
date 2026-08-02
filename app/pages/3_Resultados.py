@@ -150,15 +150,9 @@ if user_id:
             except:
                 pass
             
-            if st.button("💊 Crear refuerzo de mi debilidad", key="btn_refuerzo", type="primary"):
-                 source_context = ""
-                 if 'ref_q' in locals() and ref_q:
-                     source_context = f"{ref_q.source_refs or ''}\n{ref_q.rationale or ''}".strip()
-                 st.session_state["ai_reinforcement_topic"] = top_weak.topic
-                 st.session_state["ai_reinforcement_source_context"] = source_context
-                 st.session_state["ai_default_topic"] = top_weak.topic
-                 st.session_state["ai_default_diff"] = 3 if top_weak.mastery_score < 40 else 2
-                 st.switch_page("pages/4_Generador_IA.py")
+            if st.button("▶️ Practicar esta debilidad", key="btn_refuerzo", type="primary"):
+                 st.session_state["practice_recommended_topic"] = top_weak.topic
+                 st.switch_page("pages/1_Nuevo_Simulacro.py")
     else:
         st.info("Todavía no hay temas evaluados por debajo de la meta en este concurso.")
 else:

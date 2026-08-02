@@ -181,7 +181,7 @@ def render_custom_sidebar():
                 st.rerun()
 
         st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
-        st.sidebar.markdown('<div class="sidebar-category">🛠️ Herramientas AI</div>', unsafe_allow_html=True)
+        st.sidebar.markdown('<div class="sidebar-category">🛠️ Recursos de estudio</div>', unsafe_allow_html=True)
         st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
         
     except Exception as e:

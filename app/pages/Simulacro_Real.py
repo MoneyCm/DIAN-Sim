@@ -410,10 +410,9 @@ Eje: {detail["macro"]}
                         st.info(f"💡 **Explicación del Error / Concepto:** {q_item['rationale']}")
                         st.write("---")
                     
-                    # Botón específico para reforzar este tema con IA
-                    if st.button(f"🤖 Reforzar tema '{t_name}' con IA", key=f"reforce_{t_name}", use_container_width=True):
-                        st.session_state["ai_reinforcement_topic"] = t_name
-                        st.switch_page("pages/4_Generador_IA.py")
+                    if st.button(f"▶️ Practicar tema '{t_name}'", key=f"reforce_{t_name}", use_container_width=True):
+                        st.session_state["practice_recommended_topic"] = t_name
+                        st.switch_page("pages/1_Nuevo_Simulacro.py")
         else:
             if t > 0:
                 st.balloons()
