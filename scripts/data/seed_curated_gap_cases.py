@@ -9,6 +9,7 @@ from core.curated_gap_cases_phase3 import CURATED_GAP_CASES_PHASE3
 from core.curated_gap_cases_phase4 import CURATED_GAP_CASES_PHASE4
 from core.curated_gap_cases_phase5 import CURATED_GAP_CASES_PHASE5
 from core.curated_gap_cases_phase6 import CURATED_GAP_CASES_PHASE6
+from core.curated_gap_cases_phase7 import CURATED_GAP_CASES_PHASE7
 from core.dedupe import compute_hash
 from db.models import CaseStudy, Question
 from db.session import SessionLocal
@@ -42,6 +43,7 @@ def seed(apply: bool = False) -> tuple[int, int]:
             + CURATED_GAP_CASES_PHASE4
             + CURATED_GAP_CASES_PHASE5
             + CURATED_GAP_CASES_PHASE6
+            + CURATED_GAP_CASES_PHASE7
         )
         for data in all_cases:
             case_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data["id"]))

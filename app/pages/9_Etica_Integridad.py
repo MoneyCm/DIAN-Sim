@@ -43,7 +43,11 @@ with st.container(border=True):
     )
     st.markdown(
         "**Valores institucionales:** Honestidad · Respeto · Compromiso · "
-        "Diligencia · Justicia · Transparencia"
+        "Diligencia · Justicia"
+    )
+    st.caption(
+        "Fuente: Código de Integridad DIAN CG-TAH-0002, versión 3. "
+        "La transparencia se entrena como pauta de conducta, especialmente dentro de Honestidad."
     )
 
 st.divider()
