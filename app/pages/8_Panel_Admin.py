@@ -1,5 +1,6 @@
 import streamlit as st
 import os, sys, pandas as pd
+from pathlib import Path
 from sqlalchemy import func
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
@@ -8,7 +9,10 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from db.session import SessionLocal
-from db.models import User, UserStats, UserOPEC, Attempt, Question, QuestionAnkiEnrichment
+from db.models import (
+    User, UserStats, UserOPEC, Attempt, Question, QuestionAnkiEnrichment,
+    NormativaChunk,
+)
 from ui_utils import load_css, render_header
 from core.access_control import require_admin
 from core.normativa import NormativaManager
@@ -73,28 +77,95 @@ with tab_users:
 
 # --- TAB: NORMATIVA ---
 with tab_normativa:
-    st.subheader("📚 Gestión de Biblioteca Legal")
-    norm_path = "data/normativa"
-    if not os.path.exists(norm_path):
-        os.makedirs(norm_path)
-    
-    files = [f for f in os.listdir(norm_path) if f.endswith(".pdf")]
-    if files:
-        st.write("Archivos indexados actualmente:")
-        for f in files:
-            st.write(f"- 📄 {f}")
+    st.subheader("📚 Biblioteca normativa")
+    st.caption(
+        "Aquí se prepara el material legal que usa la búsqueda de fuentes del generador. "
+        "Esta sección no modifica el banco de preguntas automáticamente."
+    )
+    norm_path = Path(PROJECT_ROOT) / "data" / "normativa"
+    norm_path.mkdir(parents=True, exist_ok=True)
+
+    files = sorted(p.name for p in norm_path.glob("*.pdf"))
+    db_norm = SessionLocal()
+    try:
+        chunk_count = db_norm.query(NormativaChunk).count()
+        vector_count = db_norm.query(NormativaChunk).filter(
+            NormativaChunk.embedding_json.isnot(None)
+        ).count()
+        indexed_sources = db_norm.query(NormativaChunk.source_file).distinct().count()
+        source_rows = (
+            db_norm.query(
+                NormativaChunk.source_file,
+                func.count(NormativaChunk.id).label("fragmentos"),
+                func.count(NormativaChunk.embedding_json).label("vectores"),
+            )
+            .group_by(NormativaChunk.source_file)
+            .order_by(NormativaChunk.source_file)
+            .all()
+        )
+    finally:
+        db_norm.close()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("PDF disponibles", len(files))
+    c2.metric("Documentos procesados", indexed_sources)
+    c3.metric(
+        "Búsqueda semántica",
+        f"{round(vector_count * 100 / chunk_count) if chunk_count else 0}%",
+        help=f"{vector_count} de {chunk_count} fragmentos tienen vector semántico.",
+    )
+
+    if source_rows:
+        st.dataframe(
+            pd.DataFrame(source_rows, columns=["Documento", "Fragmentos", "Vectores"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+    elif files:
+        st.info("Hay PDF disponibles, pero todavía no se han procesado.")
     else:
-        st.write("La biblioteca está vacía.")
-    
-    st.divider()
-    
-    # --- ACCIONES DE INDEXACIÓN ---
-    st.subheader("⚙️ Acciones de Sincronización RAG")
+        st.info("La biblioteca está vacía. Sube el primer PDF para comenzar.")
+
+    st.subheader("1. Agregar o actualizar un documento")
+    uploaded_file = st.file_uploader(
+        "Selecciona una ley, decreto, estatuto o guía en PDF",
+        type="pdf",
+        help="El texto extraído quedará guardado en la base de datos.",
+    )
+    if uploaded_file is not None:
+        safe_name = Path(uploaded_file.name).name
+        already_exists = (norm_path / safe_name).exists()
+        if already_exists:
+            st.warning(
+                f"{safe_name} ya existe. Para evitar mezclar una versión anterior con otra nueva, "
+                "cambia el nombre del archivo antes de cargarlo."
+            )
+        if st.button(
+            "📥 Guardar y procesar PDF",
+            type="primary",
+            use_container_width=True,
+            disabled=already_exists,
+        ):
+            (norm_path / safe_name).write_bytes(uploaded_file.getbuffer())
+            manager = NormativaManager(str(norm_path))
+            try:
+                with st.spinner("Leyendo y preparando el documento..."):
+                    indexed = manager.index_all()
+                if indexed:
+                    st.success(f"{safe_name} quedó listo: se agregaron {indexed} fragmentos nuevos.")
+                else:
+                    st.info(f"{safe_name} ya estaba procesado; no se encontraron fragmentos nuevos.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"No fue posible procesar el PDF: {e}")
+
+    st.subheader("2. Mantenimiento de la biblioteca")
+    st.caption("Usa estas acciones solo al agregar archivos directamente al repositorio o si faltan vectores.")
     col_act1, col_act2 = st.columns(2)
-    
+
     with col_act1:
-        if st.button("🔄 Indexar Biblioteca (Leer PDFs)", use_container_width=True, help="Extrae el texto de los PDFs locales y los guarda en la base de datos"):
-            manager = NormativaManager()
+        if st.button("🔄 Procesar PDF pendientes", use_container_width=True, help="Extrae el texto de los PDF disponibles y evita fragmentos duplicados"):
+            manager = NormativaManager(str(norm_path))
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -104,14 +175,26 @@ with tab_normativa:
                 
             try:
                 indexed = manager.index_all(progress_callback=progress_cb)
-                st.success(f"¡Proceso completado! Se indexaron {indexed} nuevos fragmentos de ley.")
+                if indexed:
+                    st.success(f"Se agregaron {indexed} fragmentos nuevos.")
+                else:
+                    st.info("Todo está al día; no había fragmentos nuevos.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error indexando PDFs: {e}")
                 
     with col_act2:
-        if st.button("🧠 Calcular Vectores Semánticos", use_container_width=True, help="Genera embeddings vectoriales de Gemini para la búsqueda inteligente"):
-            manager = NormativaManager()
+        missing_vectors = max(chunk_count - vector_count, 0)
+        if st.button(
+            f"🧠 Completar búsqueda semántica ({missing_vectors})",
+            use_container_width=True,
+            disabled=missing_vectors == 0,
+            help="Genera con Gemini los vectores que permiten encontrar fuentes por significado.",
+        ):
+            if not get_api_key("gemini"):
+                st.error("Configura una API key global de Gemini antes de generar los vectores.")
+                st.stop()
+            manager = NormativaManager(str(norm_path))
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -121,25 +204,16 @@ with tab_normativa:
                 
             try:
                 updated = manager.backfill_embeddings(progress_callback=progress_cb)
-                st.success(f"¡Sincronización vectorial completa! Se generaron vectores para {updated} fragmentos.")
+                st.success(f"Búsqueda semántica actualizada en {updated} fragmentos.")
+                st.rerun()
             except Exception as e:
                 st.error(f"Error generando embeddings: {e}")
 
-    st.divider()
-    st.subheader("📤 Subir Nueva Ley")
-    uploaded_file = st.file_uploader("Sube el PDF de la Ley o Estatuto", type="pdf")
-    if uploaded_file is not None:
-        with open(os.path.join(norm_path, uploaded_file.name), "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        # Auto-indexar tras la subida
-        manager = NormativaManager()
-        try:
-            indexed = manager.index_all()
-            st.success(f"¡{uploaded_file.name} subido e indexado! Se crearon {indexed} fragmentos. Haz clic en 'Calcular Vectores Semánticos' para activar la búsqueda vectorial sobre este documento.")
-            st.balloons()
-        except Exception as e:
-            st.error(f"Error indexando automáticamente el nuevo PDF: {e}")
+    st.caption(
+        "En Streamlit Cloud los PDF subidos al disco pueden desaparecer al reiniciar. "
+        "Los fragmentos ya procesados permanecen si la base de datos configurada es persistente; "
+        "para conservar también el archivo original, agrégalo al repositorio o usa almacenamiento externo."
+    )
 
 # --- TAB: ANKI ENRICHMENT ---
 with tab_anki:
