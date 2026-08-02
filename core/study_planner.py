@@ -18,13 +18,13 @@ def build_timed_session(total_minutes: int) -> TimedStudySession:
     """Distribuye una sesión entre recuperación, aprendizaje, práctica y cierre."""
     minutes = min(max(int(total_minutes or 30), 15), 180)
     review = max(3, round(minutes * 0.17))
-    learning = max(5, round(minutes * 0.40))
-    practice = max(5, round(minutes * 0.33))
+    learning = max(5, round(minutes * 0.27))
+    practice = max(5, round(minutes * 0.43))
     closing = minutes - review - learning - practice
     if closing < 2:
         learning -= 2 - closing
         closing = 2
-    question_goal = max(3, min(30, math.ceil(practice / 2)))
+    question_goal = max(3, min(30, math.ceil(practice / 3)))
     return TimedStudySession(
         total_minutes=minutes,
         review_minutes=review,

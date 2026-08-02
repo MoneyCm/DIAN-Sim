@@ -291,6 +291,8 @@ try:
                             "answers": {}, "checked_answers": {}, "current_idx": 0,
                             "total_time_limit": timed_session.total_minutes * 60,
                             "started_at": datetime.datetime.now().timestamp(),
+                            "learning_complete": False,
+                            "learning_minutes": timed_session.learning_minutes,
                         })
                         restore_daily_run_to_session(st.session_state, active_daily_run)
                     st.switch_page("pages/2_Ejecucion.py")

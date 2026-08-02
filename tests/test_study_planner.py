@@ -8,9 +8,9 @@ def test_thirty_minute_session_matches_recommended_structure():
 
     assert session.total_minutes == 30
     assert session.review_minutes == 5
-    assert session.learning_minutes == 12
-    assert session.practice_minutes == 10
-    assert session.closing_minutes == 3
+    assert session.learning_minutes == 8
+    assert session.practice_minutes == 13
+    assert session.closing_minutes == 4
     assert session.question_goal == 5
 
 

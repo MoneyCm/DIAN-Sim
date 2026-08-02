@@ -30,6 +30,8 @@ def normalize_daily_run(payload: dict) -> dict:
         "current_idx": current_idx,
         "total_time_limit": max(60, int(payload.get("total_time_limit", 1800))),
         "started_at": float(payload.get("started_at", time.time())),
+        "learning_complete": bool(payload.get("learning_complete", False)),
+        "learning_minutes": max(3, int(payload.get("learning_minutes", 8))),
     }
 
 
@@ -73,3 +75,5 @@ def restore_daily_run_to_session(session_state, payload: dict) -> None:
     session_state["exam_start_time"] = payload["started_at"]
     session_state["last_answer_time"] = time.time()
     session_state["tutor_explanation"] = None
+    session_state["daily_learning_complete"] = payload["learning_complete"]
+    session_state["daily_learning_minutes"] = payload["learning_minutes"]

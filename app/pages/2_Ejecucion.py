@@ -17,6 +17,7 @@ from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
 )
 from core.generators.llm import LLMGenerator
+from core.guided_learning import build_guided_learning_brief
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
 
 # --- v21: Safe Attribute Assignment Mikey ---
@@ -191,8 +192,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-render_header(title="Simulacro en Curso")
-
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     resume_db = SessionLocal()
     resumed_run = load_daily_run(resume_db, st.session_state.get("user_id"))
@@ -204,6 +203,9 @@ if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     st.warning("No hay un examen activo. Ve a 'Nuevo Simulacro'.")
     st.stop()
 
+is_daily_session = st.session_state.get("study_session_kind") == "daily"
+render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
+
 q_ids = st.session_state["exam_questions"]
 current_idx = st.session_state["current_idx"]
 total_q = len(q_ids)
@@ -211,6 +213,59 @@ total_q = len(q_ids)
 db = SessionLocal()
 current_q_id = q_ids[current_idx]
 question = db.query(Question).filter(Question.question_id == current_q_id).first()
+
+if is_daily_session and not st.session_state.get("daily_learning_complete", False):
+    loaded_questions = db.query(Question).filter(Question.question_id.in_(q_ids)).all()
+    question_by_id = {item.question_id: item for item in loaded_questions}
+    session_questions = [question_by_id[qid] for qid in q_ids if qid in question_by_id]
+    brief = build_guided_learning_brief(
+        session_questions,
+        st.session_state.get("daily_learning_minutes", 8),
+    )
+    st.progress(0.25, text="Paso 2 de 4 · Estudio guiado")
+    with st.container(border=True):
+        st.subheader(f"📖 Estudia durante {brief.get('minutes', 8)} minutos")
+        st.markdown(f"### {brief.get('topic', 'Tema de la sesión')}")
+        st.caption(f"Macrodominio: {brief.get('macro', 'General')}")
+        st.write(f"**Objetivo:** {brief.get('objective', '')}")
+        sources = brief.get("sources", [])
+        if sources:
+            st.markdown("**Consulta estas fuentes:**")
+            for source in sources:
+                st.markdown(f"- {source}")
+        else:
+            st.warning(
+                "Este bloque no tiene una fuente precisa registrada. No memorices una explicación "
+                "sin respaldo; continúa con la práctica y revisa la fuente al corregir."
+            )
+        st.markdown(
+            "**Recuperación activa:** cierra el material y explica en voz alta la regla, "
+            "una excepción y cómo actuarías en un caso laboral."
+        )
+        ready = st.checkbox(
+            "Ya estudié la fuente y puedo explicarla sin mirarla",
+            key="daily_learning_ready",
+        )
+        if st.button(
+            "Continuar a las preguntas situacionales",
+            type="primary",
+            use_container_width=True,
+            disabled=not ready,
+        ):
+            st.session_state["daily_learning_complete"] = True
+            save_daily_run(db, st.session_state.get("user_id"), {
+                "question_ids": q_ids,
+                "answers": st.session_state.get("answers", {}),
+                "checked_answers": st.session_state.get("checked_answers", {}),
+                "current_idx": current_idx,
+                "total_time_limit": st.session_state["total_time_limit"],
+                "started_at": st.session_state["exam_start_time"],
+                "learning_complete": True,
+                "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
+            })
+            st.rerun()
+    db.close()
+    st.stop()
 
 # --- v2.0 NEW: Chronometer / Timer ---
 if "total_time_limit" not in st.session_state:
@@ -223,7 +278,6 @@ time_left = max(0, int(st.session_state["total_time_limit"] - elapsed))
 
 # Hardcore Mode Check
 is_hardcore = st.session_state.get("hardcore_mode", False)
-is_daily_session = st.session_state.get("study_session_kind") == "daily"
 if "checked_answers" not in st.session_state:
     st.session_state["checked_answers"] = {}
 is_answer_checked = bool(st.session_state["checked_answers"].get(current_q_id))
@@ -360,6 +414,8 @@ if selected_val and not is_answer_checked:
             "checked_answers": st.session_state["checked_answers"],
             "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
             "started_at": st.session_state["exam_start_time"],
+            "learning_complete": st.session_state.get("daily_learning_complete", False),
+            "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
         })
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
@@ -375,6 +431,8 @@ with col1:
                 "current_idx": st.session_state["current_idx"],
                 "total_time_limit": st.session_state["total_time_limit"],
                 "started_at": st.session_state["exam_start_time"],
+                "learning_complete": st.session_state.get("daily_learning_complete", False),
+                "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
             })
         st.session_state["tutor_explanation"] = None
         st.rerun()
@@ -392,6 +450,8 @@ with col2:
                     "checked_answers": st.session_state["checked_answers"],
                     "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
                     "started_at": st.session_state["exam_start_time"],
+                    "learning_complete": st.session_state.get("daily_learning_complete", False),
+                    "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
                 })
                 st.rerun()
         else:
@@ -441,6 +501,8 @@ with col3:
                     "current_idx": st.session_state["current_idx"],
                     "total_time_limit": st.session_state["total_time_limit"],
                     "started_at": st.session_state["exam_start_time"],
+                    "learning_complete": st.session_state.get("daily_learning_complete", False),
+                    "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
                 })
             st.session_state["last_answer_time"] = time.time()
             st.session_state["tutor_explanation"] = None
