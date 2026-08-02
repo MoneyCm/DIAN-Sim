@@ -23,7 +23,15 @@ from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
 from core.config import get_api_key
 from core.user_keys import get_user_key
-from core.adaptive import build_hybrid_remaining_daily_plan
+from core import adaptive as adaptive_engine
+
+# Streamlit Cloud puede conservar el módulo anterior durante una recarga en
+# caliente. El fallback evita tumbar el Dashboard mientras termina el reinicio.
+build_hybrid_remaining_daily_plan = getattr(
+    adaptive_engine,
+    "build_hybrid_remaining_daily_plan",
+    adaptive_engine.build_remaining_daily_plan,
+)
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent, topic_status
 from services.question_service import QuestionService
