@@ -35,6 +35,7 @@ build_hybrid_remaining_daily_plan = getattr(
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent, topic_status
 from services.question_service import QuestionService
+from core.study_resume import load_daily_run, restore_daily_run_to_session, save_daily_run
 
 # pass # Removed st.set_page_config
 
@@ -139,6 +140,7 @@ try:
         daily_goal=daily_goal,
         now=bogota_now,
     )
+    active_daily_run = load_daily_run(db, u_id)
 
     exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
 
@@ -251,26 +253,27 @@ try:
         ):
             st.switch_page("pages/10_Repaso_Especial.py")
         with action_col:
-            action_label = "Continuar plan diario" if completed_today else "Iniciar plan diario"
+            action_label = (
+                "Reanudar sesión interrumpida" if active_daily_run
+                else "Continuar plan diario" if completed_today
+                else "Iniciar plan diario"
+            )
             if st.button(
                 action_label,
                 type="primary",
                 use_container_width=True,
-                disabled=not daily_plan,
+                disabled=not daily_plan and not active_daily_run,
             ):
-                st.session_state["exam_mode"] = True
-                st.session_state["exam_questions"] = [
-                    item.question.question_id for item in daily_plan
-                ]
-                st.session_state["current_idx"] = 0
-                st.session_state["answers"] = {}
-                st.session_state["checked_answers"] = {}
-                st.session_state["hardcore_mode"] = False
-                st.session_state["study_session_kind"] = "daily"
-                st.session_state["total_time_limit"] = timed_session.total_minutes * 60
-                st.session_state["exam_start_time"] = datetime.datetime.now().timestamp()
-                st.session_state["last_answer_time"] = datetime.datetime.now().timestamp()
-                st.session_state["tutor_explanation"] = None
+                if active_daily_run:
+                    restore_daily_run_to_session(st.session_state, active_daily_run)
+                else:
+                    active_daily_run = save_daily_run(db, u_id, {
+                        "question_ids": [item.question.question_id for item in daily_plan],
+                        "answers": {}, "checked_answers": {}, "current_idx": 0,
+                        "total_time_limit": timed_session.total_minutes * 60,
+                        "started_at": datetime.datetime.now().timestamp(),
+                    })
+                    restore_daily_run_to_session(st.session_state, active_daily_run)
                 st.switch_page("pages/2_Ejecucion.py")
     if completed_today >= daily_goal:
         celebration_key = f"daily_completion_{bogota_now.date().isoformat()}"

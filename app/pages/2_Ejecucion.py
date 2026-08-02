@@ -13,6 +13,9 @@ from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
+from core.study_resume import (
+    clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
+)
 from core.generators.llm import LLMGenerator
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
 
@@ -133,6 +136,8 @@ def finalize_exam(db, q_ids, answers_dict):
         
         # Update Gamification with official weighting
         stats, points_earned, new_achievements, rank_up, is_passed = update_user_stats(db, datetime.date.today(), correct_count, total_questions=total_q, eje_breakdown=breakdown, user_id=u_id)
+        if st.session_state.get("study_session_kind") == "daily":
+            clear_daily_run(db, u_id)
         db.commit()
         
         # Store results for next page
@@ -187,6 +192,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 render_header(title="Simulacro en Curso")
+
+if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
+    resume_db = SessionLocal()
+    resumed_run = load_daily_run(resume_db, st.session_state.get("user_id"))
+    resume_db.close()
+    if resumed_run:
+        restore_daily_run_to_session(st.session_state, resumed_run)
 
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     st.warning("No hay un examen activo. Ve a 'Nuevo Simulacro'.")
@@ -342,6 +354,13 @@ selected_val = st.radio(
 )
 if selected_val and not is_answer_checked:
     st.session_state["answers"][current_q_id] = selected_val.split(")")[0]
+    if is_daily_session:
+        save_daily_run(db, st.session_state.get("user_id"), {
+            "question_ids": q_ids, "answers": st.session_state["answers"],
+            "checked_answers": st.session_state["checked_answers"],
+            "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
+            "started_at": st.session_state["exam_start_time"],
+        })
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 st.markdown('</div>', unsafe_allow_html=True) 
 
@@ -349,6 +368,14 @@ col1, col2, col3 = st.columns([1, 4, 1])
 with col1:
     if st.button("⬅️ Anterior", use_container_width=True):
         st.session_state["current_idx"] = max(0, st.session_state["current_idx"] - 1)
+        if is_daily_session:
+            save_daily_run(db, st.session_state.get("user_id"), {
+                "question_ids": q_ids, "answers": st.session_state["answers"],
+                "checked_answers": st.session_state["checked_answers"],
+                "current_idx": st.session_state["current_idx"],
+                "total_time_limit": st.session_state["total_time_limit"],
+                "started_at": st.session_state["exam_start_time"],
+            })
         st.session_state["tutor_explanation"] = None
         st.rerun()
 
@@ -360,6 +387,12 @@ with col2:
                 disabled=current_q_id not in st.session_state["answers"],
             ):
                 st.session_state["checked_answers"][current_q_id] = True
+                save_daily_run(db, st.session_state.get("user_id"), {
+                    "question_ids": q_ids, "answers": st.session_state["answers"],
+                    "checked_answers": st.session_state["checked_answers"],
+                    "current_idx": current_idx, "total_time_limit": st.session_state["total_time_limit"],
+                    "started_at": st.session_state["exam_start_time"],
+                })
                 st.rerun()
         else:
             chosen_key = st.session_state["answers"].get(current_q_id)
@@ -401,6 +434,14 @@ with col3:
             if time_spent < 45 and not is_hardcore:
                 st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
             st.session_state["current_idx"] += 1
+            if is_daily_session:
+                save_daily_run(db, st.session_state.get("user_id"), {
+                    "question_ids": q_ids, "answers": st.session_state["answers"],
+                    "checked_answers": st.session_state["checked_answers"],
+                    "current_idx": st.session_state["current_idx"],
+                    "total_time_limit": st.session_state["total_time_limit"],
+                    "started_at": st.session_state["exam_start_time"],
+                })
             st.session_state["last_answer_time"] = time.time()
             st.session_state["tutor_explanation"] = None
             st.rerun()
