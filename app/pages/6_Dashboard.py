@@ -35,6 +35,7 @@ build_hybrid_remaining_daily_plan = getattr(
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
+from core.function_coverage import build_function_coverage
 from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
@@ -344,6 +345,37 @@ try:
                 "Criterios: al menos 5 preguntas aptas por macrodominio y 3 respuestas por tema. "
                 "La revisión reforzada exige verificación y fuente registrada."
             )
+
+            if opec_functions:
+                st.markdown("#### Matriz de cobertura por función")
+                st.caption(
+                    "Vinculación automática conservadora basada en coincidencias temáticas. "
+                    "Debe revisarse cuando la CNSC publique o actualice la guía oficial."
+                )
+                function_rows, unmatched_questions = build_function_coverage(
+                    opec_functions, daily_candidates, daily_performances
+                )
+                function_df = pd.DataFrame([{
+                    "Función": row["label"],
+                    "Preguntas vinculadas": row["questions"],
+                    "Con revisión reforzada": row["trusted"],
+                    "Practicadas con evidencia": row["practiced"],
+                    "Estado": row["status"],
+                } for row in function_rows])
+                st.dataframe(function_df, hide_index=True, width="stretch")
+                uncovered_functions = [
+                    row for row in function_rows if row["status"] == "Faltan preguntas"
+                ]
+                if uncovered_functions:
+                    st.error(
+                        f"{len(uncovered_functions)} de {len(function_rows)} función(es) no tienen "
+                        "las 5 preguntas vinculadas requeridas."
+                    )
+                if unmatched_questions:
+                    st.caption(
+                        f"{unmatched_questions} pregunta(s) aptas quedaron sin asociar por falta de "
+                        "coincidencia suficiente; no se usaron para inflar la cobertura."
+                    )
         else:
             st.info("No hay preguntas aptas clasificadas para construir el control de cobertura.")
 
