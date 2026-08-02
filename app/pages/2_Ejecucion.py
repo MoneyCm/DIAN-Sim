@@ -138,6 +138,7 @@ def finalize_exam(db, q_ids, answers_dict):
         # Store results for next page
         st.session_state["exam_mode"] = False
         st.session_state["last_results"] = {
+            "session_kind": st.session_state.get("study_session_kind", "simulation"),
             "total": total_q,
             "correct": correct_count,
             "score": (correct_count / total_q) * 100 if total_q > 0 else 0,

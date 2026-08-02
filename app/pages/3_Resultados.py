@@ -25,7 +25,15 @@ if not AuthManager.check_auth():
 
 load_css()
 render_custom_sidebar()
-render_header(title="Resultados del Simulacro", subtitle="Análisis de tu desempeño reciente")
+result_preview = st.session_state.get("last_results", {})
+is_daily_session = result_preview.get("session_kind") == "daily"
+render_header(
+    title="Resumen del plan diario" if is_daily_session else "Resultados del Simulacro",
+    subtitle=(
+        "Lo aprendido hoy y los temas que debes reforzar"
+        if is_daily_session else "Análisis de tu desempeño reciente"
+    ),
+)
 # v2.5.1 - Fix PDF Binary
 
 if "last_results" not in st.session_state:
@@ -36,6 +44,7 @@ if "last_results" not in st.session_state:
     st.stop()
 
 data = st.session_state["last_results"]
+is_daily_session = data.get("session_kind") == "daily"
 breakdown = data.get("breakdown", {})
 is_passed = data.get("is_passed", True)
 
@@ -67,7 +76,13 @@ total = data["total"]
 correct = data["correct"]
 
 # Status Message
-if not is_passed:
+if is_daily_session:
+    daily_precision = (correct / total * 100) if total else 0
+    st.success(
+        f"✅ Sesión diaria completada: {correct} de {total} respuestas correctas "
+        f"({daily_precision:.0f}%). Los errores ya quedaron programados para repaso."
+    )
+elif not is_passed:
     st.error("🚨 RESULTADO: NO SUPERADO (Módulo Funcional por debajo del 70%). Según el protocolo de la CNSC, esta prueba es eliminatoria.")
 else:
     st.success("🎉 RESULTADO: SUPERADO. Has cumplido con el umbral mínimo del módulo funcional.")
@@ -75,13 +90,19 @@ else:
 # Metric Cards
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    metric_card("Puntaje Ponderado", f"{total_weighted:.1f}/100", f"Funcional: {f_pct:.0f}%")
+    if is_daily_session:
+        metric_card("Precisión de hoy", f"{daily_precision:.0f}%", f"{correct}/{total} correctas")
+    else:
+        metric_card("Puntaje Ponderado", f"{total_weighted:.1f}/100", f"Funcional: {f_pct:.0f}%")
 with col2:
     metric_card("Puntos Ganados", f"+{data.get('points_earned', 0)}", "¡Buen trabajo!")
 with col3:
     metric_card("Racha Actual", f"{data.get('new_streak', 0)}🔥", "Días seguidos")
 with col4:
-    metric_card("Módulo Funcional", "ELIMINATORIO", "Aprobado" if is_passed else "Reprobado")
+    if is_daily_session:
+        metric_card("Plan diario", "COMPLETADO", "Continúa mañana")
+    else:
+        metric_card("Módulo Funcional", "ELIMINATORIO", "Aprobado" if is_passed else "Reprobado")
 
 
 st.divider()
@@ -168,7 +189,9 @@ with col_b2:
     except Exception as e:
         st.error(f"Error PDF: {e}")
 with col_b3:
-    if total_weighted >= 70:
+    if is_daily_session:
+        st.button("📚 Aprendizaje guardado", disabled=True, use_container_width=True)
+    elif total_weighted >= 70:
         user_name = st.session_state.get("username", "Aspirante")
         from db.models import UserOPEC
         db_o = SessionLocal()
@@ -184,7 +207,7 @@ with col_b3:
 
 st.divider()
 
-if not is_passed:
+if not is_passed and not is_daily_session:
     st.warning("🚨 El reporte PDF se generó, pero recuerda que no superaste el módulo eliminatorio Funcional.")
     st.info("💡 Te recomendamos generar un nuevo simulacro enfocado específicamente en tus debilidades del Eje Funcional.")
 else:
