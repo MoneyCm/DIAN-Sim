@@ -10,6 +10,7 @@ FUNCTIONAL_OPTION_KEYS = ("A", "B", "C")
 OFFICIAL_LABEL = "Oficial GOA"
 PRACTICE_LABEL = "Practica"
 REVIEW_LABEL = "Requiere revision"
+TRUSTED_REVIEW_LABELS = {"human_source_grounded", "source_grounded"}
 
 LIKERT_OPTIONS = (
     "1 - Totalmente en desacuerdo",
@@ -17,6 +18,11 @@ LIKERT_OPTIONS = (
     "3 - De acuerdo",
     "4 - Totalmente de acuerdo",
 )
+
+
+def has_source_grounded_review(question) -> bool:
+    report = getattr(question, "quality_report", None)
+    return isinstance(report, dict) and report.get("review") in TRUSTED_REVIEW_LABELS
 
 
 def is_official_functional_case(case) -> bool:
@@ -32,6 +38,8 @@ def is_official_functional_case(case) -> bool:
         if not isinstance(options, dict) or tuple(options.keys()) != FUNCTIONAL_OPTION_KEYS:
             return False
         if not bool(getattr(question, "is_verified", False)):
+            return False
+        if not has_source_grounded_review(question):
             return False
         if getattr(question, "correct_key", None) not in FUNCTIONAL_OPTION_KEYS:
             return False
@@ -64,6 +72,7 @@ def _eligible_verified_question(question) -> bool:
     options = getattr(question, "options_json", None)
     return (
         bool(getattr(question, "is_verified", False))
+        and has_source_grounded_review(question)
         and str(getattr(question, "track", "")).upper() == FUNCTIONAL_TRACK
         and str(getattr(question, "question_type", SITUATIONAL_TYPE)).upper() == SITUATIONAL_TYPE
         and isinstance(options, dict)

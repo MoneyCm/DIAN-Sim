@@ -6,7 +6,7 @@ from core.exam_format import (
 )
 
 
-def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SITUATIONAL", is_verified=True):
+def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SITUATIONAL", is_verified=True, trusted=True):
     return SimpleNamespace(
         track=track,
         options_json=options or {"A": "Uno", "B": "Dos", "C": "Tres"},
@@ -14,6 +14,7 @@ def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SI
         question_type=question_type,
         stem="Enunciado",
         is_verified=is_verified,
+        quality_report={"status": "APPROVED", "review": "human_source_grounded"} if trusted else None,
     )
 
 
@@ -27,6 +28,14 @@ def test_official_case_requires_three_functional_statements():
 def test_official_case_rejects_wrong_track_or_options():
     case = SimpleNamespace(text="Caso", questions=[question(), question(), question(track="INTEGRIDAD")])
     assert not is_official_functional_case(case)
+
+
+def test_legacy_verified_question_without_grounded_review_is_not_official():
+    legacy = question(trusted=False)
+    case = SimpleNamespace(text="Caso", questions=[legacy, question(), question()])
+    legacy.case_study = case
+    assert not is_official_functional_case(case)
+    assert question_format_status(legacy) == REVIEW_LABEL
     case.questions[2] = question(options={"A": "Uno", "B": "Dos", "C": "Tres", "D": "Cuatro"})
     assert not is_official_functional_case(case)
 
