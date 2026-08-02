@@ -42,3 +42,13 @@ Este sesgo permite responder por patrón. No debe repararse permutando letras au
 4. Priorizar nuevos casos fuente-a-fuente para las funciones con cobertura no demostrada.
 5. Balancear A/B/C durante la autoría de nuevos casos, nunca mediante cambios mecánicos posteriores.
 6. Confirmar la cobertura final cuando se publique la guía oficial del proceso vigente.
+
+## Ampliación posterior a la auditoría
+
+Se incorporaron tres casos adicionales (nueve preguntas) construidos con la ficha AT-FL-3006 y procedimientos recuperados de la carpeta `Concurso DIAN 2026` en Google Drive:
+
+- PR-COT-0432 Liquidación Provisional, versión 3.
+- PR-COA-0229 Declaratoria de incumplimiento y efectividad de garantía, versión 4.
+- PR-COA-0501 Auditoría Posterior al Despacho, versión 1.
+
+Estado posterior a la carga: 325 preguntas totales, 94 aptas para estudio activo y 17 bloques GOA (51 preguntas). Las nueve claves nuevas quedaron equilibradas: tres A, tres B y tres C. Los documentos de Drive sustentan estos casos como material formativo del cargo; no sustituyen la guía oficial del proceso vigente.
