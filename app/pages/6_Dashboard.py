@@ -486,56 +486,97 @@ try:
         st.plotly_chart(fig_line, width="stretch", key="dashboard_progress_chart")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 4. Radar de Habilidades & Refuerzo
+    # 4. Diagnóstico accionable de habilidades
     col_d1, col_d2 = st.columns(2)
 
+    skill_rows = []
+    for skill_item in skills:
+        key = (skill_item.track, skill_item.competency, skill_item.topic)
+        evidence = {"hits": 0, "misses": 0}
+        for performance in daily_performances:
+            candidate = candidate_by_id.get(performance.question_id)
+            if candidate and (candidate.track, candidate.competency, candidate.topic) == key:
+                evidence["hits"] += int(performance.hits or 0)
+                evidence["misses"] += int(performance.misses or 0)
+        attempts_count = evidence["hits"] + evidence["misses"]
+        skill_rows.append({
+            "skill": skill_item,
+            "macro": getattr(skill_item, "macro_dominio", None) or "Transversal",
+            "topic": skill_item.topic,
+            "mastery": float(skill_item.mastery_score or 0),
+            "attempts": attempts_count,
+            "hits": evidence["hits"],
+            "misses": evidence["misses"],
+        })
+    evaluated_rows = [row for row in skill_rows if row["attempts"] > 0]
+    pending_rows = [row for row in skill_rows if row["attempts"] == 0]
+
     with col_d1:
-        st.subheader("🛡️ Radar de Macro-Dominios")
-        if skills:
-            avg_competencies = df_skills.groupby('Macro-Dominio')['Dominio'].mean().reset_index()
-            fig_radar = go.Figure()
-            # Actual Mastery
-            fig_radar.add_trace(go.Scatterpolar(
-                r=avg_competencies['Dominio'],
-                theta=avg_competencies['Macro-Dominio'],
-                fill='toself',
-                name='Dominio Actual',
-                line_color='#2c3e50',
-                fillcolor='rgba(44, 62, 80, 0.3)'
-            ))
-            # Target Mastery (Ideal 90%)
-            fig_radar.add_trace(go.Scatterpolar(
-                r=[70] * len(avg_competencies),
-                theta=avg_competencies['Macro-Dominio'],
-                name='Umbral Aprobación (70%)',
-                line_color='rgba(230, 0, 0, 0.5)',
-                line_dash='dot'
-            ))
-            fig_radar.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                showlegend=True,
-                margin=dict(l=40, r=40, t=20, b=20),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
+        st.subheader("🧭 Cobertura por Macro-Dominio")
+        if evaluated_rows:
+            evaluated_df = pd.DataFrame(evaluated_rows)
+            macro_summary = (
+                evaluated_df.groupby("macro", as_index=False)
+                .agg(Dominio=("mastery", "mean"), Intentos=("attempts", "sum"))
+                .sort_values("Dominio", ascending=True)
             )
-            st.plotly_chart(fig_radar, use_container_width=True, key="dashboard_radar_chart")
+            macro_colors = [
+                '#dc2626' if value < 50 else '#f59e0b' if value < 70 else '#10b981'
+                for value in macro_summary['Dominio']
+            ]
+            fig_macro = go.Figure(go.Bar(
+                x=macro_summary['Dominio'], y=macro_summary['macro'], orientation='h',
+                marker_color=macro_colors,
+                text=[f"{value:.0f}%" for value in macro_summary['Dominio']],
+                textposition='outside', cliponaxis=False,
+                customdata=macro_summary['Intentos'],
+                hovertemplate="%{y}<br>Dominio: %{x:.1f}%<br>Intentos: %{customdata}<extra></extra>",
+            ))
+            fig_macro.add_vline(x=70, line_dash='dash', line_color='#dc2626')
+            fig_macro.update_xaxes(range=[0, 105], ticksuffix='%', title=None, fixedrange=True)
+            fig_macro.update_yaxes(title=None, fixedrange=True)
+            fig_macro.update_layout(
+                height=max(260, 70 * len(macro_summary)), showlegend=False,
+                margin=dict(t=15, b=20, l=10, r=35),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_macro, width="stretch", key="dashboard_macro_coverage")
+            st.caption(
+                f"Cobertura evaluada: {len(evaluated_rows)} de {len(skill_rows)} habilidades. "
+                "Las no practicadas no se califican como debilidades."
+            )
         else:
-            st.info("Sin datos para el radar.")
+            st.info(
+                "Todavía no hay intentos suficientes para medir tus macro-dominios. "
+                "Completa el plan diario para iniciar el diagnóstico."
+            )
 
     with col_d2:
-        st.subheader("⚠️ Habilidades a Reforzar")
-        if skills:
-            top_weak = db.query(Skill).filter_by(user_id=u_id).order_by(Skill.mastery_score.asc()).limit(5).all()
-            for s in top_weak:
-                color = "red" if s.mastery_score < 40 else "orange"
-                st.markdown(f"""
-                <div style="background: white; border-left: 5px solid {color}; padding: 10px; border-radius: 8px; margin-bottom: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                    <b style="color: #333;">{s.topic}</b><br>
-                    <span style="font-size: 0.8rem; color: #666;">{s.competency} | Dominio: {s.mastery_score:.1f}%</span>
-                </div>
-                """, unsafe_allow_html=True)
+        st.subheader("🎯 Prioridades de Refuerzo")
+        if evaluated_rows:
+            priority_rows = sorted(
+                evaluated_rows, key=lambda row: (row["mastery"], -row["misses"], row["topic"])
+            )[:5]
+            for index, row in enumerate(priority_rows, start=1):
+                with st.container(border=True):
+                    st.markdown(f"**{index}. {row['topic']}**")
+                    st.progress(min(max(row['mastery'] / 100, 0.0), 1.0))
+                    accuracy = row['hits'] / row['attempts'] * 100 if row['attempts'] else 0
+                    st.caption(
+                        f"Dominio {row['mastery']:.0f}% · Precisión {accuracy:.0f}% · "
+                        f"{row['attempts']} intentos · {row['misses']} errores"
+                    )
+            st.page_link(
+                "pages/1_Nuevo_Simulacro.py", label="Practicar por tema", icon="▶️",
+                width="stretch",
+            )
+        elif pending_rows:
+            st.info("Aún no hay debilidades demostradas; estos temas están sin evaluar:")
+            for row in pending_rows[:5]:
+                st.markdown(f"- **{row['topic']}** · pendiente de diagnóstico")
+            st.caption("El plan diario empezará a medirlos gradualmente, sin penalizarte con 0%.")
         else:
-            st.info("No hay sugerencias todavía.")
+            st.info("No hay habilidades configuradas todavía.")
 
     # 5. Vitrina de Trofeos y Ranking Global
     col_v1, col_v2 = st.columns([2, 1])
