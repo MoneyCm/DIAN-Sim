@@ -35,7 +35,22 @@ build_hybrid_remaining_daily_plan = getattr(
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
-from core.function_coverage import build_function_coverage, build_function_study_map
+from core.function_coverage import build_function_coverage
+try:
+    from core.function_coverage import build_function_study_map
+except ImportError:
+    # Streamlit Cloud puede conservar temporalmente el módulo anterior tras
+    # desplegar una página nueva. Mantiene el Dashboard disponible hasta que
+    # recargue la versión que incluye el mapa detallado.
+    def build_function_study_map(functions, questions, performances):
+        rows, unmatched = build_function_coverage(functions, questions, performances)
+        for row in rows:
+            row["sources"] = []
+            row["recommendation"] = (
+                "El mapa detallado de fuentes estará disponible al terminar "
+                "la actualización de la aplicación."
+            )
+        return rows, unmatched
 from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
