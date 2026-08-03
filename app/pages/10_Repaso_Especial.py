@@ -197,6 +197,7 @@ with review_tab:
                     st.rerun()
             else:
                 is_correct = feedback["is_correct"]
+                explain_key = f"show_review_explanation_{current_question_id}"
                 if is_correct:
                     st.success("Respuesta correcta.")
                 else:
@@ -204,7 +205,14 @@ with review_tab:
                         f"La respuesta correcta es {question.correct_key}) "
                         f"{question.options_json.get(question.correct_key, '')}"
                     )
-                st.info(question.rationale or "Revisa la regla asociada antes de continuar.")
+                if st.button(
+                    "Ver explicación y recomendación",
+                    key=f"explain_btn_{current_question_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state[explain_key] = True
+                if st.session_state.get(explain_key, False):
+                    st.info(question.rationale or "Revisa la regla asociada antes de continuar.")
 
                 confidence_label = st.selectbox(
                     "¿Qué tan seguro estabas?",
@@ -244,6 +252,7 @@ with review_tab:
                             if item != question.question_id
                         ]
                     st.session_state.pop("native_review_feedback", None)
+                    st.session_state.pop(explain_key, None)
                     st.rerun()
 
             render_favorite_button(question.question_id, user_id)
