@@ -5,6 +5,7 @@ from core.adaptive import (
     build_daily_plan,
     build_hybrid_remaining_daily_plan,
     build_remaining_daily_plan,
+    build_study_plan_stage,
     count_topics_requiring_diagnosis,
     select_daily_questions,
 )
@@ -180,3 +181,39 @@ def test_hybrid_daily_plan_reserves_slots_for_unmeasured_topics():
     assert len(diagnostic) == 2
     assert {item.question.topic for item in diagnostic} == {"A", "B"}
     assert count_topics_requiring_diagnosis(new_topics + repeated_weakness, performances) == 3
+
+
+def test_study_stage_uses_coverage_then_exam_urgency():
+    questions = [question("a", "A"), question("b", "B"), question("c", "C")]
+
+    assert build_study_plan_stage(questions, {}, days_remaining=150).code == "diagnostic"
+    assert build_study_plan_stage(questions, {}, days_remaining=30).code == "exam_integration"
+
+    established = {
+        item.question_id: performance(3, 0, datetime(2026, 8, 2, 12, 0))
+        for item in questions
+    }
+    assert build_study_plan_stage(questions, established, days_remaining=150).code == "adaptive"
+
+
+def test_diagnostic_stage_uses_three_of_five_questions_for_breadth():
+    questions = [question(f"new-{topic}", topic) for topic in ("A", "B", "C", "D")]
+    questions.extend(question(f"weak-{index}", "Debilidad") for index in range(5))
+    performances = {
+        f"weak-{index}": performance(0, 4, datetime(2026, 8, 1, 12, 0))
+        for index in range(5)
+    }
+    stage = build_study_plan_stage(questions, performances, days_remaining=150)
+    plan = build_hybrid_remaining_daily_plan(
+        questions,
+        {("FUNCIONAL", "Competencia", "Debilidad"): skill("Debilidad", 5, 7)},
+        performances,
+        set(),
+        daily_goal=5,
+        diagnostic_share=stage.diagnostic_share,
+        max_official_cases=0,
+    )
+
+    diagnostic = [item for item in plan if "diagnóstico de cobertura" in item.reasons]
+    assert len(diagnostic) == 3
+    assert len({item.question.topic for item in diagnostic}) == 3

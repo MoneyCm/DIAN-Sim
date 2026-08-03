@@ -37,6 +37,7 @@ count_topics_requiring_diagnosis = getattr(
     "count_topics_requiring_diagnosis",
     lambda questions, performances: 0,
 )
+build_study_plan_stage = getattr(adaptive_engine, "build_study_plan_stage", None)
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
@@ -118,6 +119,7 @@ try:
     )
     timed_session = build_timed_session(configured_minutes)
     daily_goal = timed_session.question_goal
+    exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
     local_day_start = datetime.datetime.combine(
         bogota_now.date(), datetime.time.min, tzinfo=bogota_now.tzinfo
     )
@@ -180,13 +182,20 @@ try:
     daily_performance_map = {
         item.question_id: item for item in daily_performances
     }
+    study_stage = (
+        build_study_plan_stage(daily_candidates, daily_performance_map, exam_days)
+        if build_study_plan_stage
+        else None
+    )
+    plan_kwargs = {
+        "completed_question_ids": completed_today_ids,
+        "daily_goal": daily_goal,
+        "now": bogota_now,
+    }
+    if study_stage:
+        plan_kwargs["diagnostic_share"] = study_stage.diagnostic_share
     daily_plan = build_hybrid_remaining_daily_plan(
-        daily_candidates,
-        daily_skills_map,
-        daily_performance_map,
-        completed_question_ids=completed_today_ids,
-        daily_goal=daily_goal,
-        now=bogota_now,
+        daily_candidates, daily_skills_map, daily_performance_map, **plan_kwargs
     )
     topics_pending_diagnosis = count_topics_requiring_diagnosis(
         daily_candidates, daily_performance_map
@@ -213,8 +222,6 @@ try:
             })
             restore_daily_run_to_session(st.session_state, active_daily_run)
             st.switch_page("pages/2_Ejecucion.py")
-
-    exam_days = days_until_exam(study_config.exam_date if study_config else None, bogota_now.date())
 
     week_start_date = bogota_now.date() - datetime.timedelta(days=bogota_now.weekday())
     week_start_local = datetime.datetime.combine(
@@ -294,6 +301,8 @@ try:
             st.caption(f"Examen en {exam_days} días · Etapa: {preparation_phase(exam_days)}")
         else:
             st.caption("Configura la fecha estimada del examen para organizar las etapas del plan.")
+        if study_stage:
+            st.caption(f"Plan adaptativo: {study_stage.label}. {study_stage.description}")
         if not is_study_day:
             st.info("Hoy está configurado como descanso. Puedes estudiar si lo deseas o retomar el próximo día disponible.")
         time_col.metric("Tiempo", f"{timed_session.total_minutes} min")

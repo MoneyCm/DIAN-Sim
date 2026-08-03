@@ -19,6 +19,14 @@ class DailyRecommendation:
     reasons: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class StudyPlanStage:
+    code: str
+    label: str
+    diagnostic_share: float
+    description: str
+
+
 def calculate_mastery_update(is_correct: bool, current_mastery: float) -> float:
     """Actualiza el dominio de una habilidad en una escala de 0 a 100."""
     if is_correct:
@@ -214,6 +222,55 @@ def count_topics_requiring_diagnosis(
     )
 
 
+def build_study_plan_stage(
+    questions: List[Question],
+    performance_map: Mapping[str, QuestionPerformance],
+    days_remaining: Optional[int] = None,
+    min_attempts: int = DIAGNOSTIC_MIN_ATTEMPTS,
+) -> StudyPlanStage:
+    """Choose the daily-plan stage from evidence coverage and exam urgency."""
+    total_topics = len(topic_attempt_counts(questions, performance_map))
+    pending_topics = count_topics_requiring_diagnosis(
+        questions, performance_map, min_attempts
+    )
+    pending_ratio = pending_topics / total_topics if total_topics else 0.0
+
+    if days_remaining is not None and days_remaining <= 14:
+        return StudyPlanStage(
+            "final_review",
+            "Repaso final",
+            0.20 if pending_topics else 0.0,
+            "Prioriza simulacros, errores y repasos; conserva una muestra mínima de temas sin medir.",
+        )
+    if days_remaining is not None and days_remaining <= 42:
+        return StudyPlanStage(
+            "exam_integration",
+            "Simulacros y corrección",
+            0.40 if pending_topics else 0.0,
+            "Integra casos tipo examen sin abandonar los temas con evidencia insuficiente.",
+        )
+    if pending_ratio >= 0.50:
+        return StudyPlanStage(
+            "diagnostic",
+            "Diagnóstico de cobertura",
+            0.60,
+            "Recoge evidencia de varios temas antes de interpretar debilidades.",
+        )
+    if pending_topics:
+        return StudyPlanStage(
+            "coverage",
+            "Cobertura dirigida",
+            0.40,
+            "Completa los temas aún no medidos y refuerza los errores ya comprobados.",
+        )
+    return StudyPlanStage(
+        "adaptive",
+        "Adaptación consolidada",
+        0.0,
+        "Prioriza errores, repasos espaciados y mantenimiento de los temas dominados.",
+    )
+
+
 def build_hybrid_remaining_daily_plan(
     all_questions: List[Question],
     skills_map: Mapping[SkillKey, Skill],
@@ -223,6 +280,7 @@ def build_hybrid_remaining_daily_plan(
     now: Optional[datetime] = None,
     max_official_cases: int = 2,
     diagnostic_min_attempts: int = DIAGNOSTIC_MIN_ATTEMPTS,
+    diagnostic_share: float = 0.30,
 ) -> List[DailyRecommendation]:
     """Mix exam cases, coverage diagnosis, and adaptive reinforcement.
 
@@ -257,9 +315,13 @@ def build_hybrid_remaining_daily_plan(
             continue
         diagnostic_items.setdefault(key, item)
 
-    diagnostic_slots = min(
-        len(diagnostic_items),
-        max(1, math.ceil(remaining_count * 0.30)),
+    diagnostic_slots = (
+        min(
+            len(diagnostic_items),
+            max(1, math.ceil(remaining_count * diagnostic_share)),
+        )
+        if diagnostic_share > 0
+        else 0
     )
     diagnostic_order = sorted(
         diagnostic_items.items(),
