@@ -118,7 +118,7 @@ if not result_preview:
         if st.button("ðŸŽ¯ Continuar plan diario", type="primary", use_container_width=True):
             st.switch_page("pages/6_Dashboard.py")
     with action_cols[1]:
-        if st.button("â–¶ï¸ Iniciar prÃ¡ctica", use_container_width=True):
+        if st.button("▶️ Iniciar práctica", use_container_width=True):
             st.switch_page("pages/1_Nuevo_Simulacro.py")
     st.stop()
 
@@ -145,11 +145,11 @@ total_weighted = f_weighted + c_weighted + i_weighted
 if data.get("new_achievements"):
     st.balloons()
     for ach in data["new_achievements"]:
-        st.success(f"ðŸ† Â¡LOGRO DESBLOQUEADO: **{ach}**!")
+        st.success(f"🏆 ¡LOGRO DESBLOQUEADO: **{ach}**!")
 
 if data.get("rank_up"):
     st.snow()
-    st.warning(f"ðŸ‘‘ Â¡ASCENSO DE RANGO! Ahora eres: **{data['rank_up']}**")
+    st.warning(f"🎉 ¡ASCENSO DE RANGO! Ahora eres: **{data['rank_up']}**")
 
 total = data["total"]
 correct = data["correct"]
@@ -159,7 +159,7 @@ if is_daily_session:
     daily_precision = (correct / total * 100) if total else 0
     st.progress(1.0, text="Paso 3 de 3 · Cierre y programación del próximo repaso")
     st.success(
-        f"âœ… SesiÃ³n diaria completada: {correct} de {total} respuestas correctas "
+        f"✅ Sesión diaria completada: {correct} de {total} respuestas correctas "
         f"({daily_precision:.0f}%). Los errores ya quedaron programados para repaso."
     )
 elif not is_passed:
@@ -175,7 +175,7 @@ with col1:
     else:
         metric_card("Puntaje Ponderado", f"{total_weighted:.1f}/100", f"Funcional: {f_pct:.0f}%")
 with col2:
-    metric_card("Puntos Ganados", f"+{data.get('points_earned', 0)}", "Â¡Buen trabajo!")
+    metric_card("Puntos Ganados", f"+{data.get('points_earned', 0)}", "¡Buen trabajo!")
 with col3:
     metric_card("Racha Actual", f"{data.get('new_streak', 0)}ðŸ”¥", "DÃ­as seguidos")
 with col4:
@@ -252,7 +252,7 @@ if user_id:
             except:
                 pass
             
-            if st.button("â–¶ï¸ Practicar esta debilidad", key="btn_refuerzo", type="primary"):
+            if st.button("▶️ Practicar esta debilidad", key="btn_refuerzo", type="primary"):
                  st.session_state["practice_recommended_topic"] = top_weak.topic
                  st.switch_page("pages/1_Nuevo_Simulacro.py")
     else:
@@ -329,7 +329,7 @@ else:
         user_ans = answers.get(qid, "N/A")
         is_right = (user_ans == q.correct_key)
         
-        icon = "âœ…" if is_right else "âŒ"
+        icon = "✅" if is_right else "❌"
         color_class = "color: #4CAF50" if is_right else "color: #D90000"
         
         with st.expander(f"{icon} Pregunta {i+1}: {q.topic}"):
