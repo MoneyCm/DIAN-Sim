@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.function_coverage import build_function_coverage
+from core.function_coverage import build_function_coverage, build_function_study_map
 
 
 def question(qid, text, trusted=True):
@@ -31,3 +31,14 @@ def test_function_mapping_assigns_clear_matches_to_one_function():
     assert rows[1]["questions"] == 1
     assert unmatched == 0
 
+
+def test_study_map_shows_verified_source_and_next_action():
+    functions = ["Practicar pruebas solicitadas dentro de una investigaciÃ³n tributaria"]
+    rows, unmatched = build_function_study_map(
+        functions,
+        [question("1", "prÃ¡ctica de pruebas en investigaciÃ³n tributaria")],
+        [],
+    )
+    assert unmatched == 0
+    assert rows[0]["sources"] == ["Estatuto Tributario"]
+    assert "Falta banco" in rows[0]["recommendation"]

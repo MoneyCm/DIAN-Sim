@@ -35,7 +35,7 @@ build_hybrid_remaining_daily_plan = getattr(
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
-from core.function_coverage import build_function_coverage
+from core.function_coverage import build_function_coverage, build_function_study_map
 from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
@@ -434,6 +434,34 @@ try:
                         f"{unmatched_questions} pregunta(s) aptas quedaron sin asociar por falta de "
                         "coincidencia suficiente; no se usaron para inflar la cobertura."
                     )
+
+                st.markdown("#### Mapa de estudio por función")
+                st.caption(
+                    "Muestra solo fuentes vinculadas a preguntas verificadas. Si una función no tiene "
+                    "fuente, no se inventa una recomendación normativa."
+                )
+                study_map_rows, _ = build_function_study_map(
+                    opec_functions, daily_candidates, daily_performances
+                )
+                for row in study_map_rows:
+                    source_text = "\n\n".join(f"- {source}" for source in row["sources"])
+                    with st.expander(
+                        f"{row['label']} · {row['status']}",
+                        expanded=row["status"] != "Con evidencia",
+                    ):
+                        st.write(row["recommendation"])
+                        st.caption(
+                            f"Banco: {row['questions']} preguntas · "
+                            f"verificadas: {row['trusted']} · "
+                            f"practicadas con evidencia: {row['practiced']}"
+                        )
+                        if source_text:
+                            st.markdown("**Fuentes verificadas para estudiar:**\n" + source_text)
+                        else:
+                            st.warning(
+                                "Aún no hay una fuente verificada vinculada a esta función. "
+                                "No generes preguntas nuevas hasta cargar la norma o procedimiento oficial."
+                            )
         else:
             st.info("No hay preguntas aptas clasificadas para construir el control de cobertura.")
 

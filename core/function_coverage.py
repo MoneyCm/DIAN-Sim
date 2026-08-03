@@ -102,3 +102,47 @@ def build_function_coverage(functions, questions, performances) -> tuple[list[di
             "status": status,
         })
     return rows, unmatched
+
+
+def build_function_study_map(functions, questions, performances) -> tuple[list[dict], int]:
+    """Return one practical study recommendation and verified sources per OPEC function."""
+    coverage_rows, unmatched = build_function_coverage(functions, questions, performances)
+    clean_functions = [str(item).strip() for item in (functions or []) if str(item).strip()]
+    function_terms = [_terms(item) for item in clean_functions]
+    sources_by_function = [[] for _ in clean_functions]
+
+    for question in questions:
+        q_terms = _terms(_question_text(question))
+        candidates = []
+        for index, terms in enumerate(function_terms):
+            shared = terms & q_terms
+            candidates.append((len(shared), index))
+        shared_count, index = max(candidates, default=(0, -1))
+        source = " ".join(str(getattr(question, "source_refs", "") or "").split())
+        if (
+            index >= 0
+            and shared_count >= MIN_SHARED_TERMS
+            and source
+            and bool(getattr(question, "is_verified", False))
+            and has_source_grounded_review(question)
+            and source not in sources_by_function[index]
+        ):
+            sources_by_function[index].append(source)
+
+    study_rows = []
+    for index, row in enumerate(coverage_rows):
+        status = row["status"]
+        if status == "Faltan preguntas":
+            recommendation = "Falta banco: cargar fuente oficial y crear al menos 5 preguntas verificadas."
+        elif status == "Revisar calidad":
+            recommendation = "Verificar fuente, vigencia, clave y distractores antes de usar el tema."
+        elif status == "Pendiente de práctica":
+            recommendation = "Estudia la fuente vinculada y responde al menos 3 preguntas del tema."
+        else:
+            recommendation = "Mantén el tema con repaso espaciado y casos situacionales nuevos."
+        study_rows.append({
+            **row,
+            "sources": sources_by_function[index][:3],
+            "recommendation": recommendation,
+        })
+    return study_rows, unmatched
