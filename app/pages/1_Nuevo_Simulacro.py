@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import os, sys, time
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
@@ -112,9 +112,9 @@ with st.container():
         "✨ Práctica recomendada", "⚙️ Personalizar", "🧭 Otro cargo",
     ])
     
-    # --- MANUAL MODE ---
     with tab_manual:
         with st.form("manual_sim_form"):
+            st.markdown("### Configuración rápida")
             st.markdown("**Duración de la práctica**")
             num_questions = st.select_slider(
                 "Cantidad de preguntas", options=[5, 10, 15, 20], value=10,
@@ -122,7 +122,7 @@ with st.container():
                 key="num_q_manual",
             )
             
-            st.markdown("<br>**Filtros Opcionales** (Dejar vacío para incluir todo)", unsafe_allow_html=True)
+            st.markdown("<br>**Filtros opcionales** (Dejar vacío para incluir todo)", unsafe_allow_html=True)
             
             # Get available options with error handling
             try:
@@ -159,7 +159,7 @@ with st.container():
                 placeholder="Todos los temas"
             )
             if default_topics:
-                st.caption(f"Recomendación aplicada desde tus resultados: {recommended_topic}")
+                    st.caption(f"Recomendación aplicada desde tus resultados: {recommended_topic}")
             
             st.markdown("<br>", unsafe_allow_html=True)
             only_situational_manual = st.toggle(
@@ -170,14 +170,15 @@ with st.container():
             hardcore_mode = False
             st.caption("Para presión de tiempo y resultado ponderado usa **Simulacro Tipo Examen**.")
             
-            submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary")
+                submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary", use_container_width=True)
+            st.caption("Sugerencia de foco: comienza con 10 preguntas y sube gradualmente.")
 
     # --- PROFILE MODE ---
     with tab_profile:
         st.info("Selecciona el cargo al que aspiras para enfocar el estudio en sus funciones y competencias específicas.")
         
         selected_profile_name = st.selectbox("Seleccionar Cargo / Perfil", list(PROFILES.keys()))
-        
+        available_count = 0
         if selected_profile_name:
             profile_data = PROFILES[selected_profile_name]
             st.markdown(f"**Descripción:** {profile_data['description']}")
@@ -198,7 +199,7 @@ with st.container():
                     key="num_q_profile",
                 )
             with col_p2:
-                difficulty_profile = st.multiselect("Nivel de Dificultad", [1, 2, 3], default=[1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x], key="diff_profile")
+                difficulty_profile = st.multiselect("Nivel de dificultad", [1, 2, 3], default=[1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x], key="diff_profile")
 
             # Check availability
             try:
@@ -211,19 +212,22 @@ with st.container():
                 
                 if available_count < 5:
                     st.warning(f"⚠️ Solo hay {available_count} preguntas disponibles para estos temas en tu banco local.")
-                    if AuthManager.is_admin() and st.button("Crear candidatos para cubrir la brecha"):
-                        st.session_state["ai_default_text"] = profile_data["raw_text"]
-                        st.session_state["ai_default_topic"] = selected_profile_name
-                        st.session_state["ai_default_diff"] = difficulty_profile[0] if len(difficulty_profile) == 1 else 2
-                        st.switch_page("pages/4_Generador_IA.py")
-                    elif not AuthManager.is_admin():
-                        st.info("La brecha fue identificada. Continúa con los temas disponibles mientras el banco se amplía y revisa.")
+                    if AuthManager.is_admin():
+                        with st.expander("Opciones para cubrir la brecha", expanded=False):
+                            if st.button("Crear candidatos para cubrir la brecha"):
+                                st.session_state["ai_default_text"] = profile_data["raw_text"]
+                                st.session_state["ai_default_topic"] = selected_profile_name
+                                st.session_state["ai_default_diff"] = difficulty_profile[0] if len(difficulty_profile) == 1 else 2
+                                st.switch_page("pages/4_Generador_IA.py")
+                    else:
+                    st.info("La brecha fue identificada. Continúa con los temas disponibles mientras el banco se amplía y revisa.")
                 else:
-                    st.success(f"✅ Hay {available_count} preguntas disponibles para este perfil.")
+                st.success(f"✅ Hay {available_count} preguntas disponibles para este perfil.")
             except Exception as e:
                 st.error("⚠️ Error al consultar el banco. Es posible que la base de datos se esté actualizando.")
                 available_count = 0
         
+        st.markdown("### Lanzar práctica del perfil")
         st.markdown("---")
         only_situational = st.toggle("Solo preguntas situacionales (Nuevas)", value=True, help="Filtra para mostrar solo preguntas que plantean casos prácticos generados con el nuevo sistema.")
 
@@ -240,7 +244,7 @@ with st.container():
         db_opec.close()
         
         if active_opec:
-            st.success(f"🎯 **Meta Actual:** {active_opec.job_title} (OPEC {active_opec.opec_number})")
+            st.success(f"🎯 **Meta actual:** {active_opec.job_title} (OPEC {active_opec.opec_number})")
             st.markdown(f"**Propósito:** {active_opec.purpose}")
             
             with st.expander("Ver Manual de Funciones", expanded=False):
@@ -249,31 +253,28 @@ with st.container():
                         st.write(f"- {f}")
             
             st.divider()
-            col_o1, col_o2 = st.columns(2)
-            with col_o1:
-                num_q_opec = st.select_slider(
-                    "Duración", options=[5, 10, 15, 20], value=10,
-                    format_func=lambda value: f"{value} preguntas · aprox. {max(8, value * 2)} min",
-                    key="num_opec_q_input",
-                )
-                if st.button("▶️ Iniciar práctica recomendada", type="primary", use_container_width=True):
-                    # We will filter questions that match any function keyword or topic
-                    st.session_state["opec_run"] = True
-                    st.session_state["opec_n"] = num_q_opec
-                    st.rerun()
-            
-            with col_o2:
+            st.markdown("### Simulacro de OPEC")
+            num_q_opec = st.select_slider(
+                "Duración", options=[5, 10, 15, 20], value=10,
+                format_func=lambda value: f"{value} preguntas · aprox. {max(8, value * 2)} min",
+                key="num_opec_q_input",
+            )
+            if st.button("▶️ Iniciar práctica recomendada", type="primary", use_container_width=True):
+                # We will filter questions that match any function keyword or topic
+                st.session_state["opec_run"] = True
+                st.session_state["opec_n"] = num_q_opec
+                st.rerun()
+            with st.expander("Opciones de cobertura (opcional)", expanded=False):
                 st.info("¿No hay suficientes preguntas?")
-                if AuthManager.is_admin() and st.button("🤖 Crear candidatos para la OPEC", use_container_width=True):
-                    st.switch_page("pages/4_Generador_IA.py")
-                elif not AuthManager.is_admin():
+                if AuthManager.is_admin():
+                    if st.button("🤖 Crear candidatos para la OPEC", use_container_width=True):
+                        st.switch_page("pages/4_Generador_IA.py")
+                else:
                     st.caption("El administrador puede cubrir las brechas detectadas sin interrumpir tu plan diario.")
         else:
             st.warning("No has configurado una OPEC todavía.")
             if st.button("Configurar mi OPEC ahora"):
                 st.switch_page("pages/7_Configuracion_OPEC.py")
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # LOGIC HANDLER
 final_query_filters = {}
