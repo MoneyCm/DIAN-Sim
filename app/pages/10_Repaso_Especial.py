@@ -68,7 +68,7 @@ finally:
     db.close()
 
 review_tab, errors_tab, favorites_tab = st.tabs(
-    [f"ðŸ§  Repasos de hoy ({due_count})", "âŒ Banco de errores", "â­ Favoritas"]
+    [f"🧠 Repasos de hoy ({due_count})", "❌ Banco de errores", "⭐ Favoritas"]
 )
 
 with review_tab:
@@ -118,7 +118,7 @@ with review_tab:
             next_review = upcoming_rows[0].next_review
             st.metric("Repasos programados", len(upcoming_rows))
             st.caption(
-                f"PrÃ³ximo repaso: {next_review.strftime('%d/%m/%Y')} Â· "
+                f"Próximo repaso: {next_review.strftime('%d/%m/%Y')} · "
                 "hasta entonces puedes continuar con el plan diario."
             )
         else:
@@ -207,14 +207,14 @@ with review_tab:
                 st.info(question.rationale or "Revisa la regla asociada antes de continuar.")
 
                 confidence_label = st.selectbox(
-                    "Â¿QuÃ© tan seguro estabas?",
+                    "¿Qué tan seguro estabas?",
                     list(CONFIDENCE_OPTIONS.keys()),
                     index=1,
                 )
                 error_label = None
                 if not is_correct:
                     error_label = st.selectbox(
-                        "Â¿CuÃ¡l fue la causa principal del error?",
+                        "¿Cuál fue la causa principal del error?",
                         list(ERROR_TYPES.keys()),
                     )
 
@@ -235,7 +235,7 @@ with review_tab:
                     review_db.commit()
                     st.toast(
                         "Aprendizaje guardado y repaso actualizado.",
-                        icon="âœ…",
+                        icon="✅",
                     )
                     st.session_state["native_review_completed"] = completed + 1
                     if st.session_state.get("voluntary_review_ids"):
@@ -277,7 +277,7 @@ with errors_tab:
                     row.next_review.strftime("%Y-%m-%d") if row.next_review else "pendiente"
                 )
                 with st.expander(
-                    f"{question.topic} Â· {row.misses} fallo(s) Â· prÃ³ximo: {next_text}"
+                    f"{question.topic} · {row.misses} fallo(s) · próximo: {next_text}"
                 ):
                     st.write(question.stem)
                     st.info(question.rationale or "Sin explicaciÃ³n registrada.")
