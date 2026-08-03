@@ -170,7 +170,7 @@ with st.container():
             hardcore_mode = False
             st.caption("Para presión de tiempo y resultado ponderado usa **Simulacro Tipo Examen**.")
             
-                submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary", use_container_width=True)
+            submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary", use_container_width=True)
             st.caption("Sugerencia de foco: comienza con 10 preguntas y sube gradualmente.")
 
     # --- PROFILE MODE ---
