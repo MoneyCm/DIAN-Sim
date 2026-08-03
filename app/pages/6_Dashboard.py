@@ -126,9 +126,16 @@ try:
         else 0.0
     )
 
-    daily_candidates = QuestionService.get_questions_for_user(
-        db, u_id, competition_id=active_competition_id, user_opec=active_opec
-    )
+    try:
+        daily_candidates = QuestionService.get_questions_for_user(
+            db, u_id, competition_id=active_competition_id, user_opec=active_opec
+        )
+    except TypeError as exc:
+        # Compatibilidad durante el reinicio de Streamlit Cloud si conserva
+        # temporalmente una versión anterior de QuestionService en memoria.
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        daily_candidates = QuestionService.get_questions_for_user(db, u_id)
     daily_skills = db.query(Skill).filter_by(
         user_id=u_id, competition_id=active_competition_id
     ).all()
