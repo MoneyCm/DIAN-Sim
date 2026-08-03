@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import os
 import sys
 import json
@@ -70,7 +70,7 @@ if mode == "📖 Aprender Código de Ética":
                 st.write(f"- {conducta}")
     
     st.divider()
-    st.subheader("🎯 Criterios de Evaluación")
+    st.subheader("🎯 Criterios de evaluación")
     
     for criterio, descripcion in ethics_data["respuestas_correctas"]["criterios"].items():
         st.markdown(f"**{criterio.replace('_', ' ').title()}:** {descripcion}")
@@ -127,21 +127,21 @@ else:
                     
                     # Generar afirmaciones
                     if categoria == "Todas":
-                        # Generar para todas las categorías proporcionalmente
+                        # Generar para todas las categorÃ­as proporcionalmente
                         categorias = [s["categoria"] for s in ethics_data["situaciones_eticas_comunes"]]
                         
-                        # Distribución uniforme: no hay una clave que justifique
-                        # clasificar categorías como fuertes o débiles.
+                        # DistribuciÃ³n uniforme: no hay una clave que justifique
+                        # clasificar categorÃ­as como fuertes o dÃ©biles.
                         per_category = max(2, num_preguntas // len(categorias))
                         for cat in categorias:
                             statements = generate_ethics_statements(llm_gen, cat, per_category)
                             all_afirmaciones.extend(statements)
                     else:
-                        # Generar solo para la categoría seleccionada
+                        # Generar solo para la categorÃ­a seleccionada
                         statements = generate_ethics_statements(llm_gen, categoria, num_preguntas, weak_categories)
                         all_afirmaciones.extend(statements)
                     
-                    # Limitar al número solicitado
+                    # Limitar al nÃºmero solicitado
                     import random
                     if len(all_afirmaciones) > num_preguntas:
                         all_afirmaciones = random.sample(all_afirmaciones, num_preguntas)
@@ -155,7 +155,7 @@ else:
                     use_ai = False
         
         if not use_ai or not all_afirmaciones:
-            # Usar banco estático
+            # Usar banco estÃ¡tico
             for situacion in ethics_data["situaciones_eticas_comunes"]:
                 if categoria == "Todas" or situacion["categoria"] == categoria:
                     for afirmacion in situacion["afirmaciones"]:
@@ -208,7 +208,7 @@ else:
         st.markdown("---")
         
         if len(st.session_state.get("ethics_answers", {})) == len(questions):
-            if st.button("✅ Finalizar y Ver Resultados", type="primary", use_container_width=True):
+            if st.button("✅ Finalizar y ver resultados", type="primary", use_container_width=True):
                 st.session_state["ethics_completed"] = True
                 st.rerun()
         else:
@@ -230,7 +230,7 @@ else:
                 # Guardar cada respuesta
                 for i, q in enumerate(questions):
                     if i in answers:
-                        # Extraer valor numérico de la respuesta
+                        # Extraer valor numÃ©rico de la respuesta
                         answer_text = answers[i]
                         respuesta_valor = int(answer_text.split(" - ")[0])
 
@@ -255,43 +255,13 @@ else:
                 st.error(f"Error al guardar respuestas: {e}")
         
         st.success("✅ Práctica completada")
-        st.markdown("### Registro de respuestas")
-        
-        st.info("""
-        **Práctica provisional:** estas afirmaciones no tienen respuestas correctas o incorrectas.
-        Sirven para familiarizarte con una escala forzada de cuatro niveles y responder de forma
-        honesta y consistente. El formato deberá ajustarse a la guía vigente cuando sea publicada.
-        """)
-        
+        st.markdown("### Resumen de la práctica")
+
+        st.info("Esta práctica es formativa: no hay respuestas correctas ni puntaje final; se usa para consolidar criterio ético.")
+
         questions = st.session_state.get("ethics_questions", [])
         answers = st.session_state.get("ethics_answers", {})
-        
-        # Display answers
-        for i, q in enumerate(questions):
-            with st.expander(f"Pregunta {i+1}: {q['categoria']}", expanded=False):
-                st.write(f"**Afirmación:** {q['afirmacion']}")
-                st.write(f"**Tu respuesta:** {answers.get(i, 'No respondida')}")
-                
-                # Provide guidance based on category
-                cat = q['categoria']
-                criterios = ethics_data["respuestas_correctas"]["criterios"]
-                
-                if "Conflicto" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['conflicto_intereses']}")
-                elif "Información" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['informacion_privilegiada']}")
-                elif "Regalos" in cat or "Dádivas" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['regalos_dadivas']}")
-                elif "Transparencia" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['transparencia']}")
-                elif "Recursos" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['recursos_publicos']}")
-                elif "Imparcialidad" in cat:
-                    st.info(f"💡 **Criterio:** {criterios['imparcialidad']}")
-        
-        # Resumen descriptivo, sin convertir niveles de acuerdo en aciertos.
-        st.divider()
-        st.subheader("📊 Resumen de la práctica")
+
         answer_values = [
             int(value.split(" - ")[0]) for value in answers.values() if value
         ]
@@ -302,26 +272,56 @@ else:
         st.write("**Cobertura por categoría:**")
         for category_name, count in sorted(category_counts.items()):
             st.write(f"- {category_name}: {count}")
-        st.info(
-            "Este resumen no asigna puntaje ni diagnostica debilidades. Revisa si comprendiste "
-            "cada criterio y si mantuviste una respuesta atenta y coherente."
-        )
-        
+
+        if st.button("Ver detalle y criterios", use_container_width=True):
+            st.session_state["show_ethics_detail"] = True
+            st.rerun()
+
+        if not st.session_state.get("show_ethics_detail", False):
+            st.markdown("**Tip de estudio:** vuelve al resumen del código y refuerza una categoría por vez.")
+        else:
+            st.divider()
+            st.markdown("### Registro de respuestas")
+            # Display answers
+            for i, q in enumerate(questions):
+                with st.expander(f"Pregunta {i+1}: {q['categoria']}", expanded=False):
+                    st.write(f"**Afirmación:** {q['afirmacion']}")
+                    st.write(f"**Tu respuesta:** {answers.get(i, 'No respondida')}")
+                    # Provide guidance based on category
+                    cat = q["categoria"]
+                    criterios = ethics_data["respuestas_correctas"]["criterios"]
+                    if "Conflicto" in cat:
+                        st.info(f"- **Criterio:** {criterios['conflicto_intereses']}")
+                    elif "Información" in cat:
+                        st.info(f"- **Criterio:** {criterios['informacion_privilegiada']}")
+                    elif "Regalos" in cat or "Dádivas" in cat:
+                        st.info(f"- **Criterio:** {criterios['regalos_dadivas']}")
+                    elif "Transparencia" in cat:
+                        st.info(f"- **Criterio:** {criterios['transparencia']}")
+                    elif "Recursos" in cat:
+                        st.info(f"- **Criterio:** {criterios['recursos_publicos']}")
+                    elif "Imparcialidad" in cat:
+                        st.info(f"- **Criterio:** {criterios['imparcialidad']}")
+            st.info("Este bloque no convierte la escala en aciertos/errores. Revisa si mantuviste una respuesta atenta y coherente con cada criterio.")
+            if st.button("Ocultar detalle", use_container_width=True):
+                st.session_state["show_ethics_detail"] = False
+                st.rerun()
+
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 Nueva práctica"):
+            if st.button("✅ Nueva práctica", type="primary", use_container_width=True):
                 for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
                     del st.session_state[widget_key]
-                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated"]:
+                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated", "show_ethics_detail"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
-        
+
         with col2:
-            if st.button("📚 Revisar Código de Ética"):
+            if st.button("📚 Revisar Código de Ética", use_container_width=True):
                 for widget_key in [key for key in st.session_state if key.startswith("ethics_q_")]:
                     del st.session_state[widget_key]
-                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated"]:
+                for key in ["ethics_questions", "ethics_answers", "ethics_started", "ethics_completed", "ethics_saved", "ethics_ai_generated", "show_ethics_detail"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
