@@ -36,23 +36,32 @@ def sources_for_opec_function(opec_number: object, function: object) -> list[str
     text = _normalise(function)
     sources = [FICHA_236769]
 
+    matched = False
     if any(term in text for term in ("denuncia", "pertinencia", "denfis")):
         sources.extend([ESTATUTO, CPACA, LMDP])
-    elif any(term in text for term in ("insumo", "precritica", "persuasiva")):
+        matched = True
+    if any(term in text for term in ("insumo", "precritica", "persuasiva")):
         sources.extend([ESTATUTO, CPACA, LMDP])
-    elif any(term in text for term in ("reunion", "directiva", "tecnica", "juridica")):
+        matched = True
+    if any(term in text for term in ("reunion", "directiva", "tecnica", "juridica")):
         sources.extend([ESTRUCTURA, MIPG, CPACA])
-    elif any(term in text for term in ("prueba", "exterior", "dependencia")):
+        matched = True
+    if any(term in text for term in ("prueba", "exterior", "dependencia")):
         sources.extend([CPACA, ESTATUTO, LMDP])
-    elif any(term in text for term in ("cambi", "lavado", "la/ft", "operacion sospechosa")):
+        matched = True
+    if any(term in text for term in ("cambi", "lavado", "la/ft", "operacion sospechosa")):
         sources.extend([PR_CAMBIARIO, CAMBIARIO, LMDP])
-    elif any(term in text for term in ("aduan", "control posterior", "contrabando")):
+        matched = True
+    if any(term in text for term in ("aduan", "control posterior", "contrabando")):
         sources.extend([ADUANAS, ADUANAS_SANCION, LMDP])
-    elif any(term in text for term in ("acto", "notificacion", "recurso", "liquidacion", "fiscalizacion")):
+        matched = True
+    if any(term in text for term in ("acto", "notificacion", "recurso", "liquidacion", "fiscalizacion")):
         sources.extend([ESTATUTO, CPACA, PR_TRIBUTARIO])
-    elif any(term in text for term in ("indicador", "riesgo", "documental", "dato", "sistema")):
+        matched = True
+    if any(term in text for term in ("indicador", "riesgo", "documental", "dato", "sistema")):
         sources.extend([MIPG, ESTRUCTURA, LMDP])
-    else:
+        matched = True
+    if not matched:
         sources.extend([CPACA, ESTRUCTURA])
 
     return list(dict.fromkeys(sources))
