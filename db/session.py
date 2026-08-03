@@ -190,8 +190,14 @@ def sync_db_schema():
     except Exception as e:
         print(f"âš ï¸ [DB_SYNC] Native fix error: {e}", file=sys.stderr)
 
-# Ejecutar de forma segura al importar
-sync_db_schema()
+# La sincronización del esquema es una tarea de despliegue/mantenimiento, no
+# de cada carga de Streamlit. En Neon implicaba inspecciones y ALTER/UPDATE
+# innecesarios antes de atender al usuario, ralentizando el Dashboard.
+# SQLite local conserva el comportamiento cómodo de desarrollo; para forzar
+# una sincronización remota se usa AUTO_MIGRATE_SCHEMA=true una sola vez.
+auto_migrate = os.getenv("AUTO_MIGRATE_SCHEMA", "").lower() in ("1", "true", "yes")
+if "sqlite" in DATABASE_URL or auto_migrate:
+    sync_db_schema()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
