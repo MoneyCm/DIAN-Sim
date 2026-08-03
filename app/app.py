@@ -204,7 +204,10 @@ else:
         
     if is_admin():
         pages["Sistemas (Admin)"] = [p_admin, p_ia]
-    pg = st.navigation(pages)
+    if st.session_state.get("opec_onboarding"):
+        pg = st.navigation({"Primeros pasos": [p_config]})
+    else:
+        pg = st.navigation(pages)
 
 # Ejecutar la página seleccionada por el router
 pg.run()

@@ -20,6 +20,8 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
+if st.session_state.get("opec_onboarding"):
+    st.info("👋 Bienvenido. Completa primero los datos de la ficha del cargo. Después se habilitarán tu dashboard, plan diario y simulacros personalizados.")
 render_custom_sidebar()
 render_header(title="Mi Meta: OPEC", subtitle="Configura tu cargo y enfoca tu preparación")
 
@@ -182,6 +184,7 @@ with col1:
                     
                     db.commit()
                     st.success(f"¡Configuración de OPEC {opec_number} guardada para usuario {u_id}!")
+                    st.session_state.pop("opec_onboarding", None)
                     st.balloons()
                     st.rerun()
                 except Exception as e:

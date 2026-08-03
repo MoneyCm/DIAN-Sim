@@ -160,8 +160,14 @@ class AuthManager:
                 st.session_state["logged_in"] = True
                 st.session_state["user_id"] = user_id
                 st.session_state["username"] = user_name
+                has_opec = conn.execute(
+                    text("SELECT 1 FROM user_opec WHERE user_id = :uid AND is_active = TRUE LIMIT 1"),
+                    {"uid": user_id},
+                ).first() is not None
                 st.session_state["user_role"] = user_role
                 st.session_state["logout_manual_flag"] = False
+                if not has_opec:
+                    st.session_state["opec_onboarding"] = True
                 return True
         except Exception as exc:
             print(f"Google login error: {exc}", file=sys.stderr)
