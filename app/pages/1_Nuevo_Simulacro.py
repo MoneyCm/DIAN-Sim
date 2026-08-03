@@ -220,9 +220,9 @@ with st.container():
                                 st.session_state["ai_default_diff"] = difficulty_profile[0] if len(difficulty_profile) == 1 else 2
                                 st.switch_page("pages/4_Generador_IA.py")
                     else:
-                    st.info("La brecha fue identificada. Continúa con los temas disponibles mientras el banco se amplía y revisa.")
+                        st.info("La brecha fue identificada. Continúa con los temas disponibles mientras el banco se amplía y revisa.")
                 else:
-                st.success(f"✅ Hay {available_count} preguntas disponibles para este perfil.")
+                    st.success(f"✅ Hay {available_count} preguntas disponibles para este perfil.")
             except Exception as e:
                 st.error("⚠️ Error al consultar el banco. Es posible que la base de datos se esté actualizando.")
                 available_count = 0
