@@ -21,23 +21,23 @@ from ui_utils import load_css, render_custom_sidebar, render_favorite_button, re
 
 
 CONFIDENCE_OPTIONS = {
-    "AdivinÃ©": "guess",
-    "DudÃ© entre opciones": "unsure",
+    "Adiviné": "guess",
+    "Dudé entre opciones": "unsure",
     "Estaba seguro": "confident",
 }
 
 ERROR_TYPES = {
-    "No conocÃ­a la regla": "desconocimiento",
-    "ConfundÃ­ conceptos": "confusion_conceptual",
-    "InterpretÃ© mal el caso": "mala_interpretacion",
+    "No conocía la regla": "desconocimiento",
+    "Confundí conceptos": "confusion_conceptual",
+    "Interpreté mal el caso": "mala_interpretacion",
     "No vi una palabra clave": "lectura_incompleta",
-    "RespondÃ­ con afÃ¡n": "apuro",
+    "Respondí con afán": "apuro",
 }
 ERROR_LABELS = {value: label for label, value in ERROR_TYPES.items()}
 
 
 if not AuthManager.check_auth():
-    st.warning("Inicia sesiÃ³n para acceder a tus repasos.")
+    st.warning("Inicia sesión para acceder a tus repasos.")
     st.stop()
 
 load_css()
@@ -74,7 +74,7 @@ review_tab, errors_tab, favorites_tab = st.tabs(
 with review_tab:
     st.markdown("### Cola de repaso espaciado")
     st.caption(
-        "Tu respuesta, seguridad y tipo de error determinan cuÃ¡ndo volverÃ¡s a ver cada pregunta."
+        "Tu respuesta, seguridad y tipo de error determinan cuándo volverás a ver cada pregunta."
     )
 
     review_day = datetime.date.today().isoformat()
@@ -122,7 +122,7 @@ with review_tab:
                 "hasta entonces puedes continuar con el plan diario."
             )
         else:
-            st.caption("AÃºn no hay repasos programados. Se crearÃ¡n al responder y corregir preguntas.")
+            st.caption("Aún no hay repasos programados. Se crearán al responder y corregir preguntas.")
 
         optional_db = SessionLocal()
         try:
@@ -170,7 +170,7 @@ with review_tab:
             target = max(1, min(20, target))
             st.session_state["native_review_target"] = target
             st.progress(min(completed / target, 1.0))
-            st.caption(f"Repaso {completed + 1} de {target} Â· Tema: {question.topic}")
+            st.caption(f"Repaso {completed + 1} de {target} · Tema: {question.topic}")
             st.markdown(f"### {question.stem}")
 
             option_keys = list(question.options_json.keys())
@@ -267,7 +267,7 @@ with errors_tab:
         if error_causes:
             most_common_code, most_common_count = error_causes.most_common(1)[0]
             st.info(
-                f"Causa mÃ¡s repetida: **{ERROR_LABELS.get(most_common_code, most_common_code)}** "
+                f"Causa más repetida: **{ERROR_LABELS.get(most_common_code, most_common_code)}** "
                 f"en {most_common_count} pregunta(s)."
             )
         for row in error_rows:
@@ -280,10 +280,10 @@ with errors_tab:
                     f"{question.topic} · {row.misses} fallo(s) · próximo: {next_text}"
                 ):
                     st.write(question.stem)
-                    st.info(question.rationale or "Sin explicaciÃ³n registrada.")
+                    st.info(question.rationale or "Sin explicación registrada.")
                     if row.last_error_type:
                         st.caption(
-                            "Ãšltima causa detectada: "
+                            "Última causa detectada: "
                             f"{ERROR_LABELS.get(row.last_error_type, row.last_error_type)}"
                         )
     finally:
