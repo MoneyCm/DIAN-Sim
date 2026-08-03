@@ -32,6 +32,11 @@ build_hybrid_remaining_daily_plan = getattr(
     "build_hybrid_remaining_daily_plan",
     adaptive_engine.build_remaining_daily_plan,
 )
+count_topics_requiring_diagnosis = getattr(
+    adaptive_engine,
+    "count_topics_requiring_diagnosis",
+    lambda questions, performances: 0,
+)
 from core.study_planner import build_timed_session, days_until_exam, preparation_phase
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
@@ -183,6 +188,9 @@ try:
         daily_goal=daily_goal,
         now=bogota_now,
     )
+    topics_pending_diagnosis = count_topics_requiring_diagnosis(
+        daily_candidates, daily_performance_map
+    )
     active_daily_run = load_daily_run(db, u_id)
     if completed_today >= daily_goal and active_daily_run:
         clear_daily_run(db, u_id)
@@ -313,6 +321,16 @@ try:
                 )[:3]
             )
             st.caption(f"Criterios principales: {reason_summary}")
+            diagnostic_questions = sum(
+                "diagnóstico de cobertura" in item.reasons for item in daily_plan
+            )
+            if topics_pending_diagnosis:
+                st.info(
+                    "Modo diagnóstico activo: aún faltan "
+                    f"{topics_pending_diagnosis} tema(s) por medir. Esta sesión incluye "
+                    f"{diagnostic_questions} pregunta(s) para ampliar cobertura antes de "
+                    "concentrarse solo en las debilidades."
+                )
         else:
             st.info("No hay suficientes preguntas nuevas para completar la meta de hoy.")
 

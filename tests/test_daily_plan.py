@@ -5,6 +5,7 @@ from core.adaptive import (
     build_daily_plan,
     build_hybrid_remaining_daily_plan,
     build_remaining_daily_plan,
+    count_topics_requiring_diagnosis,
     select_daily_questions,
 )
 
@@ -142,11 +143,40 @@ def test_hybrid_daily_plan_includes_complete_official_cases():
     individual = [question(f"practice-{i}", "Refuerzo") for i in range(4)]
     for item in individual:
         item.case_study = None
+    established_performance = {
+        item.question_id: performance(3, 0, datetime(2026, 8, 1, 12, 0))
+        for item in official_questions + individual
+    }
     plan = build_hybrid_remaining_daily_plan(
-        official_questions + individual, {}, {}, set(), daily_goal=8, max_official_cases=2
+        official_questions + individual, {}, established_performance, set(), daily_goal=8, max_official_cases=2
     )
     selected_ids = {item.question.question_id for item in plan}
 
     assert len(plan) == 8
     assert all(question.question_id in selected_ids for question in official_questions)
     assert sum("caso tipo examen" in item.reasons for item in plan) == 6
+
+
+def test_hybrid_daily_plan_reserves_slots_for_unmeasured_topics():
+    now = datetime(2026, 8, 2, 12, 0)
+    new_topics = [question("new-a", "A"), question("new-b", "B"), question("new-c", "C")]
+    repeated_weakness = [question(f"weak-{index}", "Debilidad") for index in range(5)]
+    performances = {
+        item.question_id: performance(0, 4, now - timedelta(days=2))
+        for item in repeated_weakness
+    }
+
+    plan = build_hybrid_remaining_daily_plan(
+        new_topics + repeated_weakness,
+        {("FUNCIONAL", "Competencia", "Debilidad"): skill("Debilidad", 5, 7)},
+        performances,
+        set(),
+        daily_goal=5,
+        now=now,
+        max_official_cases=0,
+    )
+
+    diagnostic = [item for item in plan if "diagnóstico de cobertura" in item.reasons]
+    assert len(diagnostic) == 2
+    assert {item.question.topic for item in diagnostic} == {"A", "B"}
+    assert count_topics_requiring_diagnosis(new_topics + repeated_weakness, performances) == 3

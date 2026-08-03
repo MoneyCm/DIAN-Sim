@@ -9,6 +9,7 @@ from core.exam_format import official_question_groups
 
 
 SkillKey = Tuple[str, str, str]
+DIAGNOSTIC_MIN_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,42 @@ def build_remaining_daily_plan(
     )
 
 
+def _topic_key(question: Question) -> SkillKey:
+    return (
+        getattr(question, "track", None) or "Sin eje",
+        getattr(question, "competency", None) or "Sin competencia",
+        getattr(question, "topic", None) or "Sin tema",
+    )
+
+
+def topic_attempt_counts(
+    questions: List[Question],
+    performance_map: Mapping[str, QuestionPerformance],
+) -> dict[SkillKey, int]:
+    """Count all saved responses per topic, not just the current question."""
+    counts: dict[SkillKey, int] = {}
+    for question in questions:
+        key = _topic_key(question)
+        performance = performance_map.get(question.question_id)
+        attempts = int(getattr(performance, "hits", 0) or 0) + int(
+            getattr(performance, "misses", 0) or 0
+        )
+        counts[key] = counts.get(key, 0) + attempts
+    return counts
+
+
+def count_topics_requiring_diagnosis(
+    questions: List[Question],
+    performance_map: Mapping[str, QuestionPerformance],
+    min_attempts: int = DIAGNOSTIC_MIN_ATTEMPTS,
+) -> int:
+    """Return topics without enough evidence to label mastery or weakness."""
+    return sum(
+        attempts < min_attempts
+        for attempts in topic_attempt_counts(questions, performance_map).values()
+    )
+
+
 def build_hybrid_remaining_daily_plan(
     all_questions: List[Question],
     skills_map: Mapping[SkillKey, Skill],
@@ -185,8 +222,14 @@ def build_hybrid_remaining_daily_plan(
     daily_goal: int = 20,
     now: Optional[datetime] = None,
     max_official_cases: int = 2,
+    diagnostic_min_attempts: int = DIAGNOSTIC_MIN_ATTEMPTS,
 ) -> List[DailyRecommendation]:
-    """Mix complete GOA cases with adaptive individual reinforcement."""
+    """Mix exam cases, coverage diagnosis, and adaptive reinforcement.
+
+    Until a topic has enough answers, the plan reserves at least 30 percent of
+    the available slots for distinct under-assessed topics. This prevents an
+    early error in one subject from hiding an unmeasured subject indefinitely.
+    """
     remaining_count = max(daily_goal - min(len(completed_question_ids), max(daily_goal, 0)), 0)
     if remaining_count == 0:
         return []
@@ -203,6 +246,34 @@ def build_hybrid_remaining_daily_plan(
     selected = []
     selected_ids = set()
     selected_cases = set()
+
+    # First guarantee breadth. One question per topic is intentional: the
+    # diagnostic cycle needs evidence from different topics, not repetitions.
+    attempts_by_topic = topic_attempt_counts(eligible, performance_map)
+    diagnostic_items: dict[SkillKey, DailyRecommendation] = {}
+    for item in ranked:
+        key = _topic_key(item.question)
+        if attempts_by_topic.get(key, 0) >= diagnostic_min_attempts:
+            continue
+        diagnostic_items.setdefault(key, item)
+
+    diagnostic_slots = min(
+        len(diagnostic_items),
+        max(1, math.ceil(remaining_count * 0.30)),
+    )
+    diagnostic_order = sorted(
+        diagnostic_items.items(),
+        key=lambda pair: (attempts_by_topic[pair[0]], -pair[1].score, pair[0]),
+    )
+    for _, item in diagnostic_order[:diagnostic_slots]:
+        selected.append(
+            DailyRecommendation(
+                item.question,
+                item.score,
+                ("diagnóstico de cobertura",) + item.reasons,
+            )
+        )
+        selected_ids.add(item.question.question_id)
 
     if remaining_count >= 3 and max_official_cases > 0:
         for item in ranked:
@@ -221,6 +292,8 @@ def build_hybrid_remaining_daily_plan(
                 continue
             group_ids = [question.question_id for question in matching_group]
             if not set(group_ids).issubset(eligible_ids):
+                continue
+            if set(group_ids) & selected_ids:
                 continue
             if len(selected) + len(group_ids) > remaining_count:
                 continue
