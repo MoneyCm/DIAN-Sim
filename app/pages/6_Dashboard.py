@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
-from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy, StudyPlanConfig
+from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy, StudyPlanConfig, Competition
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 from ui_utils import load_css, render_header
@@ -18,7 +18,7 @@ import datetime, io
 from zoneinfo import ZoneInfo
 
 from core.auth import AuthManager
-from core.competitions import get_active_competition, get_active_competition_id
+from core.competitions import get_default_competition
 from core.rank_system import get_rank_info
 from core.anki import generate_anki_deck
 from core.config import get_api_key
@@ -57,7 +57,12 @@ try:
     u_id = st.session_state.get("user_id")
     
     active_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
-    active_competition = get_active_competition(db, u_id)
+    # Reutiliza la OPEC ya cargada para evitar repetir la consulta de usuario.
+    active_competition = (
+        db.get(Competition, active_opec.competition_id)
+        if active_opec and active_opec.competition_id
+        else get_default_competition(db)
+    )
     active_competition_id = active_competition.id if active_competition else None
     competition_export_name = (
         active_competition.code.replace(" ", "_") if active_competition else "CNSC"
