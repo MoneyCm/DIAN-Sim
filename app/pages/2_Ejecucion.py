@@ -128,7 +128,7 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
         return True
     except Exception as e:
         db.rollback()
-        st.error(f"Ã¢ÂÅ’ Error al guardar resultados: {e}")
+        st.error(f"❌ Error al guardar resultados: {e}")
         return False
 
 # --- UI Setup ---
@@ -142,7 +142,7 @@ from core.auth import AuthManager
 # pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
-    st.warning("SesiÃƒÂ³n expirada. Por favor inicia sesiÃƒÂ³n.")
+    st.warning("Sesión expirada. Por favor inicia sesión.")
     st.stop()
 
 load_css()
@@ -155,8 +155,44 @@ st.markdown("""
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
     .main .block-container {
-        max-width: 850px !important;
+        max-width: 760px !important;
+        padding-top: 0.7rem !important;
+    }
+    .stButton button,
+    .stDownloadButton button {
+        border-radius: 10px !important;
+    }
+    div[data-testid="stColumn"],
+    div[data-testid="column"] {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    [data-testid="stRadio"] label,
+    [data-testid="stCheckbox"] label {
         padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+    .main .block-container > div > div {
+        gap: 0.6rem !important;
+    }
+    .stAlert,
+    .stInfo,
+    .stSuccess,
+    .stWarning,
+    .stError {
+        display: none !important;
+    }
+    .stExpander,
+    .stMetric {
+        display: none !important;
+    }
+    .floating-timer {
+        position: sticky !important;
+        top: 0.5rem !important;
+        right: 0.5rem !important;
+        margin-bottom: 0.8rem !important;
+        z-index: 10 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -170,7 +206,41 @@ if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
         restore_daily_run_to_session(st.session_state, resumed_run)
 
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
-    st.warning("No hay un examen activo. Ve a 'Nuevo Simulacro'.")
+    if "last_results" in st.session_state:
+        results = st.session_state["last_results"]
+        pct = results.get("score", 0.0)
+        correct = results.get("correct", 0)
+        total = results.get("total", 0)
+        st.markdown("### Resultado de la sesión")
+        st.caption(f"Correctas: {correct} / {total} • Puntaje: {pct:.1f}%")
+        if total > 0:
+            st.markdown(f"**Errores:** {total - correct}")
+        
+        if st.button("Ver análisis detallado y recomendaciones", use_container_width=True):
+            st.session_state["show_ejecucion_analisis"] = True
+            st.rerun()
+        
+        if not st.session_state.get("show_ejecucion_analisis", False):
+            if st.button("Ir a resultados completos", type="primary", use_container_width=True):
+                st.switch_page("pages/3_Resultados.py")
+        else:
+            st.markdown("### 🧠 Detalle de rendimiento")
+            breakdown = results.get("breakdown", {})
+            for eje, (aciertos, total_eje) in breakdown.items():
+                if total_eje > 0:
+                    st.markdown(f"- **{eje}**: {aciertos}/{total_eje} ({(aciertos/total_eje)*100:.1f}%)")
+            st.caption(f"Puntos ganados: {results.get('points_earned', 0)}")
+            st.caption(f"Racha: {results.get('new_streak', 0)}")
+            st.caption(f"Pasaste: {'Sí' if results.get('is_passed') else 'No'}")
+            if st.button("Ocultar análisis", use_container_width=True):
+                st.session_state["show_ejecucion_analisis"] = False
+                st.rerun()
+            st.markdown("")
+            if st.button("Ir a resultados completos", type="primary", use_container_width=True):
+                st.switch_page("pages/3_Resultados.py")
+
+    else:
+        st.warning("No hay un examen activo. Ve a 'Nuevo Simulacro'.")
     st.stop()
 
 is_daily_session = st.session_state.get("study_session_kind") == "daily"
@@ -194,7 +264,7 @@ def current_daily_payload(question_ids, position):
         "paused": st.session_state.get("daily_run_paused", False),
     }
 
-render_header(title="SesiÃƒÂ³n diaria guiada" if is_daily_session else "Simulacro en curso")
+render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
 
 q_ids = st.session_state["exam_questions"]
 current_idx = st.session_state["current_idx"]
@@ -223,8 +293,8 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
     )
     st.progress(0.15, text="Paso 1 de 3 · Estudio guiado")
     with st.container(border=True):
-        st.subheader(f"Ã°Å¸â€œâ€“ Estudia durante {brief.get('minutes', 8)} minutos")
-        st.markdown(f"### {brief.get('topic', 'Tema de la sesiÃƒÂ³n')}")
+        st.subheader(f"📖 Estudia durante {brief.get('minutes', 8)} minutos")
+        st.markdown(f"### {brief.get('topic', 'Tema de la sesión')}")
         st.caption(f"Macrodominio: {brief.get('macro', 'General')}")
         st.write(f"**Objetivo:** {brief.get('objective', '')}")
         sources = brief.get("sources", [])
@@ -234,15 +304,15 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
                 st.markdown(f"- {source}")
         else:
             st.warning(
-                "Este bloque no tiene una fuente precisa registrada. No memorices una explicaciÃƒÂ³n "
-                "sin respaldo; continÃƒÂºa con la prÃƒÂ¡ctica y revisa la fuente al corregir."
+                "Este bloque no tiene una fuente precisa registrada. No memorices una explicación "
+                "sin respaldo; continúa con la práctica y revisa la fuente al corregir."
             )
         st.markdown(
-            "**RecuperaciÃƒÂ³n activa:** cierra el material y explica en voz alta la regla, "
-            "una excepciÃƒÂ³n y cÃƒÂ³mo actuarÃƒÂ­as en un caso laboral."
+            "**Recuperación activa:** cierra el material y explica en voz alta la regla, "
+            "una excepción y cómo actuarías en un caso laboral."
         )
         ready = st.checkbox(
-            "Ya estudiÃƒÂ© la fuente y puedo explicarla sin mirarla",
+            "Ya estudié la fuente y puedo explicarla sin mirarla",
             key="daily_learning_ready",
         )
         if st.button(
@@ -290,7 +360,7 @@ with st.container():
     col_prog1, col_prog2 = st.columns([3, 1])
     with col_prog1:
         progress = (current_idx / total_q)
-        label = "Ã°Å¸Å¡Â¨ MODO REALISTA (HARDCORE)" if is_hardcore else f"Progreso: {int(progress*100)}%"
+        label = "🚨 MODO REALISTA (HARDCORE)" if is_hardcore else f"Progreso: {int(progress*100)}%"
         st.progress(progress, text=label)
     with col_prog2:
         color = "#D90000" if time_left < (total_q * 20) else "#ffa500"
@@ -350,7 +420,7 @@ with st.container():
         st.components.v1.html(js_code, height=0, width=0)
 
 if time_left <= 0:
-    st.error("Ã¢ÂÂ³ Ã‚Â¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")
+    st.error("⏳ ¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")
 
 # Question Card
 st.markdown('<div class="dian-card">', unsafe_allow_html=True)
@@ -375,19 +445,19 @@ if case is not None and question_format_status(question) == OFFICIAL_LABEL:
         "var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; "
         "margin-bottom: 24px;'>"
         "<div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; "
-        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen Ã‚Â· "
+        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen · "
         f"Pregunta {position} de {len(group)}</div>"
         f"<div style='font-size: 1.1rem; line-height: 1.7;'>{escape_html(case.text)}</div></div>",
         unsafe_allow_html=True,
     )
 
 stem_text = question.stem
-if "SITUACIÃƒâ€œN:" in stem_text and "PREGUNTA:" in stem_text:
+if "SITUACIÓN:" in stem_text and "PREGUNTA:" in stem_text:
     try:
         parts = stem_text.split("PREGUNTA:")
-        sit_part = escape_html(parts[0].replace("SITUACIÃƒâ€œN:", "").strip())
+        sit_part = escape_html(parts[0].replace("SITUACIÓN:", "").strip())
         q_part = escape_html(parts[1].strip())
-        st.markdown(f"<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; margin-bottom: 24px; backdrop-filter: blur(5px);'><div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'><span style='background: var(--dian-red); width: 8px; height: 8px; border-radius: 50%;'></span>Caso / SituaciÃƒÂ³n Laboral</div><div style='font-size: 1.1rem; line-height: 1.7; color: #334155;'>{sit_part}</div></div><div class='question-stem'>{q_part}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background: rgba(230, 0, 0, 0.03); border-left: 6px solid var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; margin-bottom: 24px; backdrop-filter: blur(5px);'><div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'><span style='background: var(--dian-red); width: 8px; height: 8px; border-radius: 50%;'></span>Caso / Situación Laboral</div><div style='font-size: 1.1rem; line-height: 1.7; color: #334155;'>{sit_part}</div></div><div class='question-stem'>{q_part}</div>", unsafe_allow_html=True)
     except:
         st.markdown(f"<div class='question-stem'>{escape_html(stem_text)}</div>", unsafe_allow_html=True)
 else:
@@ -415,12 +485,12 @@ if selected_val and not is_answer_checked:
         save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
 if is_daily_session and not is_answer_checked:
     confidence_labels = {
-        "guess": "AdivinÃƒÂ©",
+        "guess": "Adiviné",
         "unsure": "Tengo dudas",
         "confident": "Estoy seguro",
     }
     selected_confidence = st.radio(
-        "Antes de comprobar: Ã‚Â¿quÃƒÂ© tan seguro estÃƒÂ¡s?",
+        "Antes de comprobar: ¿qué tan seguro estás?",
         list(confidence_labels),
         format_func=confidence_labels.get,
         index=(
@@ -447,7 +517,7 @@ if is_daily_session:
 
 col1, col2, col3 = st.columns([1, 4, 1])
 with col1:
-    if st.button("Ã¢Â¬â€¦Ã¯Â¸Â Anterior", use_container_width=True):
+    if st.button("↩️ Anterior", use_container_width=True):
         st.session_state["current_idx"] = max(0, st.session_state["current_idx"] - 1)
         if is_daily_session:
             save_daily_run(
@@ -461,7 +531,7 @@ with col2:
     if is_daily_session:
         if not is_answer_checked:
             if st.button(
-                "Ã¢Å“â€¦ Comprobar respuesta", use_container_width=True,
+                "✅ Comprobar respuesta", use_container_width=True,
                 disabled=(
                     current_q_id not in st.session_state["answers"]
                     or current_q_id not in st.session_state["confidences"]
@@ -480,14 +550,14 @@ with col2:
                     f"La respuesta correcta es {question.correct_key}) {correct_text}"
                 )
                 error_labels = {
-                    "desconocimiento": "No conocÃƒÂ­a la regla",
-                    "confusion_conceptual": "ConfundÃƒÂ­ conceptos",
-                    "mala_interpretacion": "InterpretÃƒÂ© mal el caso",
+                    "desconocimiento": "No conocía la regla",
+                    "confusion_conceptual": "Confundí conceptos",
+                    "mala_interpretacion": "Interpreté mal el caso",
                     "lectura_incompleta": "No vi una palabra clave",
-                    "apuro": "RespondÃƒÂ­ con afÃƒÂ¡n",
+                    "apuro": "Respondí con afán",
                 }
                 selected_error = st.radio(
-                    "Ã‚Â¿CuÃƒÂ¡l fue la causa principal?",
+                    "¿Cuál fue la causa principal?",
                     list(error_labels),
                     format_func=error_labels.get,
                     index=(
@@ -500,11 +570,11 @@ with col2:
                 if selected_error and st.session_state["error_types"].get(current_q_id) != selected_error:
                     st.session_state["error_types"][current_q_id] = selected_error
                     save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
-            st.info(f"Ã°Å¸â€™Â¡ {question.rationale or 'No hay explicaciÃƒÂ³n disponible.'}")
+            st.info(f"💡 {question.rationale or 'No hay explicación disponible.'}")
             if question.source_refs:
-                st.caption(f"Ã°Å¸â€œâ€“ Fuente: {question.source_refs}")
+                st.caption(f"📖 Fuente: {question.source_refs}")
     elif not is_hardcore:
-        if st.button("Ã°Å¸Â¤â€“ Tutor IA (SocrÃƒÂ¡tico)", use_container_width=True):
+        if st.button("🤖 Tutor IA (Socrático)", use_container_width=True):
             with st.spinner("Analizando..."):
                 try:
                     from core.config import get_api_key
@@ -515,7 +585,7 @@ with col2:
                         gen = LLMGenerator(current_provider, api_key, model_name=model_name)
                         q_data = {"stem": question.stem, "options_json": question.options_json, "correct_key": question.correct_key, "rationale": question.rationale}
                         st.session_state["tutor_explanation"] = gen.explain_question(q_data)
-                    else: st.warning(f"Ã¢Å¡Â Ã¯Â¸Â API Key de {current_provider} no configurada.")
+                    else: st.warning(f"⚠️ API Key de {current_provider} no configurada.")
                 except Exception as e: st.error(f"Error: {e}")
     if st.session_state.get("tutor_explanation"):
         st.info(st.session_state["tutor_explanation"])
@@ -525,7 +595,7 @@ with col3:
     time_spent = current_time - st.session_state.get("last_answer_time", current_time)
     if current_idx < total_q - 1:
         if st.button(
-            "Siguiente Ã¢Å¾Â¡Ã¯Â¸Â", type="primary", use_container_width=True,
+            "Siguiente ➡️", type="primary", use_container_width=True,
             disabled=is_daily_session and (
                 not is_answer_checked
                 or (
@@ -535,7 +605,7 @@ with col3:
             ),
         ):
             if time_spent < 45 and not is_hardcore:
-                st.toast("Ã¢Å¡Â Ã¯Â¸Â EstÃƒÂ¡s respondiendo muy rÃƒÂ¡pido.", icon="Ã¢ÂÂ±Ã¯Â¸Â")
+                st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
             st.session_state["current_idx"] += 1
             if is_daily_session:
                 save_daily_run(
@@ -546,7 +616,7 @@ with col3:
             st.session_state["tutor_explanation"] = None
             st.rerun()
     else:
-        finish_label = "Ã°Å¸ÂÂ Finalizar" if time_left > 0 else "Ã¢Å’â€º Resultados"
+        finish_label = "🏁 Finalizar" if time_left > 0 else "🔄 Resultados"
         if st.button(
             finish_label, type="primary", use_container_width=True,
             disabled=is_daily_session and (
