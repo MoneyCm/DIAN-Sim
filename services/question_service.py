@@ -6,15 +6,17 @@ from core.legacy_question_audit import is_safe_for_active_study
 
 class QuestionService:
     @staticmethod
-    def get_questions_for_user(db, user_id, include_review=False):
+    def get_questions_for_user(db, user_id, include_review=False, *, competition_id=None, user_opec=None):
         """
         Calcula las preguntas pertinentes para el usuario basándose en su OPEC activa.
         Utiliza un motor de keywords dinámico v48.1 Mikey.
         """
-        user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
+        if user_opec is None:
+            user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
         
         # El banco siempre se limita al concurso activo.
-        competition_id = get_active_competition_id(db, user_id)
+        if competition_id is None:
+            competition_id = get_active_competition_id(db, user_id)
         query = db.query(Question)
         if competition_id is not None:
             query = query.filter(Question.competition_id == competition_id)

@@ -58,7 +58,7 @@ try:
     
     active_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
     active_competition = get_active_competition(db, u_id)
-    active_competition_id = get_active_competition_id(db, u_id)
+    active_competition_id = active_competition.id if active_competition else None
     competition_export_name = (
         active_competition.code.replace(" ", "_") if active_competition else "CNSC"
     )
@@ -126,11 +126,21 @@ try:
         else 0.0
     )
 
-    daily_candidates = QuestionService.get_questions_for_user(db, u_id)
+    daily_candidates = QuestionService.get_questions_for_user(
+        db, u_id, competition_id=active_competition_id, user_opec=active_opec
+    )
     daily_skills = db.query(Skill).filter_by(
         user_id=u_id, competition_id=active_competition_id
     ).all()
-    daily_performances = db.query(QuestionPerformance).filter_by(user_id=u_id).all()
+    daily_performances = (
+        db.query(QuestionPerformance)
+        .join(Question)
+        .filter(
+            QuestionPerformance.user_id == u_id,
+            Question.competition_id == active_competition_id,
+        )
+        .all()
+    )
     daily_skills_map = {
         (item.track, item.competency, item.topic): item for item in daily_skills
     }
@@ -324,6 +334,16 @@ try:
             st.balloons()
             st.toast("Sesión terminada. Hoy cumpliste lo importante.", icon="✅")
 
+    show_analytics = st.toggle(
+        "Cargar métricas y paneles avanzados",
+        value=False,
+        key="dashboard_show_analytics",
+        help="Al activarlo se habilitan análisis detallados, gráficas y herramientas de exportación.",
+    )
+    if not show_analytics:
+        st.info("Dashboard en modo rápido. Activa **Cargar métricas y paneles avanzados** para mostrar el resto de secciones.")
+        st.stop()
+
     with st.expander("🗺️ Control de cobertura de la OPEC", expanded=False):
         st.caption(
             "Separa disponibilidad del banco, revisión de calidad y evidencia personal. "
@@ -508,9 +528,7 @@ try:
     with col_b2:
         st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
         st.subheader("🎯 Nivel de Dominio por Eje")
-        skills = db.query(Skill).filter_by(
-            user_id=u_id, competition_id=active_competition_id
-        ).all()
+        skills = daily_skills
         if skills:
             df_skills = pd.DataFrame([{
                 'Eje': s.track,
@@ -767,13 +785,22 @@ try:
 
     # 6. Herramientas Administrativas
     is_admin_user = AuthManager.is_admin()
+    show_admin_tools = False
     if is_admin_user:
         st.divider()
         st.subheader("🛠️ Respaldo administrativo del banco")
-
-    all_qs = db.query(Question).filter(
-        Question.competition_id == active_competition_id
-    ).all() if is_admin_user else []
+        show_admin_tools = st.toggle(
+            "Mostrar herramientas administrativas del banco",
+            value=False,
+            key="dashboard_show_admin_tools",
+        )
+    all_qs = (
+        db.query(Question)
+        .filter(Question.competition_id == active_competition_id)
+        .all()
+        if is_admin_user and show_admin_tools
+        else []
+    )
 
     if all_qs:
         export_data = []
@@ -1195,3 +1222,5 @@ except Exception as e:
     st.error(f"Error cargando dashboard: {e}")
 finally:
     db.close()
+
+
