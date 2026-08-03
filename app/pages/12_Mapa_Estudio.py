@@ -13,13 +13,14 @@ from core.function_coverage import build_function_coverage
 try:
     from core.function_coverage import build_function_study_map
 except ImportError:
-    def build_function_study_map(functions, questions, performances):
+    def build_function_study_map(functions, questions, performances, catalog_sources=None):
         rows, unmatched = build_function_coverage(functions, questions, performances)
         for row in rows:
-            row["sources"] = []
+            row["sources"] = list((catalog_sources or {}).get(row["function_number"], []))
             row["recommendation"] = "Actualiza la aplicación para ver el mapa de fuentes verificadas."
         return rows, unmatched
 from core.legacy_question_audit import is_safe_for_active_study
+from core.opec_source_catalog import sources_for_opec_function
 from db.models import Question, QuestionPerformance, UserOPEC
 from db.session import SessionLocal
 from ui_utils import load_css, render_custom_sidebar, render_header
@@ -62,7 +63,13 @@ try:
         QuestionPerformance.user_id == user_id,
         Question.competition_id == competition_id,
     ).all()
-    rows, unmatched = build_function_study_map(functions, questions, performances)
+    catalogue = {
+        index: sources_for_opec_function(active_opec.opec_number, function)
+        for index, function in enumerate(functions, start=1)
+    }
+    rows, unmatched = build_function_study_map(
+        functions, questions, performances, catalogue
+    )
 
     st.info(
         f"Concurso: **{competition.name if competition else 'Sin concurso'}** · "
@@ -70,7 +77,7 @@ try:
     )
     st.caption(
         "Una función se considera con evidencia cuando tiene preguntas verificadas y ya has "
-        "practicado al menos tres. Las fuentes mostradas pertenecen únicamente a preguntas verificadas."
+        "practicado al menos tres. Las fuentes mostradas provienen de preguntas verificadas o del catálogo oficial de la OPEC."
     )
 
     for row in rows:
@@ -87,7 +94,7 @@ try:
             col3.metric("Con práctica", row["practiced"])
             st.write(f"**Siguiente paso:** {row['recommendation']}")
             if row["sources"]:
-                st.markdown("**Fuentes verificadas para estudiar:**")
+                st.markdown("**Fuentes recomendadas para estudiar:**")
                 for source in row["sources"]:
                     st.markdown(f"- {source}")
             else:

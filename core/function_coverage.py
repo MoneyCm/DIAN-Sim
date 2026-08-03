@@ -104,7 +104,7 @@ def build_function_coverage(functions, questions, performances) -> tuple[list[di
     return rows, unmatched
 
 
-def build_function_study_map(functions, questions, performances) -> tuple[list[dict], int]:
+def build_function_study_map(functions, questions, performances, catalog_sources=None) -> tuple[list[dict], int]:
     """Return one practical study recommendation and verified sources per OPEC function."""
     coverage_rows, unmatched = build_function_coverage(functions, questions, performances)
     clean_functions = [str(item).strip() for item in (functions or []) if str(item).strip()]
@@ -140,9 +140,11 @@ def build_function_study_map(functions, questions, performances) -> tuple[list[d
             recommendation = "Estudia la fuente vinculada y responde al menos 3 preguntas del tema."
         else:
             recommendation = "Mantén el tema con repaso espaciado y casos situacionales nuevos."
+        catalogue = (catalog_sources or {}).get(index + 1, [])
+        combined_sources = list(dict.fromkeys(sources_by_function[index] + list(catalogue)))
         study_rows.append({
             **row,
-            "sources": sources_by_function[index][:3],
+            "sources": combined_sources[:4],
             "recommendation": recommendation,
         })
     return study_rows, unmatched

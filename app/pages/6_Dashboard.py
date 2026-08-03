@@ -36,16 +36,17 @@ from core.study_planner import build_timed_session, days_until_exam, preparation
 from core.motivation import build_weekly_progress, coverage_percent
 from core.coverage import build_coverage_rows
 from core.function_coverage import build_function_coverage
+from core.opec_source_catalog import sources_for_opec_function
 try:
     from core.function_coverage import build_function_study_map
 except ImportError:
     # Streamlit Cloud puede conservar temporalmente el módulo anterior tras
     # desplegar una página nueva. Mantiene el Dashboard disponible hasta que
     # recargue la versión que incluye el mapa detallado.
-    def build_function_study_map(functions, questions, performances):
+    def build_function_study_map(functions, questions, performances, catalog_sources=None):
         rows, unmatched = build_function_coverage(functions, questions, performances)
         for row in rows:
-            row["sources"] = []
+            row["sources"] = list((catalog_sources or {}).get(row["function_number"], []))
             row["recommendation"] = (
                 "El mapa detallado de fuentes estará disponible al terminar "
                 "la actualización de la aplicación."
@@ -455,8 +456,12 @@ try:
                     "Muestra solo fuentes vinculadas a preguntas verificadas. Si una función no tiene "
                     "fuente, no se inventa una recomendación normativa."
                 )
+                catalogue = {
+                    index: sources_for_opec_function(active_opec.opec_number, function)
+                    for index, function in enumerate(opec_functions, start=1)
+                }
                 study_map_rows, _ = build_function_study_map(
-                    opec_functions, daily_candidates, daily_performances
+                    opec_functions, daily_candidates, daily_performances, catalogue
                 )
                 for row in study_map_rows:
                     source_text = "\n\n".join(f"- {source}" for source in row["sources"])
