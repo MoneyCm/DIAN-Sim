@@ -1,6 +1,8 @@
 import json
 from sqlalchemy import or_, and_, func
-from db.models import Question, UserOPEC
+from sqlalchemy.orm import selectinload
+
+from db.models import CaseStudy, Question, UserOPEC
 from core.competitions import get_active_competition_id
 from core.legacy_question_audit import is_safe_for_active_study
 
@@ -17,7 +19,11 @@ class QuestionService:
         # El banco siempre se limita al concurso activo.
         if competition_id is None:
             competition_id = get_active_competition_id(db, user_id)
-        query = db.query(Question)
+        # El plan diario analiza casos completos. Precargarlos evita una consulta
+        # adicional por cada pregunta/caso al construir los bloques GOA.
+        query = db.query(Question).options(
+            selectinload(Question.case_study).selectinload(CaseStudy.questions)
+        )
         if competition_id is not None:
             query = query.filter(Question.competition_id == competition_id)
 
