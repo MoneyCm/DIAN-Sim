@@ -90,9 +90,8 @@ def load_saved_opec_profile():
     except (OSError, json.JSONDecodeError):
         return None
     return (
-        competition.code != "TERRITORIAL-12-BOLIVAR-2685"
-        and "TERRITORIAL 12" in normalized
-        and "BOLIVAR" in normalized
+        "PROCESO DE SELECCION MODALIDAD ABIERTO TERRITORIAL 12" in normalized
+        and "GOBERNACION DE BOLIVAR" in normalized
     )
 
 if not AuthManager.check_auth():
