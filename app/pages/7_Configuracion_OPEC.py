@@ -65,19 +65,28 @@ TERRITORIAL_12_SEED = [
     ("La formulación de planes, programas y proyectos requiere levantar información conforme a:", {"A": "Las metodologías establecidas.", "B": "Preferencias personales del equipo.", "C": "Información no verificable."}, "A", "La función 6 exige aplicar las metodologías establecidas."),
     ("¿Qué condición debe cumplir una persona inscrita en modalidad Abierto para continuar en el proceso?", {"A": "Acreditar requisitos de participación y requisitos mínimos del empleo.", "B": "Tener experiencia únicamente en el sector privado.", "C": "Haber presentado una prueba de integridad independiente."}, "A", "El Acuerdo y Anexo regulan requisitos de participación y verificación de requisitos mínimos."),
     ("¿Cuál afirmación sobre la verificación de requisitos mínimos es correcta?", {"A": "Es una condición obligatoria y no una prueba de selección.", "B": "Reemplaza las pruebas escritas.", "C": "Solo aplica luego de la lista de elegibles."}, "A", "La normativa CNSC distingue la verificación de requisitos mínimos de las pruebas de selección."),
+    ("Al elaborar el plan indicativo, el servidor debe articularlo principalmente con:", {"A": "Metas proyectadas y distribución de recursos.", "B": "Preferencias individuales.", "C": "Actividades sin indicador."}, "A", "La función 5 exige esa concordancia."),
+    ("Si un indicador muestra atraso crítico en una meta, la acción adecuada es:", {"A": "Analizar causas y revalidar acciones de cumplimiento.", "B": "Eliminar la meta del reporte.", "C": "Cambiar el indicador sin justificación."}, "A", "La semaforización sirve para orientar acciones de cumplimiento."),
+    ("¿Qué distingue un indicador de eficiencia?", {"A": "Relaciona resultados con recursos utilizados.", "B": "Solo describe una actividad realizada.", "C": "Mide exclusivamente percepción."}, "A", "La eficiencia evalúa la relación entre recursos y productos o resultados."),
+    ("¿Qué debe hacer el cargo antes de gestionar la aprobación del POAI?", {"A": "Verificar la necesidad de coordinar ajustes cuando sean necesarios.", "B": "Eliminar los proyectos prioritarios.", "C": "Aprobarlo sin revisar metas."}, "A", "La función 8 prevé gestión de aprobación y coordinación de ajustes."),
+    ("La coordinación de un grupo temporal debe realizarse conforme a:", {"A": "Los lineamientos del superior inmediato.", "B": "Decisiones informales de terceros.", "C": "El criterio exclusivo de cada integrante."}, "A", "La función 2 fija ese lineamiento."),
+    ("La coordinación de grupos permanentes se ejerce de acuerdo con:", {"A": "El respectivo acto administrativo del Gobernador.", "B": "Una instrucción verbal sin soporte.", "C": "La decisión de un contratista."}, "A", "La función 1 exige el acto administrativo correspondiente."),
+    ("Para revisar componentes estratégicos del sector, el criterio rector es:", {"A": "Los lineamientos normativos aplicables.", "B": "La improvisación presupuestal.", "C": "La eliminación de evidencias."}, "A", "La función 3 exige ceñirse a los lineamientos normativos."),
+    ("¿Qué evidencia respalda mejor el seguimiento a metas de un proyecto?", {"A": "Indicadores definidos, línea base, meta y resultado periódico.", "B": "Una opinión sin datos.", "C": "Solo el nombre del proyecto."}, "A", "El seguimiento exige información verificable para medir resultados."),
 ]
 
 
 def seed_territorial_12_questions(db, competition_id):
     from db.models import Question
     import uuid
-    existing = db.query(Question).filter(Question.competition_id == competition_id, Question.source_refs == "Acuerdo 36 y Anexo Técnico Territorial 12").count()
-    if existing:
-        return 0
+    created = 0
     for stem, options, correct, rationale in TERRITORIAL_12_SEED:
+        if db.query(Question).filter(Question.competition_id == competition_id, Question.stem == stem).first():
+            continue
         db.add(Question(competition_id=competition_id, question_id=str(uuid.uuid4()), stem=stem, options_json=options, correct_key=correct, rationale=rationale, track="FUNCIONAL", competency="Planeación y gestión pública", topic="Territorial 12 - Bolívar", macro_dominio="Planeación territorial", micro_competencia="Planeación, seguimiento y evaluación", difficulty=2, source_refs="Acuerdo 36 y Anexo Técnico Territorial 12", hash_norm=str(uuid.uuid4())))
+        created += 1
     db.commit()
-    return len(TERRITORIAL_12_SEED)
+    return created
 
 
 def load_saved_opec_profile():
