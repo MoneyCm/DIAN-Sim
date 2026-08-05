@@ -56,6 +56,30 @@ def is_legacy_territorial_12_duplicate(competition):
     )
 
 
+TERRITORIAL_12_SEED = [
+    ("¿Cuál es la finalidad de las pruebas del proceso de selección?", {"A": "Apreciar capacidad, idoneidad, adecuación y potencialidad para el empleo.", "B": "Reemplazar la verificación de requisitos mínimos.", "C": "Asignar automáticamente una vacante por antigüedad."}, "A", "Las pruebas buscan valorar las calidades y competencias requeridas para desempeñar eficazmente el empleo."),
+    ("Para la OPEC 241130, ¿qué instrumento debe guardar coherencia con las metas proyectadas y la distribución de recursos?", {"A": "El POAI y los planes de acción por área.", "B": "El registro civil de los aspirantes.", "C": "El listado de inscritos del concurso."}, "A", "La función del empleo ordena elaborar el plan indicativo, planes de acción y POAI en concordancia con metas y recursos."),
+    ("¿Qué debe verificarse antes de aprobar el plan de inversiones del Plan de Desarrollo Educativo?", {"A": "Su coherencia con el componente estratégico y los programas y proyectos prioritarios.", "B": "Que todos los proyectos tengan el mismo presupuesto.", "C": "Que no existan indicadores."}, "A", "La ficha de la OPEC exige verificar coherencia estratégica e inclusión de prioridades."),
+    ("¿Cuál conjunto de indicadores corresponde al seguimiento de metas previsto para el cargo?", {"A": "Impacto, eficiencia y eficacia.", "B": "Color, antigüedad y ubicación.", "C": "Únicamente número de reuniones."}, "A", "La función 7 señala expresamente indicadores de impacto, eficiencia y eficacia."),
+    ("¿Qué finalidad tiene semaforizar las metas por plan, programa y proyecto?", {"A": "Revalidar acciones orientadas al cumplimiento.", "B": "Sustituir el plan de desarrollo.", "C": "Eliminar la rendición de cuentas."}, "A", "La función 9 relaciona la semaforización con acciones para el cumplimiento."),
+    ("La formulación de planes, programas y proyectos requiere levantar información conforme a:", {"A": "Las metodologías establecidas.", "B": "Preferencias personales del equipo.", "C": "Información no verificable."}, "A", "La función 6 exige aplicar las metodologías establecidas."),
+    ("¿Qué condición debe cumplir una persona inscrita en modalidad Abierto para continuar en el proceso?", {"A": "Acreditar requisitos de participación y requisitos mínimos del empleo.", "B": "Tener experiencia únicamente en el sector privado.", "C": "Haber presentado una prueba de integridad independiente."}, "A", "El Acuerdo y Anexo regulan requisitos de participación y verificación de requisitos mínimos."),
+    ("¿Cuál afirmación sobre la verificación de requisitos mínimos es correcta?", {"A": "Es una condición obligatoria y no una prueba de selección.", "B": "Reemplaza las pruebas escritas.", "C": "Solo aplica luego de la lista de elegibles."}, "A", "La normativa CNSC distingue la verificación de requisitos mínimos de las pruebas de selección."),
+]
+
+
+def seed_territorial_12_questions(db, competition_id):
+    from db.models import Question
+    import uuid
+    existing = db.query(Question).filter(Question.competition_id == competition_id, Question.source_refs == "Acuerdo 36 y Anexo Técnico Territorial 12").count()
+    if existing:
+        return 0
+    for stem, options, correct, rationale in TERRITORIAL_12_SEED:
+        db.add(Question(competition_id=competition_id, question_id=str(uuid.uuid4()), stem=stem, options_json=options, correct_key=correct, rationale=rationale, track="FUNCIONAL", competency="Planeación y gestión pública", topic="Territorial 12 - Bolívar", macro_dominio="Planeación territorial", micro_competencia="Planeación, seguimiento y evaluación", difficulty=2, source_refs="Acuerdo 36 y Anexo Técnico Territorial 12", hash_norm=str(uuid.uuid4())))
+    db.commit()
+    return len(TERRITORIAL_12_SEED)
+
+
 def load_saved_opec_profile():
     profile_path = os.path.join(
         PROJECT_ROOT, "data", "concursos", "territorial_12_bolivar_opec_241130", "perfil_concurso.json"
@@ -117,6 +141,15 @@ selected_competition_id = st.selectbox(
 selected_competition = competition_db.get(Competition, selected_competition_id) if selected_competition_id else None
 competition_db.close()
 active_opec = get_active_opec(selected_competition_id)
+
+if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR-2685":
+    if st.button("Crear preguntas oficiales iniciales", use_container_width=True):
+        seed_db = SessionLocal()
+        try:
+            created = seed_territorial_12_questions(seed_db, selected_competition_id)
+            st.success(f"{created} preguntas oficiales iniciales disponibles para Territorial 12.")
+        finally:
+            seed_db.close()
 
 saved_profile = load_saved_opec_profile()
 if (
