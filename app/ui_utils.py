@@ -26,7 +26,18 @@ def render_header(title: str = None, subtitle: str = None):
     with col_logo:
         # Relativizado para el despliegue
         # El logo debe estar en app/assets/logo.png
-        logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+        logo_name = "logo.png"
+        try:
+            from db.session import SessionLocal
+            from core.competitions import get_active_competition
+            db = SessionLocal()
+            competition = get_active_competition(db, st.session_state.get("user_id")) if st.session_state.get("user_id") else None
+            db.close()
+            if competition and competition.code == "TERRITORIAL-12-BOLIVAR-2685":
+                logo_name = "territorial12-bolivar.png"
+        except Exception:
+            pass
+        logo_path = os.path.join(os.path.dirname(__file__), "assets", logo_name)
         try:
             if os.path.exists(logo_path):
                 # V50.1 Mikey: Clickable Logo (Base64)
