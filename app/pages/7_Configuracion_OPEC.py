@@ -142,11 +142,12 @@ with col1:
     if uploaded_pdf:
         try:
             extracted = extract_opec_profile(uploaded_pdf.getvalue())
-            required = ["opec_number", "job_title", "level", "purpose", "requirements"]
-            missing = [label for label in required if not extracted.get(label)]
-            if missing:
-                st.error("No se pudieron identificar todos los datos obligatorios. Sube el PDF original de SIMO con texto seleccionable.")
+            if not extracted.get("opec_number"):
+                st.error("No se pudo identificar el número OPEC. Sube el PDF original de SIMO con texto seleccionable.")
             else:
+                incomplete = [label for label in ("level", "purpose", "functions", "requirements") if not extracted.get(label)]
+                if incomplete:
+                    st.warning("La ficha se puede guardar, pero el PDF no permitió extraer: " + ", ".join(incomplete) + ".")
                 st.success(f"Se identificó la OPEC {extracted['opec_number']}. Revisa la extracción antes de confirmarla.")
                 st.markdown(f"**Cargo:** {extracted['job_title']}  ")
                 st.markdown(f"**Nivel:** {extracted['level']}  ")

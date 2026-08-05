@@ -48,10 +48,10 @@ def extract_opec_profile(pdf_bytes: bytes) -> dict[str, str | list[str]]:
 
     profile: dict[str, str | list[str]] = {
         "opec_number": field(r"(?:N[uú]mero\s+)?OPEC\s*[:#]?\s*(\d{4,})"),
-        "denomination": field(r"Denominaci[oó]n\s*:\s*(.*?)(?=\s+(?:Grado|C[oó]digo)\s*:|\n)"),
-        "code": field(r"C[oó]digo\s*:\s*(\d+)"),
-        "grade": field(r"Grado\s*:\s*(\d+)"),
-        "level": field(r"Nivel\s*:\s*(.*?)(?=\s+Denominaci[oó]n\s*:|\n)"),
+        "denomination": field(r"(?:Denominaci[oó]n|Nombre\s+del\s+Cargo)\s*:?[ \t]*(.*?)(?=\s+(?:Grado|C[oó]digo)\s*:|\n)"),
+        "code": field(r"C[oó]digo\s*:?[ \t]*(\d+)"),
+        "grade": field(r"Grado\s*:?[ \t]*(\d+)"),
+        "level": field(r"Nivel\s*:?[ \t]*(.*?)(?=\s+(?:Denominaci[oó]n|Nombre\s+del\s+Cargo)\s*:|\n)"),
         "purpose": re.sub(r"\s+", " ", section(r"Prop[oó]sito", r"Funciones|Requisitos|Equivalencias")).strip(),
         "functions": functions,
         "requirements": re.sub(r"\s+", " ", section(r"Requisitos", r"Equivalencias|Vacantes")).strip(),
@@ -59,4 +59,6 @@ def extract_opec_profile(pdf_bytes: bytes) -> dict[str, str | list[str]]:
     profile["job_title"] = " ".join(
         part for part in [str(profile["denomination"]), f"Grado {profile['grade']}" if profile["grade"] else ""] if part
     )
+    if not profile["job_title"] and profile["opec_number"]:
+        profile["job_title"] = f"Empleo OPEC {profile['opec_number']}"
     return profile
