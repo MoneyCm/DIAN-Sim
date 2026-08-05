@@ -20,6 +20,19 @@ def _normalized_name(value: str) -> str:
     )
 
 
+def is_hidden_catalog_duplicate(competition: Competition, profiles: list[dict[str, Any]]) -> bool:
+    """Hide legacy manual entries when a canonical catalogue profile exists."""
+    normalized = _normalized_name(competition.name)
+    for profile in profiles:
+        source = profile["competition"]
+        if competition.code == source["code"]:
+            continue
+        if source["code"] == "TERRITORIAL-12-BOLIVAR-2685":
+            if "TERRITORIAL 12" in normalized and "BOLIVAR" in normalized:
+                return True
+    return False
+
+
 def load_catalog_profiles() -> list[dict[str, Any]]:
     """Return valid profiles from ``data/concursos`` without breaking the UI."""
     profiles: list[dict[str, Any]] = []

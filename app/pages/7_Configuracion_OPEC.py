@@ -13,6 +13,7 @@ from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
 from core.competition_catalog import (
+    is_hidden_catalog_duplicate,
     load_catalog_profiles,
     profile_for_competition,
     sync_catalog_competitions,
@@ -79,7 +80,10 @@ competition_db = SessionLocal()
 sync_catalog_competitions(competition_db)
 competition_db.commit()
 catalog_profiles = load_catalog_profiles()
-competitions = competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
+competitions = [
+    competition for competition in competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
+    if not is_hidden_catalog_duplicate(competition, catalog_profiles)
+]
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]
 default_competition_id = (
