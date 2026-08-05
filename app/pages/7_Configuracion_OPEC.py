@@ -278,9 +278,9 @@ st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
 st.markdown("""
 Si no quieres crear preguntas una por una, usa esta opción. El sistema leerá tu **Cargo y Funciones** y generará automáticamente:
 *   3 Casos Protagónicos completos.
-*   10 Preguntas Funcionales.
-*   5 Preguntas Comportamentales.
-*   5 Preguntas de Integridad/Valores.
+*   Hasta 60 preguntas funcionales.
+*   Hasta 20 preguntas comportamentales.
+*   Hasta 20 preguntas de integridad/valores.
 """)
 
 if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_container_width=True):
@@ -303,8 +303,14 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
         # For now, let's try to instantiate with placeholder and rely on .env if user hasn't set custom.
         
         try:
-            api_key = os.getenv("MISTRAL_API_KEY") or os.getenv("GEMINI_API_KEY")
-            provider = "mistral" if os.getenv("MISTRAL_API_KEY") else "gemini"
+            from core.config import get_api_key
+            mistral_key = get_api_key("mistral")
+            gemini_key = get_api_key("gemini")
+            api_key = mistral_key or gemini_key
+            provider = "mistral" if mistral_key else "gemini"
+            if not api_key:
+                st.error("Configura una API Key de Gemini o Mistral en Generador IA antes de crear la base.")
+                st.stop()
             
             # Simple fallback if keys missing (handled by LLMGenerator typically or errors out)
             gen = LLMGenerator(provider=provider, api_key=api_key if api_key else "dummy")
@@ -319,7 +325,8 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             # 1. Generate Case Studies
             status.info("Generando 3 Casos Protagónicos...")
-            for i in range(3):
+            existing_cases = db.query(CaseStudy).filter(CaseStudy.competition_id == selected_competition_id).count()
+            for i in range(max(0, 3 - existing_cases)):
                 try:
                     case_data = gen.generate_case_study(
                         topic=f"Caso {i+1}: {active_opec.job_title} - {active_opec.purpose}",
@@ -371,8 +378,17 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             # 2. Functional Questions
             status.info("Generando preguntas funcionales...")
-            func_text = f"Cargo: {active_opec.job_title}\nFunciones:\n{str(active_opec.functions)}"
-            q_func = gen.generate_from_text(func_text, count=10, difficulty=2)
+            func_text = (
+                f"Cargo: {active_opec.job_title}\nPropósito: {active_opec.purpose}\n"
+                f"Funciones: {str(active_opec.functions)}\nRequisitos: {active_opec.requirements}"
+            )
+            existing_functional = db.query(Question).filter(
+                Question.competition_id == selected_competition_id,
+                Question.track == "FUNCIONAL",
+            ).count()
+            q_func = gen.generate_from_text(
+                func_text, count=max(0, 60 - existing_functional), difficulty=2, user_id=u_id
+            ) if existing_functional < 60 else []
             
             for q in q_func:
                 new_q = Question(
@@ -399,7 +415,13 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             # 3. Behavioral Questions
             status.info("Generando preguntas comportamentales...")
             behav_text = f"CONTEXTO COMPORTAMENTAL: Generar preguntas sobre Liderazgo, Trabajo en Equipo y Orientación al Resultado para el cargo {active_opec.job_title}."
-            q_behav = gen.generate_from_text(behav_text, count=5, difficulty=2)
+            existing_behavioral = db.query(Question).filter(
+                Question.competition_id == selected_competition_id,
+                Question.track == "COMPORTAMENTAL",
+            ).count()
+            q_behav = gen.generate_from_text(
+                behav_text, count=max(0, 20 - existing_behavioral), difficulty=2, user_id=u_id
+            ) if existing_behavioral < 20 else []
             
             for q in q_behav:
                 new_q = Question(
@@ -425,8 +447,14 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             # 4. Integrity Questions
             status.info("Generando preguntas de valores e integridad...")
-            int_text = f"CONTEXTO ÉTICO: Dilemas éticos, código de integridad y valores para funcionario público DIAN en el cargo {active_opec.job_title}."
-            q_int = gen.generate_from_text(int_text, count=5, difficulty=2)
+            int_text = f"CONTEXTO ÉTICO: Dilemas éticos, Código de Integridad del Servicio Público y valores para un servidor público territorial en el cargo {active_opec.job_title}."
+            existing_integrity = db.query(Question).filter(
+                Question.competition_id == selected_competition_id,
+                Question.topic == "Integridad y Valores",
+            ).count()
+            q_int = gen.generate_from_text(
+                int_text, count=max(0, 20 - existing_integrity), difficulty=2, user_id=u_id
+            ) if existing_integrity < 20 else []
              
             for q in q_int:
                 new_q = Question(
