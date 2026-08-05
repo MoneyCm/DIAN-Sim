@@ -1,5 +1,5 @@
 import streamlit as st
-import os, sys, json, re
+import os, sys, json, re, unicodedata
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -12,12 +12,6 @@ from db.models import Competition, UserOPEC
 from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
-from core.competition_catalog import (
-    is_hidden_catalog_duplicate,
-    load_catalog_profiles,
-    profile_for_competition,
-    sync_catalog_competitions,
-)
 
 # pass # Removed st.set_page_config
 
@@ -53,6 +47,19 @@ def extract_opec_profile_from_text(text):
         "requirements": re.sub(r"\s+", " ", section(r"Requisitos", r"Equivalencias|Vacantes")).strip(),
     }
 
+
+def is_legacy_territorial_12_duplicate(competition):
+    """Hide the old manual Bolívar entry; keep the canonical profile visible."""
+    normalized = "".join(
+        char for char in unicodedata.normalize("NFD", competition.name.upper())
+        if unicodedata.category(char) != "Mn"
+    )
+    return (
+        competition.code != "TERRITORIAL-12-BOLIVAR-2685"
+        and "TERRITORIAL 12" in normalized
+        and "BOLIVAR" in normalized
+    )
+
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")
     st.stop()
@@ -77,12 +84,9 @@ def get_active_opec(competition_id=None):
 
 u_id = st.session_state.get("user_id")
 competition_db = SessionLocal()
-sync_catalog_competitions(competition_db)
-competition_db.commit()
-catalog_profiles = load_catalog_profiles()
 competitions = [
     competition for competition in competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
-    if not is_hidden_catalog_duplicate(competition, catalog_profiles)
+    if not is_legacy_territorial_12_duplicate(competition)
 ]
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]
@@ -102,18 +106,6 @@ selected_competition_id = st.selectbox(
 selected_competition = competition_db.get(Competition, selected_competition_id) if selected_competition_id else None
 competition_db.close()
 active_opec = get_active_opec(selected_competition_id)
-
-selected_catalog_profile = profile_for_competition(
-    catalog_profiles,
-    selected_competition.code if selected_competition else None,
-)
-if selected_catalog_profile:
-    position = selected_catalog_profile["position"]
-    st.info(
-        f"Perfil local disponible: OPEC {position['opec_number']} — "
-        f"{position['denomination']} grado {position['grade']} ({position['dependency']}). "
-        "Puedes reemplazarlo o confirmarlo cargando el PDF original de SIMO."
-    )
 
 if active_opec and not active_opec.is_active:
     if st.button("Usar este concurso y cargo", type="primary", use_container_width=True):
