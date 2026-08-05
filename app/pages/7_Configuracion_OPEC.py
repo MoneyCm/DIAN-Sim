@@ -120,7 +120,7 @@ u_id = st.session_state.get("user_id")
 competition_db = SessionLocal()
 competitions = [
     competition for competition in competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
-    if not is_legacy_territorial_12_duplicate(competition)
+    if competition.code in {"DIAN-2676", "TERRITORIAL-12-BOLIVAR-2685"}
 ]
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]
