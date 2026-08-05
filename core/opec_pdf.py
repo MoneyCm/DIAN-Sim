@@ -9,20 +9,20 @@ from pypdf import PdfReader
 
 
 def extract_opec_profile(pdf_bytes: bytes) -> dict[str, str | list[str]]:
-    """Extract the standard SIMO/OPEC labels from a text-based PDF.
-
-    The caller must present the extracted values for confirmation. Scanned PDFs
-    have no usable text layer and deliberately raise a clear error instead of
-    inventing a profile.
-    """
+    """Extract a profile from a text-based PDF (legacy upload support)."""
     try:
         reader = PdfReader(BytesIO(pdf_bytes))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception as exc:
         raise ValueError("No fue posible leer el PDF. Verifica que no esté protegido o dañado.") from exc
 
-    if len(text.strip()) < 80:
-        raise ValueError("El PDF no contiene texto seleccionable. Sube el PDF original de SIMO, no una imagen escaneada.")
+    return extract_opec_profile_from_text(text)
+
+
+def extract_opec_profile_from_text(text: str) -> dict[str, str | list[str]]:
+    """Extract the standard SIMO/OPEC labels from pasted employment text."""
+    if len(text.strip()) < 40:
+        raise ValueError("Pega el texto completo de la ficha de empleo de SIMO.")
 
     def field(pattern: str) -> str:
         match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)

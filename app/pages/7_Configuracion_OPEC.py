@@ -17,7 +17,7 @@ from core.competition_catalog import (
     profile_for_competition,
     sync_catalog_competitions,
 )
-from core.opec_pdf import extract_opec_profile
+from core.opec_pdf import extract_opec_profile_from_text
 
 # pass # Removed st.set_page_config
 
@@ -135,15 +135,20 @@ if st.session_state.get("debug_mode"):
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📄 Cargar ficha del empleo")
-    st.caption("Sube el PDF original descargado de SIMO. La aplicación extrae los datos y te muestra una vista previa antes de guardarlos.")
-    uploaded_pdf = st.file_uploader("Ficha del empleo (PDF)", type=["pdf"], key="opec_pdf_upload")
+    st.subheader("📋 Pegar ficha del empleo")
+    st.caption("Copia y pega aquí el texto completo de la ficha de empleo de SIMO. La aplicación extrae los datos y te muestra una vista previa antes de guardarlos.")
+    employment_text = st.text_area(
+        "Ficha de empleo de SIMO",
+        placeholder="Pega aquí desde 'Nivel' hasta 'Vacantes'...",
+        height=360,
+        key="opec_employment_text",
+    )
 
-    if uploaded_pdf:
+    if employment_text.strip():
         try:
-            extracted = extract_opec_profile(uploaded_pdf.getvalue())
+            extracted = extract_opec_profile_from_text(employment_text)
             if not extracted.get("opec_number"):
-                st.error("No se pudo identificar el número OPEC. Sube el PDF original de SIMO con texto seleccionable.")
+                st.error("No se pudo identificar el número OPEC. Verifica que hayas pegado la ficha completa de SIMO.")
             else:
                 incomplete = [label for label in ("level", "purpose", "functions", "requirements") if not extracted.get(label)]
                 if incomplete:
