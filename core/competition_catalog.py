@@ -5,11 +5,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 from db.models import CaseStudy, Competition, Question, Skill, StudyPlanConfig, UserOPEC
 
 
 CATALOG_ROOT = Path(__file__).resolve().parents[1] / "data" / "concursos"
+
+
+def _normalized_name(value: str) -> str:
+    return "".join(
+        character for character in unicodedata.normalize("NFD", value.upper())
+        if unicodedata.category(character) != "Mn"
+    )
 
 
 def load_catalog_profiles() -> list[dict[str, Any]]:
@@ -50,8 +58,8 @@ def sync_catalog_competitions(db) -> None:
         duplicate_candidates = [
             competition for competition in db.query(Competition).all()
             if competition.id != canonical.id
-            and "TERRITORIAL 12" in competition.name.upper()
-            and "BOLIVAR" in competition.name.upper()
+            and "TERRITORIAL 12" in _normalized_name(competition.name)
+            and "BOLIVAR" in _normalized_name(competition.name)
         ]
         for duplicate in duplicate_candidates:
             for model in (UserOPEC, StudyPlanConfig, CaseStudy, Question, Skill):
