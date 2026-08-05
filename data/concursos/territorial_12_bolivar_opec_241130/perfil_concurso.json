@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "competition": {
+    "code": "TERRITORIAL-12-BOLIVAR-2685",
+    "name": "Territorial 12 - Gobernación de Bolívar",
+    "selection_process_number": "2685",
+    "entity": "Gobernación de Bolívar",
+    "modality": "Abierto",
+    "registration_deadline": "2026-06-15"
+  },
+  "position": {
+    "opec_number": "241130",
+    "denomination": "Profesional Especializado",
+    "code": "222",
+    "grade": "10",
+    "level": "Profesional",
+    "salary": 11284289,
+    "salary_validity": 2024,
+    "vacancies": 1,
+    "dependency": "Secretaría de Educación",
+    "municipality": "Turbaco"
+  },
+  "purpose": "Apoyar en la gestión estratégica, planes, programas y proyectos encaminados al cumplimiento de las políticas propias del sector atendiendo los planteamientos del Plan Departamental de Desarrollo (PDD).",
+  "functions": [
+    "Ejercer labores de coordinación de grupos de trabajo permanentes de acuerdo al respectivo acto administrativo del Gobernador.",
+    "Realizar labores de coordinación de grupos de trabajo temporales de conformidad con los lineamientos del superior inmediato.",
+    "Revisar y analizar los componentes estratégicos que buscan solucionar las problemáticas del sector ciñéndose a los lineamientos normativos aplicables.",
+    "Aprobar el plan de inversiones del Plan de Desarrollo Educativo previa verificación de su coherencia con el componente estratégico y la inclusión de programas y proyectos prioritarios.",
+    "Elaborar el plan indicativo, los planes de acción por área y el plan operativo anual de inversiones según las metas y distribución de recursos.",
+    "Levantar la información requerida para formular planes, programas y proyectos conforme a las metodologías establecidas.",
+    "Apoyar la revisión del cumplimiento de metas mediante indicadores de impacto, eficiencia y eficacia.",
+    "Gestionar la aprobación y, si procede, el ajuste del Plan Operativo Anual de Inversiones.",
+    "Semaforizar el cumplimiento de metas por plan, programa y proyecto para revalidar acciones de cumplimiento.",
+    "Desempeñar las demás funciones asignadas conforme a la naturaleza del empleo."
+  ],
+  "requirements": {
+    "education": [
+      "Profesional en Administración",
+      "Profesional en Economía",
+      "Profesional en Ingeniería de Sistemas, Telemática y afines",
+      "Profesional en Ingeniería Industrial y afines",
+      "Posgrado de especialización relacionado con las funciones del cargo"
+    ],
+    "experience": "30 meses de experiencia profesional relacionada",
+    "other": "Tarjeta o matrícula profesional vigente cuando la ley lo requiera"
+  },
+  "suggested_topics": [
+    "Planeación estratégica territorial",
+    "Plan de Desarrollo Departamental",
+    "Planeación y gestión educativa",
+    "Formulación y seguimiento de proyectos de inversión pública",
+    "Plan Indicativo, planes de acción y POAI",
+    "Indicadores de impacto, eficiencia y eficacia",
+    "Gestión de equipos de trabajo",
+    "Gestión pública y control de resultados"
+  ],
+  "source_status": "Perfil creado con información suministrada por el usuario. Las fuentes oficiales se relacionan en fuentes_oficiales.md y deben verificarse antes de generar contenido evaluable."
+}

@@ -12,6 +12,12 @@ from db.models import Competition, UserOPEC
 from ui_utils import load_css, render_header, render_custom_sidebar
 
 from core.auth import AuthManager
+from core.competition_catalog import (
+    load_catalog_profiles,
+    profile_for_competition,
+    sync_catalog_competitions,
+)
+from core.opec_pdf import extract_opec_profile
 
 # pass # Removed st.set_page_config
 
@@ -39,6 +45,9 @@ def get_active_opec(competition_id=None):
 
 u_id = st.session_state.get("user_id")
 competition_db = SessionLocal()
+sync_catalog_competitions(competition_db)
+competition_db.commit()
+catalog_profiles = load_catalog_profiles()
 competitions = competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]
@@ -58,6 +67,19 @@ selected_competition_id = st.selectbox(
 selected_competition = competition_db.get(Competition, selected_competition_id) if selected_competition_id else None
 competition_db.close()
 active_opec = get_active_opec(selected_competition_id)
+
+selected_catalog_profile = profile_for_competition(
+    catalog_profiles,
+    selected_competition.code if selected_competition else None,
+)
+if selected_catalog_profile:
+    position = selected_catalog_profile["position"]
+    st.info(
+        f"Perfil local disponible: OPEC {position['opec_number']} — "
+        f"{position['denomination']} grado {position['grade']} ({position['dependency']}). "
+        "Puedes reemplazarlo o confirmarlo cargando el PDF original de SIMO."
+    )
+
 if active_opec and not active_opec.is_active:
     if st.button("Usar este concurso y cargo", type="primary", use_container_width=True):
         activate_db = SessionLocal()
@@ -113,85 +135,68 @@ if st.session_state.get("debug_mode"):
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📋 Datos del Empleo")
-    with st.form("opec_form"):
-        opec_number = st.text_input("Número OPEC", value=active_opec.opec_number if active_opec else "", placeholder="Ej: 198273")
-        job_title = st.text_input("Nombre del Cargo", value=active_opec.job_title if active_opec else "", placeholder="Ej: Gestor II - Auditoría")
-        # Mikey v8.1: Safe Selectbox Indexing
-        options_level = ["Profesional", "Técnico", "Asistencial"]
+    st.subheader("📄 Cargar ficha del empleo")
+    st.caption("Sube el PDF original descargado de SIMO. La aplicación extrae los datos y te muestra una vista previa antes de guardarlos.")
+    uploaded_pdf = st.file_uploader("Ficha del empleo (PDF)", type=["pdf"], key="opec_pdf_upload")
+
+    if uploaded_pdf:
         try:
-            current_index = options_level.index(active_opec.level) if active_opec and active_opec.level in options_level else 0
-        except ValueError:
-            current_index = 0
-            
-        level = st.selectbox("Nivel Jerárquico", options_level, index=current_index)
-        
-        purpose = st.text_area("Propósito del Empleo", value=active_opec.purpose if active_opec else "", height=100)
-        
-        raw_functions = ""
-        if active_opec and active_opec.functions:
-            if isinstance(active_opec.functions, list):
-                raw_functions = "\n".join(active_opec.functions)
+            extracted = extract_opec_profile(uploaded_pdf.getvalue())
+            required = ["opec_number", "job_title", "level", "purpose", "requirements"]
+            missing = [label for label in required if not extracted.get(label)]
+            if missing:
+                st.error("No se pudieron identificar todos los datos obligatorios. Sube el PDF original de SIMO con texto seleccionable.")
             else:
-                raw_functions = str(active_opec.functions)
-                
-        functions_text = st.text_area("Funciones (una por línea)", value=raw_functions, height=200, help="Copia y pega el manual de funciones aquí.")
-        
-        requirements = st.text_area("Requisitos de Estudio y Experiencia", value=active_opec.requirements if active_opec else "", height=100)
-        
-        submit = st.form_submit_button("🎯 Guardar y Enfocar Simulador", type="primary", use_container_width=True)
-        
-        if submit:
-            if not opec_number or not job_title:
-                st.error("Por favor completa el Número OPEC y el Nombre del Cargo.")
-            else:
-                db = SessionLocal()
-                try:
+                st.success(f"Se identificó la OPEC {extracted['opec_number']}. Revisa la extracción antes de confirmarla.")
+                st.markdown(f"**Cargo:** {extracted['job_title']}  ")
+                st.markdown(f"**Nivel:** {extracted['level']}  ")
+                st.markdown(f"**Funciones detectadas:** {len(extracted['functions'])}")
+                with st.expander("Ver datos extraídos", expanded=False):
+                    st.write(extracted["purpose"])
+                    st.write(extracted["functions"])
+                    st.write(extracted["requirements"])
+
+                if st.button("Confirmar y enfocar simulador", type="primary", use_container_width=True):
                     if selected_competition_id is None:
                         st.error("Primero selecciona o registra un concurso.")
-                        st.stop()
-                    # Deactivate others for THIS user
-                    db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
-                    
-                    # Process functions into JSON list
-                    func_list = [f.strip() for f in functions_text.split("\n") if f.strip()]
-                    
-                    # Check if this OPEC already exists FOR THIS USER
-                    existing = db.query(UserOPEC).filter_by(
-                        user_id=u_id, competition_id=selected_competition_id, opec_number=opec_number
-                    ).first()
-                    if existing:
-                        existing.job_title = job_title
-                        existing.level = level
-                        existing.purpose = purpose
-                        existing.functions = func_list
-                        existing.requirements = requirements
-                        existing.is_active = True
                     else:
-                        new_opec = UserOPEC(
-                            user_id=u_id,
-                            competition_id=selected_competition_id,
-                            opec_number=opec_number,
-                            job_title=job_title,
-                            level=level,
-                            purpose=purpose,
-                            functions=func_list,
-                            requirements=requirements,
-                            is_active=True
-                        )
-                        db.add(new_opec)
-                        print(f"✅ Created new OPEC for user {u_id}")
-                    
-                    db.commit()
-                    st.success(f"¡Configuración de OPEC {opec_number} guardada para usuario {u_id}!")
-                    st.session_state.pop("opec_onboarding", None)
-                    st.balloons()
-                    st.rerun()
-                except Exception as e:
-                    db.rollback()
-                    st.error(f"Error al guardar: {e}")
-                finally:
-                    db.close()
+                        db = SessionLocal()
+                        try:
+                            db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
+                            existing = db.query(UserOPEC).filter_by(
+                                user_id=u_id,
+                                competition_id=selected_competition_id,
+                                opec_number=extracted["opec_number"],
+                            ).first()
+                            values = {
+                                "job_title": extracted["job_title"],
+                                "level": extracted["level"],
+                                "purpose": extracted["purpose"],
+                                "functions": extracted["functions"],
+                                "requirements": extracted["requirements"],
+                                "is_active": True,
+                            }
+                            if existing:
+                                for field, value in values.items():
+                                    setattr(existing, field, value)
+                            else:
+                                db.add(UserOPEC(
+                                    user_id=u_id,
+                                    competition_id=selected_competition_id,
+                                    opec_number=extracted["opec_number"],
+                                    **values,
+                                ))
+                            db.commit()
+                            st.session_state.pop("opec_onboarding", None)
+                            st.success("Ficha cargada y concurso activado.")
+                            st.rerun()
+                        except Exception as exc:
+                            db.rollback()
+                            st.error(f"Error al guardar la ficha: {exc}")
+                        finally:
+                            db.close()
+        except ValueError as exc:
+            st.error(str(exc))
 
 with col2:
     st.subheader("🎯 Resumen y Gestión Multi-Cargo")
