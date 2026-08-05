@@ -1,5 +1,5 @@
 import streamlit as st
-import os, sys, json
+import os, sys, json, re
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -17,9 +17,40 @@ from core.competition_catalog import (
     profile_for_competition,
     sync_catalog_competitions,
 )
-from core.opec_pdf import extract_opec_profile_from_text
 
 # pass # Removed st.set_page_config
+
+def extract_opec_profile_from_text(text):
+    """Extrae los campos relevantes de una ficha copiada desde SIMO."""
+    if len(text.strip()) < 40:
+        raise ValueError("Pega el texto completo de la ficha de empleo de SIMO.")
+
+    def field(pattern):
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+
+    def section(start, end):
+        match = re.search(rf"{start}\s*[:\-]?\s*(.*?)(?=\s*{end}\b|\Z)", text, flags=re.IGNORECASE | re.DOTALL)
+        return match.group(1).strip() if match else ""
+
+    functions_raw = section(r"Funciones", r"Requisitos|Equivalencias|Vacantes")
+    matches = re.findall(r"(?:^|\n)\s*\d{1,2}\s*[\.)]\s*(.*?)(?=(?:\n\s*\d{1,2}\s*[\.)])|\Z)", functions_raw, flags=re.DOTALL)
+    functions = [re.sub(r"\s+", " ", value).strip() for value in matches if value.strip()]
+    if not functions and functions_raw:
+        functions = [re.sub(r"\s+", " ", functions_raw).strip()]
+
+    denomination = field(r"(?:Denominaci[oó]n|Nombre\s+del\s+Cargo)\s*:?[ \t]*(.*?)(?=\s+(?:Grado|C[oó]digo)\s*:|\n)")
+    grade = field(r"Grado\s*:?[ \t]*(\d+)")
+    opec_number = field(r"(?:N[uú]mero\s+)?OPEC\s*[:#]?\s*(\d{4,})")
+    job_title = " ".join(part for part in [denomination, f"Grado {grade}" if grade else ""] if part)
+    return {
+        "opec_number": opec_number,
+        "job_title": job_title or (f"Empleo OPEC {opec_number}" if opec_number else ""),
+        "level": field(r"Nivel\s*:?[ \t]*(.*?)(?=\s+(?:Denominaci[oó]n|Nombre\s+del\s+Cargo)\s*:|\n)"),
+        "purpose": re.sub(r"\s+", " ", section(r"Prop[oó]sito", r"Funciones|Requisitos|Equivalencias")).strip(),
+        "functions": functions,
+        "requirements": re.sub(r"\s+", " ", section(r"Requisitos", r"Equivalencias|Vacantes")).strip(),
+    }
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")
