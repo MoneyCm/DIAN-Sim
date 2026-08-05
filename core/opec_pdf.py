@@ -1,22 +1,8 @@
-"""Extraction of OPEC employment data from an uploaded PDF."""
+"""Extraction of OPEC employment data pasted from SIMO."""
 
 from __future__ import annotations
 
-from io import BytesIO
 import re
-
-from pypdf import PdfReader
-
-
-def extract_opec_profile(pdf_bytes: bytes) -> dict[str, str | list[str]]:
-    """Extract a profile from a text-based PDF (legacy upload support)."""
-    try:
-        reader = PdfReader(BytesIO(pdf_bytes))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    except Exception as exc:
-        raise ValueError("No fue posible leer el PDF. Verifica que no esté protegido o dañado.") from exc
-
-    return extract_opec_profile_from_text(text)
 
 
 def extract_opec_profile_from_text(text: str) -> dict[str, str | list[str]]:
