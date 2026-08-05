@@ -54,6 +54,17 @@ def is_legacy_territorial_12_duplicate(competition):
         char for char in unicodedata.normalize("NFD", competition.name.upper())
         if unicodedata.category(char) != "Mn"
     )
+
+
+def load_saved_opec_profile():
+    profile_path = os.path.join(
+        PROJECT_ROOT, "data", "concursos", "territorial_12_bolivar_opec_241130", "perfil_concurso.json"
+    )
+    try:
+        with open(profile_path, "r", encoding="utf-8") as source:
+            return json.load(source)
+    except (OSError, json.JSONDecodeError):
+        return None
     return (
         competition.code != "TERRITORIAL-12-BOLIVAR-2685"
         and "TERRITORIAL 12" in normalized
@@ -106,6 +117,44 @@ selected_competition_id = st.selectbox(
 selected_competition = competition_db.get(Competition, selected_competition_id) if selected_competition_id else None
 competition_db.close()
 active_opec = get_active_opec(selected_competition_id)
+
+saved_profile = load_saved_opec_profile()
+if (
+    saved_profile
+    and selected_competition
+    and selected_competition.code == saved_profile["competition"]["code"]
+    and not active_opec
+):
+    position = saved_profile["position"]
+    st.info(f"Ficha guardada disponible: OPEC {position['opec_number']} — {position['denomination']}.")
+    if st.button("Usar ficha guardada para mi cuenta", type="primary", use_container_width=True):
+        db = SessionLocal()
+        try:
+            db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
+            db.add(UserOPEC(
+                user_id=u_id,
+                competition_id=selected_competition_id,
+                opec_number=position["opec_number"],
+                job_title=f"{position['denomination']} Grado {position['grade']}",
+                level=position["level"],
+                purpose=saved_profile.get("purpose"),
+                functions=saved_profile.get("functions", []),
+                requirements="\n".join([
+                    *(f"Estudio: {item}" for item in saved_profile.get("requirements", {}).get("education", [])),
+                    f"Experiencia: {saved_profile.get('requirements', {}).get('experience', '')}",
+                    f"Otros: {saved_profile.get('requirements', {}).get('other', '')}",
+                ]),
+                is_active=True,
+            ))
+            db.commit()
+            st.session_state.pop("opec_onboarding", None)
+            st.success("Ficha asociada a tu cuenta de Google.")
+            st.rerun()
+        except Exception as exc:
+            db.rollback()
+            st.error(f"No se pudo asociar la ficha: {exc}")
+        finally:
+            db.close()
 
 if active_opec and not active_opec.is_active:
     if st.button("Usar este concurso y cargo", type="primary", use_container_width=True):
