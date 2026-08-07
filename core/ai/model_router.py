@@ -8,6 +8,23 @@ import time
 from typing import Optional, Type
 
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+def _setting(name: str) -> Optional[str]:
+    """Lee configuración local o Streamlit Secrets sin exponerla."""
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        import streamlit as st
+
+        return st.secrets.get(name)
+    except Exception:
+        return None
 
 
 class AIUnavailable(RuntimeError):
@@ -22,22 +39,43 @@ class ModelProfile(str, Enum):
 
 class ModelRouter:
     def __init__(self, *, client=None, provider: Optional[str] = None, db_factory=None):
-        self.provider = (provider or os.getenv("AI_PROVIDER") or os.getenv("LLM_PROVIDER") or "none").lower()
+        configured_provider = provider or _setting("AI_PROVIDER") or _setting("LLM_PROVIDER")
+        if not configured_provider:
+            if _setting("GEMINI_API_KEY"):
+                configured_provider = "gemini"
+            elif _setting("OPENAI_API_KEY"):
+                configured_provider = "openai"
+        self.provider = (configured_provider or "none").lower()
+        default_models = {
+            "gemini": {
+                ModelProfile.FAST: "gemini-3.6-flash",
+                ModelProfile.BALANCED: "gemini-3.6-flash",
+                ModelProfile.REASONING: "gemini-3.6-flash",
+            },
+            "openai": {
+                ModelProfile.FAST: "gpt-5.6-luna",
+                ModelProfile.BALANCED: "gpt-5.6-terra",
+                ModelProfile.REASONING: "gpt-5.6-sol",
+            },
+        }.get(self.provider, {})
         self.models = {
-            ModelProfile.FAST: os.getenv("MODEL_FAST", "gpt-5.6-luna"),
-            ModelProfile.BALANCED: os.getenv("MODEL_BALANCED", "gpt-5.6-terra"),
-            ModelProfile.REASONING: os.getenv("MODEL_REASONING", "gpt-5.6-sol"),
+            profile: _setting(f"MODEL_{profile.value}") or default_models.get(profile, "")
+            for profile in ModelProfile
         }
         self.db_factory = db_factory
         self.client = client
-        if self.client is None and self.provider == "openai" and os.getenv("OPENAI_API_KEY"):
+        if self.client is None and self.provider == "openai" and _setting("OPENAI_API_KEY"):
             from openai import OpenAI
 
-            self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            self.client = OpenAI(api_key=_setting("OPENAI_API_KEY"))
+        elif self.client is None and self.provider == "gemini" and _setting("GEMINI_API_KEY"):
+            from google import genai
+
+            self.client = genai.Client(api_key=_setting("GEMINI_API_KEY"))
 
     @property
     def available(self) -> bool:
-        return self.provider == "openai" and self.client is not None
+        return self.provider in {"openai", "gemini"} and self.client is not None
 
     def model_for(self, profile: ModelProfile) -> str:
         return self.models[ModelProfile(profile)]
@@ -73,18 +111,40 @@ class ModelRouter:
         try:
             if not self.available:
                 raise AIUnavailable("Proveedor de IA no configurado")
-            response = self.client.responses.parse(
-                model=model,
-                input=prompt,
-                text_format=schema,
-                reasoning={"effort": "low" if profile != ModelProfile.REASONING else "medium"},
-            )
-            parsed = response.output_parsed
+            if self.provider == "openai":
+                response = self.client.responses.parse(
+                    model=model,
+                    input=prompt,
+                    text_format=schema,
+                    reasoning={"effort": "low" if profile != ModelProfile.REASONING else "medium"},
+                )
+                parsed = response.output_parsed
+                usage = getattr(response, "usage", None)
+                input_tokens = getattr(usage, "input_tokens", None)
+                output_tokens = getattr(usage, "output_tokens", None)
+            elif self.provider == "gemini":
+                from google.genai import types
+
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_json_schema=schema.model_json_schema(),
+                    ),
+                )
+                parsed = getattr(response, "parsed", None)
+                if parsed is None and getattr(response, "text", None):
+                    parsed = schema.model_validate_json(response.text)
+                usage = getattr(response, "usage_metadata", None)
+                input_tokens = getattr(usage, "prompt_token_count", None)
+                output_tokens = getattr(usage, "candidates_token_count", None)
+            else:
+                raise AIUnavailable(f"Proveedor no compatible: {self.provider}")
             if parsed is None:
                 raise AIUnavailable("La IA no devolvió una salida estructurada")
-            usage = getattr(response, "usage", None)
-            input_tokens = getattr(usage, "input_tokens", None)
-            output_tokens = getattr(usage, "output_tokens", None)
+            if not isinstance(parsed, schema):
+                parsed = schema.model_validate(parsed)
             success = True
             return parsed
         except Exception as exc:

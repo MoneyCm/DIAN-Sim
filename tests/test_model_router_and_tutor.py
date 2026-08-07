@@ -37,6 +37,37 @@ class FakeResponses:
         )
 
 
+class FakeGeminiModels:
+    def __init__(self, parsed):
+        self.parsed = parsed
+        self.calls = []
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(
+            parsed=self.parsed,
+            text=None,
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=15,
+                candidates_token_count=9,
+            ),
+        )
+
+
+def test_gemini_dict_response_is_normalized_to_schema(monkeypatch):
+    monkeypatch.delenv("MODEL_FAST", raising=False)
+    models = FakeGeminiModels(evaluation().model_dump(mode="json"))
+    router = ModelRouter(provider="gemini", client=SimpleNamespace(models=models))
+    result = router.generate_structured(
+        task_type="test",
+        prompt="prompt",
+        schema=EvaluationResult,
+        profile=ModelProfile.FAST,
+    )
+    assert isinstance(result, EvaluationResult)
+    assert result.result.value == "partial"
+
+
 def test_router_uses_configured_profile_and_structured_schema(monkeypatch):
     monkeypatch.setenv("MODEL_BALANCED", "verified-balanced-model")
     responses = FakeResponses(evaluation())
@@ -60,6 +91,40 @@ def test_router_fails_cleanly_without_provider():
         router.generate_structured(
             task_type="test", prompt="prompt", schema=EvaluationResult
         )
+
+
+def test_router_uses_free_gemini_with_structured_output(monkeypatch):
+    monkeypatch.delenv("MODEL_BALANCED", raising=False)
+    models = FakeGeminiModels(evaluation())
+    router = ModelRouter(
+        provider="gemini",
+        client=SimpleNamespace(models=models),
+    )
+    result = router.generate_structured(
+        task_type="tutor_feedback",
+        prompt="prompt",
+        schema=EvaluationResult,
+        profile=ModelProfile.BALANCED,
+    )
+    assert result.result.value == "partial"
+    assert models.calls[0]["model"] == "gemini-3.6-flash"
+    assert (
+        models.calls[0]["config"].response_json_schema
+        == EvaluationResult.model_json_schema()
+    )
+
+
+def test_router_auto_detects_existing_gemini_key(monkeypatch):
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    for name in ("MODEL_FAST", "MODEL_BALANCED", "MODEL_REASONING"):
+        monkeypatch.delenv(name, raising=False)
+    router = ModelRouter(client=SimpleNamespace(models=FakeGeminiModels(evaluation())))
+    assert router.provider == "gemini"
+    assert router.available is True
+    assert router.model_for(ModelProfile.FAST) == "gemini-3.6-flash"
 
 
 def test_tutor_falls_back_when_ai_is_unavailable():

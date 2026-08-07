@@ -46,8 +46,11 @@ determinística ni insertar preguntas en el banco oficial.
 ## Modelos y fallback
 
 Los perfiles se configuran con `MODEL_FAST`, `MODEL_BALANCED` y
-`MODEL_REASONING`. En ausencia de proveedor, clave, respuesta válida o servicio,
-la sesión continúa con selección múltiple, persistencia, dominio y repaso.
+`MODEL_REASONING`. El router admite OpenAI y Gemini. Si encuentra una clave Gemini
+sin proveedor explícito, selecciona automáticamente `gemini-3.6-flash`, que cuenta
+con nivel gratuito sujeto a cuota. En ausencia de proveedor, clave, respuesta
+válida o servicio, la sesión continúa con selección múltiple, persistencia,
+dominio y repaso.
 
 La tabla `ai_call_logs` conserva proveedor, modelo, tarea, versión de prompt,
 tokens cuando están disponibles, latencia, resultado y fecha. No almacena

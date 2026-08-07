@@ -53,9 +53,10 @@ Las tablas se crean automáticamente en SQLite. También puede ejecutarse la mig
 .\.venv\Scripts\python.exe scripts\data\migrate_learning_v1.py
 ```
 
-El tutor funciona sin IA. Para enriquecer explicaciones configura `AI_PROVIDER=openai`,
-`OPENAI_API_KEY` y, opcionalmente, los tres perfiles `MODEL_FAST`, `MODEL_BALANCED`
-y `MODEL_REASONING`. Dominio, prioridad, repaso y selección nunca dependen del modelo.
+El tutor funciona sin IA. Para usar la cuota gratuita configura `AI_PROVIDER=gemini`,
+`GEMINI_API_KEY` y `gemini-3.6-flash` en los tres perfiles. Si existe una clave de
+Gemini y no se especifica proveedor, el router la detecta automáticamente. También
+admite OpenAI. Dominio, prioridad, repaso y selección nunca dependen del modelo.
 
 ## Estructura
 
