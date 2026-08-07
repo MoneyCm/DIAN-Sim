@@ -748,6 +748,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             # 1. Generate verified case triplets for the real exam
             from core.exam_format import is_official_functional_payload, official_question_groups
+            from core.opec_case_factory import build_fallback_opec_case, build_fallback_questions
             status.info("Generando hasta 10 casos tipo examen...")
             existing_case_rows = db.query(CaseStudy).filter(
                 CaseStudy.competition_id == selected_competition_id
@@ -756,15 +757,34 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 1 for case in existing_case_rows if official_question_groups(case)
             )
             for i in range(max(0, 10 - existing_cases)):
+                case_number = existing_cases + i + 1
                 try:
-                    case_data = gen.generate_case_study(
-                        topic=f"Caso {i+1}: {active_opec.job_title} - {active_opec.purpose}",
-                        num_questions=3,
-                        difficulty=2
+                    case_data = None
+                    source_context = (
+                        f"OPEC {active_opec.opec_number}. Propósito: {active_opec.purpose}. "
+                        f"Funciones: {active_opec.functions}."
                     )
-                    
-                    if not is_official_functional_payload(case_data):
-                        raise ValueError("El caso no cumple el formato de tres preguntas funcionales.")
+                    for attempt in range(2):
+                        try:
+                            candidate = gen.generate_case_study(
+                                topic=f"Caso {case_number}: {active_opec.job_title}",
+                                num_questions=3,
+                                difficulty=2,
+                                source_context=source_context,
+                            )
+                        except Exception as generation_exc:
+                            print(f"Case {case_number} AI attempt {attempt + 1}: {generation_exc}")
+                            candidate = None
+                            if "cuota" in str(generation_exc).lower() or "quota" in str(generation_exc).lower():
+                                break
+                        if is_official_functional_payload(candidate):
+                            case_data = candidate
+                            break
+                        if attempt == 0:
+                            status.warning(f"Caso {case_number} con formato incompleto; haciendo un segundo intento...")
+                    if case_data is None:
+                        case_data = build_fallback_opec_case(active_opec, case_number)
+                        status.info(f"Caso {case_number} completado desde la ficha OPEC.")
 
                     # Save Case
                     new_case = CaseStudy(
@@ -806,8 +826,9 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                     
                     db.commit()
                 except Exception as e:
-                    print(f"Error generating case {i}: {e}")
-                    status.warning(f"Error en caso {i+1}, reintentando...")
+                    db.rollback()
+                    print(f"Error generating case {case_number}: {e}")
+                    status.error(f"No se pudo guardar el caso {case_number}: {e}")
             
             current_step += 1
             progress.progress(25, text="Casos generados. Iniciando preguntas funcionales...")
@@ -822,9 +843,17 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 Question.competition_id == selected_competition_id,
                 Question.track == "FUNCIONAL",
             ).count()
-            q_func = gen.generate_from_text(
-                func_text, count=max(0, 60 - existing_functional), difficulty=2, user_id=u_id
-            ) if existing_functional < 60 else []
+            functional_needed = max(0, 60 - existing_functional)
+            try:
+                q_func = gen.generate_from_text(
+                    func_text, count=functional_needed, difficulty=2, user_id=u_id
+                ) if functional_needed else []
+            except Exception as exc:
+                status.info("Cuota de IA no disponible; completando preguntas funcionales desde la ficha OPEC.")
+                print(f"Functional AI fallback: {exc}")
+                q_func = build_fallback_questions(
+                    active_opec, "FUNCIONAL", functional_needed, existing_functional
+                )
             
             for q in q_func:
                 new_q = Question(
@@ -855,9 +884,17 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 Question.competition_id == selected_competition_id,
                 Question.track == "COMPORTAMENTAL",
             ).count()
-            q_behav = gen.generate_from_text(
-                behav_text, count=max(0, 20 - existing_behavioral), difficulty=2, user_id=u_id
-            ) if existing_behavioral < 20 else []
+            behavioral_needed = max(0, 20 - existing_behavioral)
+            try:
+                q_behav = gen.generate_from_text(
+                    behav_text, count=behavioral_needed, difficulty=2, user_id=u_id
+                ) if behavioral_needed else []
+            except Exception as exc:
+                status.info("Cuota de IA no disponible; completando preguntas comportamentales localmente.")
+                print(f"Behavioral AI fallback: {exc}")
+                q_behav = build_fallback_questions(
+                    active_opec, "COMPORTAMENTAL", behavioral_needed, existing_behavioral
+                )
             
             for q in q_behav:
                 new_q = Question(
@@ -888,9 +925,17 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 Question.competition_id == selected_competition_id,
                 Question.topic == "Integridad y Valores",
             ).count()
-            q_int = gen.generate_from_text(
-                int_text, count=max(0, 20 - existing_integrity), difficulty=2, user_id=u_id
-            ) if existing_integrity < 20 else []
+            integrity_needed = max(0, 20 - existing_integrity)
+            try:
+                q_int = gen.generate_from_text(
+                    int_text, count=integrity_needed, difficulty=2, user_id=u_id
+                ) if integrity_needed else []
+            except Exception as exc:
+                status.info("Cuota de IA no disponible; completando integridad y valores localmente.")
+                print(f"Integrity AI fallback: {exc}")
+                q_int = build_fallback_questions(
+                    active_opec, "INTEGRIDAD", integrity_needed, existing_integrity
+                )
              
             for q in q_int:
                 new_q = Question(

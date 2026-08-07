@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="250" viewBox="0 0 720 250" role="img" aria-label="ADRES - Gestión tecnológica">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#075985"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="250" rx="30" fill="url(#bg)"/>
+  <g transform="translate(48 40)" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M80 8v38M61 27h38"/>
+    <path d="M24 79c0-29 23-52 52-52h8c29 0 52 23 52 52 0 43-56 82-56 82S24 122 24 79z" opacity=".97"/>
+    <circle cx="80" cy="91" r="22"/>
+    <path d="M102 91h44l15-22 18 44 18-22h32"/>
+  </g>
+  <text x="310" y="106" fill="#fff" font-family="Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="4">ADRES</text>
+  <text x="312" y="151" fill="#d5f5ef" font-family="Arial, sans-serif" font-size="24">Gestión tecnológica para la salud</text>
+  <path d="M312 174h330" stroke="#67e8f9" stroke-width="5" stroke-linecap="round"/>
+</svg>

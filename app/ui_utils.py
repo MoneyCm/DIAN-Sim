@@ -40,6 +40,7 @@ def render_header(title: str = None, subtitle: str = None):
             competition_logos = {
                 "TERRITORIAL-12-BOLIVAR-2685": "territorial12-bolivar.png",
                 "ALIMENTACION-ESCOLAR-ABIERTO": "alimentacion-escolar.png",
+                "ADRES-ABIERTO": "adres.svg",
             }
             if competition:
                 logo_name = competition_logos.get(competition.code, logo_name)
@@ -52,12 +53,13 @@ def render_header(title: str = None, subtitle: str = None):
                 import base64
                 with open(logo_path, "rb") as image_file:
                     encoded_string = base64.b64encode(image_file.read()).decode()
+                image_mime = "image/svg+xml" if logo_name.endswith(".svg") else "image/png"
                 
                 # Use HTML to make it clickable (Main Page Redirect)
                 st.markdown(
                     f"""
                     <a href="/" target="_self">
-                        <img src="data:image/png;base64,{encoded_string}" width="280" style="margin-bottom: 10px; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <img src="data:{image_mime};base64,{encoded_string}" width="280" style="margin-bottom: 10px; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     </a>
                     """,
                     unsafe_allow_html=True
