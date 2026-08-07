@@ -620,12 +620,26 @@ with col2:
                     if api_key:
                         model_name = st.session_state.get("current_model")
                         gen = LLMGenerator(current_provider, api_key, model_name=model_name)
-                        q_data = {"stem": question.stem, "options_json": question.options_json, "correct_key": question.correct_key, "rationale": question.rationale}
-                        st.session_state["tutor_explanation"] = gen.explain_question(q_data)
-                    else: st.warning(f"⚠️ API Key de {current_provider} no configurada.")
-                except Exception as e: st.error(f"Error: {e}")
+                        q_data = {
+                            "competition": f"{question.topic} · {question.competency}",
+                            "stem": question.stem,
+                            "options_json": question.options_json,
+                            "selected_key": selected_key,
+                            "rationale": question.rationale,
+                            "source_refs": question.source_refs,
+                        }
+                        st.session_state["tutor_explanation"] = gen.explain_socratically(q_data)
+                    else:
+                        st.session_state["tutor_explanation"] = fallback_hint
+                except Exception:
+                    st.session_state["tutor_explanation"] = fallback_hint
     if st.session_state.get("tutor_explanation"):
-        st.info(st.session_state["tutor_explanation"])
+        st.markdown("#### Orientación socrática")
+        st.markdown(
+            f"<div style='padding:16px 18px;border:1px solid #cbd5e1;border-radius:12px;"
+            f"background:#f8fafc;line-height:1.65'>{escape_html(st.session_state['tutor_explanation'])}</div>",
+            unsafe_allow_html=True,
+        )
 
 with col3:
     current_time = time.time()
