@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import uuid
 
-from db.models import Question
+from db.models import CaseStudy, Question
 
 
 COMPETITION_CODE = "ALIMENTACION-ESCOLAR-ABIERTO"
 TARGET_COUNT = 100
+ADVANCED_CASE_COUNT = 10
+ADVANCED_QUESTION_COUNT = 30
 
 PETI = "UApA, Plan Estratégico de Tecnologías de Información (PETI) 2024-2026, versión 2026"
 MRAE = "MinTIC, Marco de Referencia de Arquitectura Empresarial (MRAE)"
@@ -37,6 +39,20 @@ SCENARIOS = [
     ("Proveedores TI", "Un proveedor reporta avance por horas trabajadas, aunque los entregables no funcionan.", "Controlar resultados mediante entregables verificables, niveles de servicio, seguridad, conocimiento y aceptación.", "Informes de pruebas, actas de aceptación, SLA, hallazgos y plan de transferencia.", "Porcentaje de entregables aceptados sin defectos críticos.", "Pagar actividad sin recibir capacidad operativa ni conocimiento sostenible.", FICHA),
     ("Adopción tecnológica", "Se propone adoptar una tecnología de moda sin caso de uso ni evaluación de riesgos.", "Ejecutar vigilancia, caso de negocio y piloto controlado con criterios de valor, interoperabilidad, costo, seguridad y salida.", "Matriz comparativa, concepto de arquitectura y resultados medibles del piloto.", "Porcentaje de pilotos que demuestran valor antes de escalar.", "Crear dependencia tecnológica y costos sin beneficio comprobado.", FICHA),
     ("Uso y apropiación", "Se despliega una nueva herramienta, pero los usuarios continúan usando hojas personales.", "Caracterizar actores y brechas, gestionar el cambio, formar por roles, acompañar y medir adopción efectiva.", "Plan de apropiación, materiales, asistencia, retroalimentación y métricas de uso.", "Porcentaje de usuarios objetivo activos y procesos ejecutados en la herramienta.", "Confundir instalación con transformación y no obtener los beneficios esperados.", PETI),
+]
+
+
+ADVANCED_CASES = [
+    ("Integración y calidad de SiPAE", "La Subdirección de Información recibe informes contradictorios sobre beneficiarios del PAE. SigePAE conserva identificadores territoriales, una nueva solución usa documentos sin normalizar y el tablero directivo suma registros de ambas fuentes. El proveedor propone corregir manualmente el tablero antes de cada comité. No existe responsable formal del dato ni reglas documentadas de conciliación.", "Detener la publicación como dato certificado, definir responsables, identificadores maestros, reglas de calidad y linaje, y corregir la integración desde la fuente.", "Diccionario y linaje aprobados, reporte de duplicados y conciliación reproducible entre fuentes.", "Porcentaje de registros críticos únicos, completos y conciliados.", "Institucionalizar ajustes manuales que ocultan el problema y producen decisiones no reproducibles.", "Arquitectura de información", PETI),
+    ("Modernización de un sistema crítico", "Un sistema misional presenta fallas, pero soporta integraciones no documentadas con varias entidades. La dirección solicita reemplazarlo en tres meses. El proveedor nuevo propone apagarlo al liberar la primera versión y migrar únicamente los datos del último año. Las áreas usuarias no han validado procesos ni criterios de aceptación.", "Caracterizar dependencias y datos, definir arquitectura de transición, migración verificable, pruebas integrales y reversión antes del retiro gradual.", "Catálogo de integraciones, plan de migración, resultados de pruebas, conciliación y plan de reversión.", "Porcentaje de integraciones y datos críticos validados antes del corte.", "Interrumpir servicios, perder información histórica y descubrir dependencias después del apagado.", "Sistemas de información", MRAE),
+    ("Incidente de seguridad en producción", "La mesa de servicio recibe alertas de accesos atípicos a una base con información personal. Un administrador reinicia el servidor para recuperar rendimiento y propone borrar los registros antiguos. Aún no se conoce el alcance, no se ha informado al responsable de seguridad y el servicio continúa expuesto.", "Activar el procedimiento de incidentes: contener sin destruir evidencia, preservar registros, escalar, analizar alcance, erradicar, recuperar y documentar.", "Línea de tiempo, registros preservados, alcance, decisiones de contención y lecciones aprendidas.", "Tiempo de detección, contención y recuperación, junto con recurrencia del incidente.", "Destruir evidencia, ampliar la exposición y omitir obligaciones de gestión y comunicación.", "Seguridad y privacidad", PETI),
+    ("Contratación de nube", "La entidad evalúa trasladar un servicio crítico a nube. La oferta más barata no especifica ubicación y portabilidad de datos, recuperación, salida, subcontratistas ni atención de incidentes. El área solicitante quiere adjudicar por precio y definir esos aspectos durante la ejecución.", "Evaluar riesgos y arquitectura, y exigir antes de contratar requisitos de seguridad, continuidad, niveles de servicio, portabilidad, reversibilidad y responsabilidades.", "Matriz de requisitos y riesgos, evaluación técnica, SLA y plan de salida contractual.", "Porcentaje de requisitos críticos cubiertos y probados por el proveedor.", "Crear dependencia del proveedor y carecer de recuperación, control o salida viable.", "Servicios tecnológicos y proveedores", FICHA),
+    ("Tablero analítico para inspección", "Se solicita un tablero que priorice alertas para inspección y vigilancia. El prototipo usa una fórmula creada por el proveedor, mezcla datos de fechas distintas y no permite explicar por qué una entidad territorial aparece en riesgo alto. La dirección desea publicarlo por la urgencia operativa.", "Definir el propósito decisorio, validar fuentes y cortes, documentar la fórmula, probar sesgos y calidad, y habilitar trazabilidad antes del uso.", "Ficha de indicadores, versión del modelo, fuentes, pruebas de calidad y validación de usuarios responsables.", "Porcentaje de alertas trazables a datos certificados y reglas explicables.", "Orientar actuaciones con resultados opacos, desactualizados o sesgados.", "Analítica y gestión de información", FICHA),
+    ("Cambio urgente de software", "Una vulnerabilidad crítica exige modificar una aplicación. El proveedor propone aplicar el cambio directamente en producción porque el ambiente de pruebas está desactualizado. No hay copia reciente verificada ni procedimiento de reversión, aunque la ventana disponible es corta.", "Contener el riesgo, actualizar una prueba representativa, verificar respaldo y reversión, probar el cambio y autorizarlo con seguimiento reforzado.", "Solicitud de cambio, evaluación de riesgo, prueba, respaldo verificado, aprobación y resultado posterior.", "Porcentaje de cambios urgentes exitosos sin incidentes ni reversión fallida.", "Convertir una corrección de seguridad en indisponibilidad o pérdida de información.", "Gestión de cambios y desarrollo seguro", PETI),
+    ("Arquitectura empresarial fragmentada", "Tres áreas presentan proyectos: una aplicación móvil, una plataforma documental y un nuevo lago de datos. Todos solicitan presupuesto por separado, comparten usuarios e información, pero emplean tecnologías incompatibles. Ninguno identifica capacidades institucionales ni reutilización de servicios existentes.", "Evaluarlos como portafolio, mapear capacidades y datos compartidos, definir arquitectura objetivo, principios y hoja de ruta incremental.", "Mapa de capacidades, catálogos, arquitectura objetivo, brechas, dependencias y hoja de ruta priorizada.", "Porcentaje de iniciativas alineadas con arquitectura objetivo y componentes reutilizables.", "Financiar silos incompatibles y multiplicar costos de operación e integración.", "Arquitectura empresarial", MRAE),
+    ("Continuidad del ecosistema", "Durante una interrupción de conectividad, el equipo descubre que el procedimiento de continuidad solo cubre servidores, pero no identidad, red, integraciones ni personal clave. Las copias existen, aunque nunca se han restaurado. El servicio tiene un RTO declarado sin análisis de impacto.", "Realizar análisis de impacto integral, validar dependencias, acordar RTO/RPO realistas y ejecutar pruebas de restauración y continuidad de extremo a extremo.", "BIA, mapa de dependencias y resultados de ejercicios que demuestren RTO y RPO.", "Porcentaje de servicios críticos recuperados dentro de objetivos probados.", "Confiar en copias no verificadas y planes parciales que fallan durante una contingencia real.", "Continuidad de servicios TI", PETI),
+    ("Adopción de inteligencia artificial", "Un proveedor ofrece clasificar automáticamente solicitudes ciudadanas mediante IA y usar los mensajes históricos para entrenar. No explica calidad, tratamiento de datos personales, revisión humana, errores por categoría ni posibilidad de retirar la solución. Se promete reducir tiempos en 60 %.", "Delimitar caso de uso y datos, evaluar privacidad, seguridad, calidad y sesgos, diseñar supervisión humana y ejecutar un piloto con criterios de salida.", "Evaluación de impacto, conjunto de prueba, métricas por categoría, controles humanos y resultados del piloto.", "Precisión y tasa de error por categoría, con porcentaje de decisiones revisadas cuando corresponda.", "Escalar decisiones erróneas u opacas y tratar datos sin controles suficientes.", "Tecnologías emergentes", FICHA),
+    ("Apropiación y valor", "Se implementó una herramienta de gestión de proyectos, pero solo el equipo TI la utiliza. Las áreas continúan enviando avances por correo porque la configuración no refleja sus flujos y la capacitación fue una demostración general. El proveedor reporta éxito porque todas las licencias fueron activadas.", "Analizar actores y brechas, ajustar flujos prioritarios, formar por rol, acompañar el cambio y medir uso efectivo y resultados.", "Línea base, plan de cambio, configuración validada, métricas de uso y retroalimentación de usuarios.", "Porcentaje de proyectos gestionados de extremo a extremo y usuarios activos por rol.", "Medir licencias en vez de adopción y mantener procesos paralelos sin beneficios institucionales.", "Uso y apropiación", PETI),
 ]
 
 
@@ -80,6 +96,32 @@ def build_questions():
     return rows
 
 
+def build_advanced_case_questions():
+    """Construye 10 casos extensos con tres preguntas avanzadas por caso."""
+    cases = []
+    for case_index, (title, text, action, evidence, indicator, risk, domain, source) in enumerate(ADVANCED_CASES):
+        prompts = [
+            ("¿Cuál debe ser la primera decisión técnica del Profesional Especializado?", action,
+             "Aceptar la alternativa más rápida y documentar sus efectos cuando termine la ejecución.",
+             "Trasladar toda la decisión al proveedor porque conoce la tecnología.",
+             f"La respuesta integra gobierno, riesgo y trazabilidad: {action}"),
+            ("¿Cuál evidencia ofrece el soporte más sólido para autorizar la actuación?", evidence,
+             "Un correo que indique que el equipo está de acuerdo, sin anexos técnicos.",
+             "La presentación comercial de la solución propuesta.",
+             f"La decisión debe sustentarse en evidencia verificable: {evidence}"),
+            ("¿Cuál indicador es más pertinente para verificar el resultado?", indicator,
+             "Número de reuniones realizadas durante el proyecto.",
+             "Cantidad total de mensajes enviados por el equipo.",
+             f"El indicador se relaciona directamente con el resultado: {indicator}"),
+        ]
+        questions = []
+        for prompt_index, (stem, correct, wrong_1, wrong_2, rationale) in enumerate(prompts):
+            options, key = _options(correct, wrong_1, wrong_2, (case_index + prompt_index + 1) % 3)
+            questions.append({"stem": stem, "options": options, "correct": key, "rationale": rationale})
+        cases.append({"title": title, "text": text, "domain": domain, "source": source, "questions": questions})
+    return cases
+
+
 def seed_questions(db, competition_id: int) -> int:
     """Inserta el banco de forma idempotente y devuelve cuántas filas creó."""
     created = 0
@@ -112,3 +154,60 @@ def seed_questions(db, competition_id: int) -> int:
         created += 1
     db.commit()
     return created
+
+
+def seed_advanced_cases(db, competition_id: int) -> int:
+    """Inserta casos avanzados y sus preguntas de forma idempotente."""
+    created = 0
+    for case_data in build_advanced_case_questions():
+        case = db.query(CaseStudy).filter(
+            CaseStudy.competition_id == competition_id,
+            CaseStudy.title == case_data["title"],
+        ).first()
+        if case is None:
+            case = CaseStudy(competition_id=competition_id, title=case_data["title"],
+                             text=case_data["text"], difficulty=3, topic=case_data["domain"])
+            db.add(case)
+            db.flush()
+        for row in case_data["questions"]:
+            full_stem = f"Caso {case_data['title']}: {row['stem']}"
+            digest = hashlib.sha256(f"{COMPETITION_CODE}|advanced|{full_stem}".encode("utf-8")).hexdigest()
+            existing = db.query(Question).filter(
+                (Question.competition_id == competition_id) &
+                ((Question.hash_norm == digest) | (Question.stem == full_stem))
+            ).first()
+            if existing:
+                existing.case_id = case.id
+                existing.is_verified = True
+                existing.quality_report = {"review": "source_grounded", "bank": COMPETITION_CODE}
+                continue
+            db.add(Question(
+                competition_id=competition_id, case_id=case.id, question_id=str(uuid.uuid4()),
+                track="FUNCIONAL", competency="Análisis y decisión en gestión de TI",
+                topic=f"UApA - {case_data['domain']}", macro_dominio="Casos integrados de arquitectura y gestión TI",
+                micro_competencia=case_data["domain"], difficulty=3, question_type="SITUATIONAL",
+                stem=full_stem, options_json=row["options"], correct_key=row["correct"],
+                rationale=row["rationale"], source_refs=case_data["source"], hash_norm=digest,
+                is_verified=True, quality_report={"review": "source_grounded", "bank": COMPETITION_CODE},
+            ))
+            created += 1
+    db.commit()
+    return created
+
+
+def remove_obsolete_advanced_questions(db, competition_id: int) -> int:
+    """Retira la cuarta pregunta del prototipo para conservar tripletas tipo GOA."""
+    case_titles = [case[0] for case in ADVANCED_CASES]
+    case_ids = [row[0] for row in db.query(CaseStudy.id).filter(
+        CaseStudy.competition_id == competition_id,
+        CaseStudy.title.in_(case_titles),
+    ).all()]
+    if not case_ids:
+        return 0
+    deleted = db.query(Question).filter(
+        Question.competition_id == competition_id,
+        Question.case_id.in_(case_ids),
+        Question.stem.contains("¿Cuál es el riesgo principal de aceptar la propuesta inmediata"),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return deleted

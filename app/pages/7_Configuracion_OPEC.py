@@ -16,6 +16,7 @@ from core.competitions import ensure_builtin_competitions
 from core.competition_catalog import is_hidden_catalog_duplicate, load_catalog_profiles
 from core.question_banks.alimentacion_escolar import (
     TARGET_COUNT as ALIMENTACION_ESCOLAR_TARGET,
+    seed_advanced_cases as seed_alimentacion_escolar_advanced_cases,
     seed_questions as seed_alimentacion_escolar_questions,
 )
 
@@ -399,10 +400,14 @@ if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-A
         seed_db = SessionLocal()
         try:
             created = seed_alimentacion_escolar_questions(seed_db, selected_competition_id)
+            advanced_created = seed_alimentacion_escolar_advanced_cases(seed_db, selected_competition_id)
             total = seed_db.query(Question).filter(
                 Question.competition_id == selected_competition_id
             ).count()
-            st.success(f"Se agregaron {created} preguntas. Banco actual de UApA: {total} preguntas.")
+            st.success(
+                f"Se agregaron {created} preguntas funcionales y {advanced_created} de casos avanzados. "
+                f"Banco actual de UApA: {total} preguntas."
+            )
         except Exception as exc:
             seed_db.rollback()
             st.error(f"No se pudo completar el banco UApA: {exc}")

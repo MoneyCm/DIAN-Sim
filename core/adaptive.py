@@ -397,11 +397,39 @@ def select_questions_for_simulation(
     n: int = 20,
 ) -> List[Question]:
     """Selector adaptativo general usado por los simulacros configurables."""
+    # Los casos verificados se mantienen como tripletas completas, como en el
+    # formato GOA, antes de completar el cupo con preguntas adaptativas sueltas.
+    from core.exam_format import official_question_groups
+
+    selected = []
+    selected_ids = set()
+    seen_cases = set()
+    case_groups = []
+    eligible_ids = {question.question_id for question in all_questions}
+    for question in all_questions:
+        case = getattr(question, "case_study", None)
+        case_id = getattr(case, "id", None)
+        if not case_id or case_id in seen_cases:
+            continue
+        seen_cases.add(case_id)
+        for group in official_question_groups(case):
+            if {item.question_id for item in group}.issubset(eligible_ids):
+                case_groups.append(group)
+    random.shuffle(case_groups)
+    for group in case_groups:
+        if len(selected) + len(group) > n:
+            continue
+        selected.extend(group)
+        selected_ids.update(question.question_id for question in group)
+
+    remaining_n = n - len(selected)
     weak_questions = []
     medium_questions = []
     strong_questions = []
 
     for question in all_questions:
+        if question.question_id in selected_ids:
+            continue
         key = (question.track, question.competency, question.topic)
         skill = skills_map.get(key)
         mastery = skill.mastery_score if skill else 0.0
@@ -413,20 +441,20 @@ def select_questions_for_simulation(
         else:
             strong_questions.append(question)
 
-    n_weak = int(n * 0.60)
-    n_medium = int(n * 0.25)
+    n_weak = int(remaining_n * 0.60)
+    n_medium = int(remaining_n * 0.25)
 
     def sample_safe(pool, count):
         return random.sample(pool, min(len(pool), count))
 
-    selected = sample_safe(weak_questions, n_weak)
-    remaining_weak_slots = n_weak - len(selected)
-    selected.extend(sample_safe(medium_questions, n_medium + remaining_weak_slots))
-    selected.extend(sample_safe(strong_questions, n - len(selected)))
+    adaptive_selected = sample_safe(weak_questions, n_weak)
+    remaining_weak_slots = n_weak - len(adaptive_selected)
+    adaptive_selected.extend(sample_safe(medium_questions, n_medium + max(0, remaining_weak_slots)))
+    adaptive_selected.extend(sample_safe(strong_questions, remaining_n - len(adaptive_selected)))
 
-    if len(selected) < n:
-        remaining = [question for question in all_questions if question not in selected]
-        selected.extend(sample_safe(remaining, n - len(selected)))
+    if len(adaptive_selected) < remaining_n:
+        remaining = [question for question in all_questions if question not in selected and question not in adaptive_selected]
+        adaptive_selected.extend(sample_safe(remaining, remaining_n - len(adaptive_selected)))
 
-    random.shuffle(selected)
-    return selected
+    # No barajar internamente las tripletas; cada caso debe aparecer seguido.
+    return selected + adaptive_selected
