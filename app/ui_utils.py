@@ -181,20 +181,25 @@ def render_custom_sidebar():
             # Badge de Pro mikey v4.0
             pro_badge = '<div style="background: linear-gradient(90deg, #FFD700, #FFA500); color: black; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: 900; margin-top: 5px; display: inline-block;">✨ USUARIO PRO</div>' if is_pro else ""
                 
-            st.sidebar.markdown(f"""
-            <div class="dian-card" style='padding: 20px; text-align: center; margin-bottom: 5px; border-top: 3px solid {rank["color"]};'>
-                <div style='font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px;'>Rango Actual</div>
-                <div style='font-size: 2.5rem; margin: 5px 0;'>{rank["icon"]}</div>
-                <div style='font-size: 1.1rem; font-weight: 800; color: {rank["color"]}; margin-bottom: 5px;'>{rank["name"]}</div>
-                {pro_badge}
-                <div style='background: rgba(0,0,0,0.05); height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden;'>
-                    <div style='background: {rank["color"]}; width: {pct}%; height: 100%; transition: width 0.5s ease;'></div>
-                </div>
-                <div style='font-size: 0.7rem; color: var(--text-muted);'>
-                    {stats_s.total_points} / {next_rank["threshold"] if next_rank else "MAX"} PTS
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Mantener el fragmento en una sola línea evita que Markdown interprete
+            # los DIV anidados como bloques de código cuando ``pro_badge`` está vacío.
+            rank_card = (
+                f'<div class="dian-card" style="padding:20px;text-align:center;margin-bottom:5px;'
+                f'border-top:3px solid {rank["color"]};">'
+                '<div style="font-size:.7rem;color:var(--text-muted);font-weight:800;'
+                'text-transform:uppercase;letter-spacing:2px;">Rango Actual</div>'
+                f'<div style="font-size:2.5rem;margin:5px 0;">{rank["icon"]}</div>'
+                f'<div style="font-size:1.1rem;font-weight:800;color:{rank["color"]};'
+                f'margin-bottom:5px;">{rank["name"]}</div>{pro_badge}'
+                '<div style="background:rgba(0,0,0,.05);height:8px;border-radius:4px;'
+                'margin:10px 0;overflow:hidden;">'
+                f'<div style="background:{rank["color"]};width:{pct}%;height:100%;'
+                'transition:width .5s ease;"></div></div>'
+                '<div style="font-size:.7rem;color:var(--text-muted);">'
+                f'{stats_s.total_points} / {next_rank["threshold"] if next_rank else "MAX"} PTS'
+                '</div></div>'
+            )
+            st.sidebar.markdown(rank_card, unsafe_allow_html=True)
 
         if not is_pro:
             if st.sidebar.button("🚀 ¡Pasar a PRO!", use_container_width=True, type="primary", key="sidebar_pro_btn"):

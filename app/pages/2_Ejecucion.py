@@ -447,8 +447,9 @@ with st.container():
 if time_left <= 0:
     st.error("⏳ ¡TIEMPO AGOTADO! Finaliza el examen para guardar tus resultados.")
 
-# Question Card
-st.markdown('<div class="dian-card">', unsafe_allow_html=True)
+# Question content. Streamlit cannot wrap later widgets by opening an HTML DIV
+# in one markdown call and closing it in another; the opening tag rendered as
+# an empty styled card and produced a large blank space above the question.
 st.caption(f"Eje: {question.track} | Macro: {question.macro_dominio or 'General'}")
 st.markdown(f"### {question.topic}")
 
@@ -529,7 +530,6 @@ if is_daily_session and not is_answer_checked:
         st.session_state["confidences"][current_q_id] = selected_confidence
         save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
-st.markdown('</div>', unsafe_allow_html=True) 
 
 if is_daily_session:
     if st.button("⏸️ Pausar y salir", use_container_width=True):
@@ -684,7 +684,9 @@ with col3:
                 st.session_state.get("error_types") if is_daily_session else None,
             ):
                 db.close()
-                st.switch_page("pages/3_Resultados.py")
+                if "show_ejecucion_analisis" in st.session_state:
+                    st.session_state["show_ejecucion_analisis"] = False
+                st.rerun()
 
 db.close()
 

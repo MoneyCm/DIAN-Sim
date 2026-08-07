@@ -1,4 +1,4 @@
-
+﻿
 import streamlit as st
 import time
 import datetime
@@ -50,7 +50,8 @@ st.markdown("""
         font-size: 1.1rem;
         line-height: 1.6;
         color: #2c3e50;
-        height: 80vh;
+        height: auto;
+        max-height: 60vh;
         overflow-y: auto;
     }
     .timer-box {
@@ -66,11 +67,74 @@ st.markdown("""
         right: 20px;
         z-index: 999;
     }
+    .stAlert,
+    .stInfo,
+    .stSuccess,
+    .stWarning,
+    .stError,
+    .stExpander,
+    .stMetric,
+    .stProgress {
+        display: none !important;
+    }
     .question-box {
         margin-bottom: 30px;
         padding: 15px;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- FOCUS MODE CSS (Modo examen concentrado) ---
+st.markdown("""
+<style>
+    [data-testid="stHeader"] { visibility: hidden; }
+    [data-testid="stSidebar"] { display: none; }
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+    .main .block-container {
+        max-width: 760px !important;
+        padding-top: 0.7rem !important;
+    }
+    .stButton button {
+        border-radius: 10px !important;
+    }
+    div[data-testid="stColumn"],
+    div[data-testid="column"] {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    .case-text {
+        margin-bottom: 1rem !important;
+        font-size: 1.05rem !important;
+        line-height: 1.6 !important;
+        max-height: 62vh !important;
+    }
+    [data-testid="stRadio"] label {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+    .main .block-container > div > div {
+        gap: 0.6rem !important;
+    }
+    .timer-box {
+        top: 0.5rem !important;
+        right: 0.8rem !important;
+        position: sticky !important;
+        margin-bottom: 0.8rem !important;
+        z-index: 11 !important;
+    }
+    .stAlert,
+    .stInfo,
+    .stSuccess,
+    .stWarning,
+    .stError,
+    .stExpander,
+    .stMetric,
+    .stProgress {
+        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -337,18 +401,35 @@ if not st.session_state.exam_active:
         c, t = st.session_state.exam_score
         pct = (c/t)*100 if t > 0 else 0
         st.success(f"### Resultado Final: {c}/{t} ({pct:.1f}%)")
+        st.markdown(f"### Resumen de sesión")
+        st.caption(f"Correctas: {c} de {t} preguntas | Puntaje: {pct:.1f}%")
         
-        # --- RECOMENDACIONES DE ESTUDIO DETALLADAS (v7.0) ---
-        cases = st.session_state.get("last_exam_cases", [])
-        answers = st.session_state.get("last_user_answers", {})
+        wrong_count = t - c
+        st.markdown(f"**Errores:** {wrong_count}")
+        if wrong_count == 0:
+            st.success("¡Excelente. No hay fallos detectables en este intento.")
         
-        failed_details = {} # {topic_key: {"topic": topic, "track": track, "macro": macro, "refs": set(), "questions": []}}
+        if st.button("Ver análisis detallado y recomendaciones", use_container_width=True):
+            st.session_state["show_simulacro_analisis"] = True
+            st.rerun()
         
-        for c_idx, case in enumerate(cases):
-            if not _case_is_valid_for_dian(case): continue
-            for q in case.questions:
-                user_ans = answers.get(q.question_id)
-                if user_ans != q.correct_key:
+        if not st.session_state.get("show_simulacro_analisis", False):
+            st.markdown("Puedes continuar al siguiente simulacro y revisar después las áreas de mejora.")
+        else:
+            st.markdown("### 🧠 Análisis y recomendaciones")
+            # --- RECOMENDACIONES DE ESTUDIO DETALLADAS (v7.0) ---
+            cases = st.session_state.get("last_exam_cases", [])
+            answers = st.session_state.get("last_user_answers", {})
+            
+            failed_details = {}  # {topic_key: {...}}
+            
+            for c_idx, case in enumerate(cases):
+                if not _case_is_valid_for_dian(case):
+                    continue
+                for q in case.questions:
+                    user_ans = answers.get(q.question_id)
+                    if user_ans == q.correct_key:
+                        continue
                     # Determinar el tema/micro-competencia más específico
                     topic_name = q.micro_competencia or q.competency or q.topic or "Competencia General"
                     if topic_name.upper().startswith("OPEC") and "-" in topic_name:
@@ -376,7 +457,6 @@ if not st.session_state.exam_active:
                                 for r in ref_str.split('\n'):
                                     if r.strip():
                                         failed_details[topic_name]["refs"].add(r.strip())
-                                        
                     # Agregar detalles de la pregunta fallada
                     failed_details[topic_name]["questions"].append({
                         "stem": q.stem,
@@ -385,100 +465,40 @@ if not st.session_state.exam_active:
                         "correct_text": q.options_json.get(q.correct_key) if q.options_json else "",
                         "rationale": q.rationale
                     })
-                    
-        if failed_details:
-            st.warning("### 🎯 Recomendaciones de Estudio Personalizadas")
-            st.markdown("Basado en tus errores en este simulacro, te sugerimos repasar fuertemente los siguientes temas técnicos:")
             
             for t_name, detail in failed_details.items():
                 track_val = detail["track"].upper()
                 track_color = "#E60000" if "FUNCIONAL" in track_val else "#3b82f6" if "COMPORTAMENTAL" in track_val else "#10b981"
-                
                 refs_list = list(detail["refs"])
-                refs_html = ""
+                
+                st.markdown(f"**{detail['topic']}** — {detail['macro']} ({detail['track']})")
                 if refs_list:
-                    refs_html = f"""<div style="margin-top: 10px; padding: 10px 15px; background: rgba(255, 255, 255, 0.5); border-left: 4px solid #FFD700; border-radius: 6px;">
-<span style="font-size: 0.75rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Fuentes de Estudio Sugeridas:</span><br>
-<span style="font-size: 0.95rem; color: #1e293b; font-weight: 700;">{" | ".join(refs_list[:3])}</span>
-</div>"""
-                
-                st.markdown(f"""<div style="background: rgba(255, 255, 255, 0.75); border: 1px solid rgba(0,0,0,0.06); border-left: 6px solid {track_color}; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-<span style="background: {track_color}1A; color: {track_color}; padding: 3px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; border: 1px solid {track_color}33; text-transform: uppercase;">
-{detail["track"]}
-</span>
-<span style="font-size: 0.8rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
-Eje: {detail["macro"]}
-</span>
-</div>
-<h4 style="margin: 5px 0 10px 0; color: #0f172a; font-weight: 800; font-size: 1.15rem;">{detail["topic"]}</h4>
-{refs_html}
-</div>""", unsafe_allow_html=True)
-                
-                # Desglose de preguntas falladas en el expansor
-                with st.expander(f"🔍 Ver detalles de los fallos y concepto clave para: {t_name}", expanded=False):
-                    for q_idx, q_item in enumerate(detail["questions"]):
-                        stem_display = q_item["stem"]
-                        if "PREGUNTA:" in stem_display:
-                            try: stem_display = stem_display.split("PREGUNTA:")[1].strip()
-                            except: pass
-                        
-                        st.markdown(f"**Pregunta {q_idx+1}:** *{stem_display}*")
-                        st.markdown(f"❌ **Tu respuesta:** `{q_item['chosen']}` | ✅ **Respuesta correcta:** `{q_item['correct']}` — *{q_item['correct_text']}*")
-                        st.info(f"💡 **Explicación del Error / Concepto:** {q_item['rationale']}")
-                        st.write("---")
-                    
-                    if st.button(f"▶️ Practicar tema '{t_name}'", key=f"reforce_{t_name}", use_container_width=True):
-                        st.session_state["practice_recommended_topic"] = t_name
-                        st.switch_page("pages/1_Nuevo_Simulacro.py")
-        else:
-            if t > 0:
-                st.balloons()
-                st.success("¡Excelente! No tuviste fallos detectables en temas específicos. Estás listo.")
-
-        # --- REVIEW SECTION ---
-        st.markdown("### 📝 Revisión de Respuestas")
-        with st.expander("Ver Detalles y Retroalimentación", expanded=True):
-            cases = st.session_state.get("last_exam_cases", [])
-            answers = st.session_state.get("last_user_answers", {})
+                    st.caption("Fuentes sugeridas: " + " | ".join(refs_list[:3]))
+                for q_item in detail["questions"]:
+                    stem_display = q_item["stem"]
+                    if "PREGUNTA:" in stem_display:
+                        try:
+                            stem_display = stem_display.split("PREGUNTA:")[1].strip()
+                        except: 
+                            pass
+                    st.markdown(f"- Tú: `{q_item['chosen']}` | Correcta: `{q_item['correct']}`")
+                    if q_item["rationale"]:
+                        st.caption(q_item["rationale"])
+                if st.button(f"Practicar tema '{t_name}'", key=f"reforce_{t_name}", use_container_width=True):
+                    st.session_state["practice_recommended_topic"] = t_name
+                    st.switch_page("pages/1_Nuevo_Simulacro.py")
             
-            for c_idx, case in enumerate(cases):
-                if not _case_is_valid_for_dian(case):
-                    st.session_state.last_exam_cases = []
-                    st.session_state.last_user_answers = {}
-                    if "exam_score" in st.session_state:
-                        del st.session_state.exam_score
-                    st.warning("Se oculto un caso invalido almacenado en la sesion.")
-                    st.rerun()
-                st.markdown(f"#### 📂 Caso {c_idx+1}: {case.title}")
-                st.caption(case.text[:150] + "...") # Preview text
-                
-                for q in case.questions:
-                    user_ans = answers.get(q.question_id)
-                    is_ok = (user_ans == q.correct_key)
-                    icon = "✅" if is_ok else "❌"
-                    color = "green" if is_ok else "red"
-                    
-                    st.markdown(f"**{icon} Pregunta:** {q.stem}")
-                    st.markdown(f"**Tu respuesta:** {user_ans} | **Correcta:** {q.correct_key}")
-                    
-                    if not is_ok:
-                        st.markdown(f"Expected: {q.options_json.get(q.correct_key)}")
-                    
-                    st.info(f"💡 **Explicación:** {q.rationale}")
-                    # Fix NameError v5.4
-                    user_id = st.session_state.get("user_id")
-                    render_favorite_button(q.question_id, user_id)
-                    st.divider()
-        
-        # Cleanup score but keep review data until new exam starts
-        # del st.session_state.exam_score # Keep it for display
+            if st.button("Ocultar análisis detallado", use_container_width=True):
+                st.session_state["show_simulacro_analisis"] = False
+                st.rerun()
     
     if st.button("🔴 INICIAR EXAMEN AHORA", type="primary", use_container_width=True, disabled=official_cases == 0):
         # Clear previous review data
         if "last_exam_cases" in st.session_state: del st.session_state.last_exam_cases
         if "last_user_answers" in st.session_state: del st.session_state.last_user_answers
         if "exam_score" in st.session_state: del st.session_state.exam_score
+        if "show_simulacro_analisis" in st.session_state:
+            del st.session_state.show_simulacro_analisis
         start_exam()
 
 else:
@@ -565,59 +585,43 @@ else:
         st.warning("Se detecto un caso invalido y fue descartado antes de mostrarlo.")
         st.rerun()
     
-    st.progress((current_idx) / len(st.session_state.exam_cases))
-    st.caption(f"Caso {current_idx + 1} de {len(st.session_state.exam_cases)}")
+    st.markdown(f"<div style='font-weight:700; margin-bottom:0.8rem; color:#475569;'>Caso {current_idx + 1} de {len(st.session_state.exam_cases)}</div>", unsafe_allow_html=True)
     
-    # 3. Layout: Split Screen
-    col_text, col_questions = st.columns([1, 1.2], gap="large")
-    
-    with col_text:
-        st.markdown(f"### 📄 {current_case.title or 'Situación'}")
-        st.markdown(f'<div class="case-text">{escape_html(current_case.text)}</div>', unsafe_allow_html=True)
-        st.info("💡 Lee atentamente el texto. Todas las preguntas de la derecha se basan en esta información.")
+    # 3. Layout: One flow (text + questions + one action)
+    st.markdown(f"### 📄 {current_case.title or 'Situación'}")
+    st.markdown(f'<div class="case-text">{escape_html(current_case.text)}</div>', unsafe_allow_html=True)
 
-    with col_questions:
-        st.markdown("### ❓ Preguntas del Caso")
-        for i, q in enumerate(current_case.questions):
-            st.markdown(f"#### Pregunta {i+1}")
-            st.write(q.stem)
-            
-            opts = q.options_json
-            options_list = list(opts.keys())
-            
-            # Key for state
-            k = f"q_{q.question_id}"
-            
-            # Radio
-            # We need to map options to a display format
-            # Use index if already selected
-            prev_sel = st.session_state.user_answers.get(q.question_id)
-            idx = options_list.index(prev_sel) if prev_sel in options_list else None
-            
-            sel = st.radio(
-                "Seleccione una opción:",
-                options_list,
-                format_func=lambda x: f"{x}) {opts[x]}",
-                key=k,
-                index=idx,
-                label_visibility="collapsed"
-            )
-            
-            # Save selection immediately
-            if sel:
-                st.session_state.user_answers[q.question_id] = sel
-            
-            st.divider()
-        
-        # Navigation Buttons
-        c1, c2 = st.columns(2)
-        is_last = (current_idx == len(st.session_state.exam_cases) - 1)
-        
-        if c2.button("Siguiente Caso ➡️" if not is_last else "FINALIZAR EXAMEN 🏁", type="primary", use_container_width=True):
-            if is_last:
-                finish_exam()
-            else:
-                st.session_state.current_case_idx += 1
-                st.rerun()
+    st.markdown("### ❓ Preguntas del Caso")
+    for i, q in enumerate(current_case.questions):
+        st.markdown(f"#### Pregunta {i+1}")
+        st.write(q.stem)
 
+        opts = q.options_json
+        options_list = list(opts.keys())
+
+        # Key for state
+        k = f"q_{q.question_id}"
+
+        prev_sel = st.session_state.user_answers.get(q.question_id)
+        idx = options_list.index(prev_sel) if prev_sel in options_list else None
+
+        sel = st.radio(
+            "Seleccione una opción:",
+            options_list,
+            format_func=lambda x: f"{x}) {opts[x]}",
+            key=k,
+            index=idx,
+            label_visibility="collapsed"
+        )
+
+        if sel:
+            st.session_state.user_answers[q.question_id] = sel
+
+    is_last = (current_idx == len(st.session_state.exam_cases) - 1)
+    if st.button("Siguiente Caso ➡️" if not is_last else "FINALIZAR EXAMEN 🏁", type="primary", use_container_width=True):
+        if is_last:
+            finish_exam()
+        else:
+            st.session_state.current_case_idx += 1
+            st.rerun()
 

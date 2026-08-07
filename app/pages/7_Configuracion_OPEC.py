@@ -401,10 +401,32 @@ if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-A
         current_total = seed_db.query(Question).filter(
             Question.competition_id == selected_competition_id
         ).count()
+        current_functional = seed_db.query(Question).filter(
+            Question.competition_id == selected_competition_id,
+            Question.track == "FUNCIONAL",
+        ).count()
+        current_behavioral = seed_db.query(Question).filter(
+            Question.competition_id == selected_competition_id,
+            Question.track == "COMPORTAMENTAL",
+        ).count()
     finally:
         seed_db.close()
-    st.caption(f"Banco funcional del concurso: {current_total}/{ALIMENTACION_ESCOLAR_TARGET} preguntas")
-    if st.button("Completar banco de 100 preguntas UApA", use_container_width=True):
+    st.caption(
+        f"Banco del concurso: {current_total} preguntas en total · "
+        f"{current_functional} funcionales · {current_behavioral} comportamentales."
+    )
+    bank_incomplete = current_total < ALIMENTACION_ESCOLAR_TARGET
+    if bank_incomplete:
+        st.info(
+            f"Meta mínima del banco inicial: {ALIMENTACION_ESCOLAR_TARGET} preguntas "
+            f"({current_total} disponibles)."
+        )
+    else:
+        st.success(
+            f"Meta mínima de {ALIMENTACION_ESCOLAR_TARGET} preguntas alcanzada. "
+            "Tener más preguntas aumenta la variedad de los simulacros."
+        )
+    if bank_incomplete and st.button("Completar banco inicial UApA", use_container_width=True):
         seed_db = SessionLocal()
         try:
             created = seed_alimentacion_escolar_questions(seed_db, selected_competition_id)
@@ -481,7 +503,10 @@ if active_opec and not active_opec.is_active:
         finally:
             activate_db.close()
 
-with st.expander("Agregar otro concurso CNSC"):
+st.caption(
+    "¿Tu concurso no aparece en la lista? Puedes registrarlo sin importar cuál esté seleccionado actualmente."
+)
+with st.expander("➕ Registrar un concurso nuevo (opción general)"):
     with st.form("new_competition_form"):
         new_competition_code = st.text_input("Código del proceso", placeholder="Ej: TERRITORIAL-11")
         new_competition_name = st.text_input("Nombre del concurso", placeholder="Ej: Territorial 11")
