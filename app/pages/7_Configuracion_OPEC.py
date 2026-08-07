@@ -90,6 +90,206 @@ TERRITORIAL_12_SECOND_SEED = [
     ("Si se usa cédula digital, ¿qué regla aplica al teléfono?", {"A": "Puede usarse durante toda la prueba", "B": "Puede ingresar excepcionalmente, pero debe permanecer apagado y ubicarse donde indiquen", "C": "Puede utilizarse como calculadora"}, "B", "La excepción es solo para identificación y exige mantenerlo apagado.", "Anexo Técnico Territorial 12, numeral 4, nota 1"),
 ]
 
+# Cada escenario produce cuatro preguntas situacionales: decisión, evidencia,
+# indicador y riesgo. Junto con los dos bloques anteriores completa 100 ítems.
+TERRITORIAL_12_SCENARIOS = [
+    {
+        "domain": "Alineación con el PDD",
+        "situation": "Una dependencia propone un proyecto educativo atractivo, pero no demuestra relación con ninguna meta del Plan Departamental de Desarrollo.",
+        "action": "Solicitar la trazabilidad entre problema, objetivo, producto, meta e indicador del PDD antes de priorizarlo.",
+        "evidence": "Matriz de articulación que vincule el proyecto con metas, indicadores y recursos del PDD.",
+        "indicator": "Porcentaje de productos del proyecto que contribuyen a metas verificables del PDD.",
+        "risk": "Asignar recursos a actividades sin contribución demostrable a los resultados departamentales.",
+        "source": "Ficha OPEC 241130, propósito y funciones 3, 4 y 5",
+    },
+    {
+        "domain": "Plan Operativo Anual de Inversiones",
+        "situation": "El techo presupuestal disminuye y el POAI contiene proyectos cuyo costo supera los recursos disponibles.",
+        "action": "Revisar prioridades, metas, fuentes y cronogramas, documentar los ajustes y tramitar nuevamente la aprobación.",
+        "evidence": "Versión ajustada del POAI con trazabilidad de cambios, concepto técnico y disponibilidad de recursos.",
+        "indicator": "Porcentaje del valor del POAI respaldado por fuentes de financiación identificadas.",
+        "risk": "Aprobar compromisos sin respaldo financiero o sacrificar metas prioritarias sin justificación.",
+        "source": "Ficha OPEC 241130, funciones 5 y 8",
+    },
+    {
+        "domain": "Plan indicativo",
+        "situation": "El plan indicativo registra metas cuatrienales, pero no distribuye los resultados esperados por vigencia.",
+        "action": "Desagregar las metas por anualidad y relacionarlas con responsables, productos e indicadores.",
+        "evidence": "Plan indicativo aprobado con programación anual, líneas base, metas y responsables.",
+        "indicator": "Porcentaje de metas cuatrienales con programación anual completa.",
+        "risk": "Impedir el seguimiento oportuno y detectar los retrasos solo al finalizar el periodo de gobierno.",
+        "source": "Ficha OPEC 241130, función 5",
+    },
+    {
+        "domain": "Planes de acción",
+        "situation": "Un área reporta numerosas actividades, pero ninguna señala responsable, plazo o producto verificable.",
+        "action": "Reformular el plan de acción con actividades, productos, responsables, plazos, recursos e indicadores.",
+        "evidence": "Plan de acción firmado y matriz de seguimiento con soportes de avance.",
+        "indicator": "Porcentaje de actividades del plan cumplidas oportunamente y con evidencia válida.",
+        "risk": "Confundir ejecución de tareas con cumplimiento efectivo de metas institucionales.",
+        "source": "Ficha OPEC 241130, funciones 5 y 7",
+    },
+    {
+        "domain": "Plan de Desarrollo Educativo",
+        "situation": "El plan de inversiones educativo incluye iniciativas dispersas que no corresponden a los programas prioritarios definidos.",
+        "action": "Contrastar cada iniciativa con el componente estratégico y devolver para ajuste las que carezcan de coherencia.",
+        "evidence": "Concepto técnico de coherencia entre diagnóstico, programas prioritarios, metas e inversiones.",
+        "indicator": "Proporción de inversión educativa destinada a programas y proyectos priorizados.",
+        "risk": "Fragmentar recursos y reducir el efecto de la inversión sobre los problemas educativos identificados.",
+        "source": "Ficha OPEC 241130, función 4",
+    },
+    {
+        "domain": "Levantamiento de información",
+        "situation": "Dos equipos presentan cifras diferentes sobre cobertura educativa y no documentan su origen ni fecha de corte.",
+        "action": "Definir una metodología común, validar las fuentes y documentar responsables, fecha de corte y reglas de calidad.",
+        "evidence": "Ficha técnica del dato, base validada y registro de controles de consistencia.",
+        "indicator": "Porcentaje de registros que superan los controles de completitud, consistencia y oportunidad.",
+        "risk": "Formular proyectos y metas con diagnósticos contradictorios o no reproducibles.",
+        "source": "Ficha OPEC 241130, función 6",
+    },
+    {
+        "domain": "Seguimiento de metas",
+        "situation": "Una meta presenta avance físico del 40% cuando, según la programación, debería alcanzar el 70%.",
+        "action": "Analizar la desviación, identificar causas, acordar acciones correctivas y actualizar el seguimiento.",
+        "evidence": "Informe de desviaciones con causas, responsables, compromisos y fechas de recuperación.",
+        "indicator": "Brecha porcentual entre avance físico ejecutado y avance físico programado.",
+        "risk": "Mantener la misma ejecución y cerrar la vigencia con incumplimiento de la meta.",
+        "source": "Ficha OPEC 241130, funciones 7 y 9",
+    },
+    {
+        "domain": "Eficiencia",
+        "situation": "Dos proyectos entregan el mismo producto, pero uno utiliza el doble de recursos y tiempo.",
+        "action": "Comparar procesos y costos unitarios para identificar causas y oportunidades de optimización.",
+        "evidence": "Análisis de costos, tiempos, productos y factores que explican la diferencia.",
+        "indicator": "Costo promedio por producto educativo entregado.",
+        "risk": "Mantener ineficiencias que reducen la cantidad de beneficiarios atendidos con los recursos disponibles.",
+        "source": "Ficha OPEC 241130, función 7",
+    },
+    {
+        "domain": "Eficacia",
+        "situation": "Un programa ejecutó todo su presupuesto, pero alcanzó solamente la mitad de la meta de beneficiarios.",
+        "action": "Evaluar el cumplimiento del resultado, explicar la desviación y definir medidas de recuperación.",
+        "evidence": "Comparación documentada entre meta programada, resultado alcanzado y población efectivamente atendida.",
+        "indicator": "Porcentaje de cumplimiento de la meta de beneficiarios.",
+        "risk": "Presentar la ejecución presupuestal como éxito aunque el resultado institucional no se haya logrado.",
+        "source": "Ficha OPEC 241130, función 7",
+    },
+    {
+        "domain": "Impacto",
+        "situation": "Un proyecto entregó dotaciones a todas las sedes previstas, pero no se sabe si mejoró la calidad educativa.",
+        "action": "Complementar el indicador de producto con mediciones de resultado o impacto relacionadas con el problema intervenido.",
+        "evidence": "Línea base y medición posterior comparable de la variable de resultado seleccionada.",
+        "indicator": "Variación de la brecha de aprendizaje o del resultado educativo atribuible a la intervención.",
+        "risk": "Concluir que hubo transformación únicamente porque se entregaron bienes o servicios.",
+        "source": "Ficha OPEC 241130, función 7",
+    },
+    {
+        "domain": "Semaforización",
+        "situation": "El tablero marca una meta en verde porque se ejecutó el presupuesto, aunque el avance físico está retrasado.",
+        "action": "Definir reglas de semaforización que integren avance físico, financiero, plazo y calidad de la evidencia.",
+        "evidence": "Ficha del indicador con umbrales, fórmula, periodicidad y fuentes de verificación.",
+        "indicator": "Número de metas en alerta cuya clasificación fue sustentada con información física y financiera.",
+        "risk": "Ocultar retrasos reales mediante una lectura aislada de la ejecución presupuestal.",
+        "source": "Ficha OPEC 241130, función 9",
+    },
+    {
+        "domain": "Coordinación de grupo permanente",
+        "situation": "Se solicita coordinar de manera permanente un equipo, pero no se identifica el acto administrativo que lo conforma.",
+        "action": "Verificar el acto administrativo, su alcance, integrantes y responsabilidades antes de ejercer la coordinación.",
+        "evidence": "Acto administrativo vigente y plan de trabajo alineado con las responsabilidades asignadas.",
+        "indicator": "Porcentaje de compromisos del grupo permanente cumplidos dentro del plazo acordado.",
+        "risk": "Asumir funciones o impartir instrucciones sin competencia o alcance claramente definido.",
+        "source": "Ficha OPEC 241130, función 1",
+    },
+    {
+        "domain": "Coordinación de grupo temporal",
+        "situation": "Un equipo temporal recibe tareas contradictorias de varias dependencias y empieza a duplicar esfuerzos.",
+        "action": "Aclarar objetivo, alcance, responsables y canal de decisión conforme a los lineamientos del superior inmediato.",
+        "evidence": "Plan de trabajo temporal con entregables, responsables, cronograma y reglas de coordinación.",
+        "indicator": "Porcentaje de entregables temporales aceptados en la fecha prevista.",
+        "risk": "Duplicar actividades, incumplir plazos y producir resultados incompatibles.",
+        "source": "Ficha OPEC 241130, función 2",
+    },
+    {
+        "domain": "Revisión normativa",
+        "situation": "Un componente estratégico propone una solución rápida, pero no identifica las normas que regulan la competencia departamental.",
+        "action": "Verificar competencia, marco normativo y restricciones antes de emitir concepto favorable.",
+        "evidence": "Matriz normativa vigente con análisis de aplicabilidad y concepto técnico-jurídico.",
+        "indicator": "Porcentaje de componentes estratégicos revisados con soporte normativo completo.",
+        "risk": "Aprobar acciones inviables, contrarias al marco aplicable o fuera de la competencia institucional.",
+        "source": "Ficha OPEC 241130, función 3",
+    },
+    {
+        "domain": "Priorización de proyectos",
+        "situation": "Hay recursos para financiar solo dos de cinco proyectos que contribuyen al mismo objetivo sectorial.",
+        "action": "Aplicar criterios transparentes de alineación, impacto, viabilidad, población beneficiaria, costo y urgencia.",
+        "evidence": "Matriz de priorización con criterios, ponderaciones, puntajes y justificación de la decisión.",
+        "indicator": "Porcentaje de recursos asignados a proyectos viables y de mayor puntaje de priorización.",
+        "risk": "Seleccionar proyectos por presión informal y no por su contribución demostrable al objetivo público.",
+        "source": "Ficha OPEC 241130, funciones 3, 4 y 5",
+    },
+    {
+        "domain": "Gestión de ajustes",
+        "situation": "Durante la ejecución cambia una condición crítica y el proyecto requiere modificar cronograma y metas.",
+        "action": "Sustentar técnicamente el cambio, evaluar sus efectos y tramitar el ajuste por la instancia competente.",
+        "evidence": "Solicitud de ajuste con análisis técnico, presupuestal, cronológico y decisión de aprobación.",
+        "indicator": "Porcentaje de ajustes formalizados antes de ejecutar las condiciones modificadas.",
+        "risk": "Ejecutar cambios sin autorización, perder trazabilidad y distorsionar la medición de resultados.",
+        "source": "Ficha OPEC 241130, función 8",
+    },
+]
+
+
+def build_territorial_12_scenario_questions():
+    """Construye 64 preguntas situacionales, cuatro por escenario."""
+    rows = []
+    letters = ("A", "B", "C")
+
+    def options_with_answer(correct_text, distractor_1, distractor_2, offset):
+        values = [correct_text, distractor_1, distractor_2]
+        rotated = values[offset:] + values[:offset]
+        options = dict(zip(letters, rotated))
+        correct_key = letters[rotated.index(correct_text)]
+        return options, correct_key
+
+    for index, scenario in enumerate(TERRITORIAL_12_SCENARIOS):
+        prompts = [
+            (
+                f"{scenario['situation']} ¿Cuál es la actuación más adecuada del Profesional Especializado?",
+                scenario["action"],
+                "Archivar el asunto sin análisis ni comunicación a los responsables.",
+                "Modificar metas y recursos de manera informal para que el reporte aparezca cumplido.",
+                f"La actuación adecuada es {scenario['action'].lower()}",
+            ),
+            (
+                f"En el escenario de {scenario['domain'].lower()}, ¿cuál es el soporte más útil para una decisión verificable?",
+                scenario["evidence"],
+                "Comentarios verbales sin fecha, responsable ni fuente identificable.",
+                "Una presentación sin datos de respaldo ni control de versiones.",
+                f"La evidencia pertinente es: {scenario['evidence']}",
+            ),
+            (
+                f"¿Cuál indicador permite seguir mejor el escenario de {scenario['domain'].lower()}?",
+                scenario["indicator"],
+                "Cantidad de correos enviados por el equipo durante el mes.",
+                "Número de páginas que contiene el informe de seguimiento.",
+                f"El indicador propuesto mide directamente el desempeño relevante: {scenario['indicator']}",
+            ),
+            (
+                f"¿Cuál es el principal riesgo de no corregir la situación descrita en {scenario['domain'].lower()}?",
+                scenario["risk"],
+                "Que todos los indicadores mejoren automáticamente sin intervención.",
+                "Que aumente el presupuesto disponible sin necesidad de aprobación.",
+                f"El riesgo sustantivo es {scenario['risk'].lower()}",
+            ),
+        ]
+        for question_index, (stem, correct, distractor_1, distractor_2, rationale) in enumerate(prompts):
+            options, correct_key = options_with_answer(
+                correct, distractor_1, distractor_2, (index + question_index) % 3
+            )
+            rows.append((stem, options, correct_key, rationale, scenario["source"]))
+    return rows
+
 
 def seed_territorial_12_questions(db, competition_id):
     from db.models import Question
@@ -97,6 +297,7 @@ def seed_territorial_12_questions(db, competition_id):
     created = 0
     seed_rows = [(stem, options, correct, rationale, "Ficha OPEC 241130 y Acuerdo 36") for stem, options, correct, rationale in TERRITORIAL_12_SEED]
     seed_rows.extend(TERRITORIAL_12_SECOND_SEED)
+    seed_rows.extend(build_territorial_12_scenario_questions())
     for stem, options, correct, rationale, source_ref in seed_rows:
         if db.query(Question).filter(Question.competition_id == competition_id, Question.stem == stem).first():
             continue
@@ -164,11 +365,17 @@ competition_db.close()
 active_opec = get_active_opec(selected_competition_id)
 
 if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR-2685":
-    if st.button("Crear preguntas oficiales iniciales", use_container_width=True):
+    if st.button("Completar banco de 100 preguntas", use_container_width=True):
         seed_db = SessionLocal()
         try:
             created = seed_territorial_12_questions(seed_db, selected_competition_id)
-            st.success(f"{created} preguntas oficiales iniciales disponibles para Territorial 12.")
+            total = seed_db.query(Question).filter(
+                Question.competition_id == selected_competition_id
+            ).count()
+            st.success(
+                f"Se agregaron {created} preguntas. "
+                f"Banco actual de Territorial 12: {total} preguntas."
+            )
         finally:
             seed_db.close()
 
