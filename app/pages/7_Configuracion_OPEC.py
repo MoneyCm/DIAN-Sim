@@ -757,12 +757,13 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             for i in range(max(0, 10 - existing_cases)):
                 case_number = existing_cases + i + 1
                 try:
-                    case_data = None
+                    is_adres = getattr(selected_competition, "code", None) == "ADRES-ABIERTO"
+                    case_data = build_fallback_opec_case(active_opec, case_number) if is_adres else None
                     source_context = (
                         f"OPEC {active_opec.opec_number}. Propósito: {active_opec.purpose}. "
                         f"Funciones: {active_opec.functions}."
                     )
-                    for attempt in range(2):
+                    for attempt in range(0 if is_adres else 2):
                         try:
                             candidate = gen.generate_case_study(
                                 topic=f"Caso {case_number}: {active_opec.job_title}",
