@@ -6,6 +6,7 @@ pandas
 plotly
 google-genai
 openai
+pydantic>=2.0
 pypdf
 fpdf2
 passlib

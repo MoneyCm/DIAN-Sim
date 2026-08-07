@@ -3,7 +3,7 @@ import datetime
 import uuid
 import sys
 from typing import List, Optional
-from sqlalchemy import Column, String, Integer, Text, Boolean, Date, DateTime, Float, ForeignKey, JSON, func
+from sqlalchemy import Column, String, Integer, Text, Boolean, Date, DateTime, Float, ForeignKey, JSON, func, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, registry
 
 # --- EL EXORCISMO TOTAL v19.0 - MIKEY ---
@@ -238,6 +238,80 @@ class QuestionPerformance(Base):
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="performance")
     question: Mapped["Question"] = relationship("Question", back_populates="perf_entries")
+
+
+class LearningSession(Base):
+    """Sesión adaptativa que selecciona una pregunta después de cada respuesta."""
+
+    __tablename__ = "learning_sessions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
+    current_question_id: Mapped[Optional[str]] = mapped_column(ForeignKey("questions.question_id"))
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+    finished_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    target_minutes: Mapped[int] = mapped_column(Integer, default=20)
+    actual_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+
+
+class LearningAttempt(Base):
+    """Intento enriquecido de una sesión de aprendizaje."""
+
+    __tablename__ = "learning_attempts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(ForeignKey("learning_sessions.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.question_id"), index=True)
+    answer: Mapped[str] = mapped_column(Text)
+    result: Mapped[str] = mapped_column(String(20), index=True)
+    score: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[str] = mapped_column(String(20))
+    error_type: Mapped[Optional[str]] = mapped_column(String(40))
+    response_time_seconds: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
+
+
+class TopicMastery(Base):
+    """Dominio agregado por usuario, concurso y tema estable."""
+
+    __tablename__ = "topic_mastery"
+    __table_args__ = (
+        UniqueConstraint("user_id", "competition_id", "topic_id", name="uq_topic_mastery_scope"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    competition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("competitions.id"), index=True)
+    topic_id: Mapped[str] = mapped_column(String(64), index=True)
+    topic_label: Mapped[str] = mapped_column(String(250))
+    competency: Mapped[Optional[str]] = mapped_column(String(250))
+    track: Mapped[Optional[str]] = mapped_column(String(100))
+    mastery_score: Mapped[float] = mapped_column(Float, default=0.0)
+    importance: Mapped[float] = mapped_column(Float, default=1.0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    correct_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    partial_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_reviewed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    next_review_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, index=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class AICallLog(Base):
+    """Telemetría mínima de IA; nunca almacena prompts ni secretos."""
+
+    __tablename__ = "ai_call_logs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(30))
+    model: Mapped[str] = mapped_column(String(100))
+    task_type: Mapped[str] = mapped_column(String(50), index=True)
+    prompt_version: Mapped[Optional[str]] = mapped_column(String(30))
+    input_tokens: Mapped[Optional[int]] = mapped_column(Integer)
+    output_tokens: Mapped[Optional[int]] = mapped_column(Integer)
+    latency_ms: Mapped[int] = mapped_column(Integer)
+    success: Mapped[bool] = mapped_column(Boolean)
+    error_code: Mapped[Optional[str]] = mapped_column(String(100))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=func.now())
 
 class Configuration(Base):
     __tablename__ = "configurations"

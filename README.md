@@ -9,6 +9,8 @@ Aplicación Streamlit para preparar concursos DIAN mediante simulacros, práctic
 - Repaso espaciado nativo con cola diaria, nivel de confianza y clasificación de errores; Anki queda como exportación opcional.
 - Preparación multi-concurso CNSC con catálogo de procesos, OPEC activa y bancos/progreso separados por concurso.
 - Sesiones guiadas por tiempo, fecha de examen y disponibilidad semanal, con una estructura recomendada de 30 minutos.
+- Tutor adaptativo V1 con sesiones persistentes, dominio por tema, seguridad, causa de error y selección de una pregunta a la vez.
+- Router opcional de IA con salida estructurada y fallback determinístico.
 - Motivación basada en progreso real: misión semanal flexible, cobertura del temario, mapa de dominio y cierre diario.
 - Motor adaptativo para simulacros configurables.
 - Banco de preguntas, casos situacionales y módulo de ética.
@@ -42,6 +44,18 @@ La aplicación usa `dian_sim.db` cuando no encuentra `DATABASE_URL`. El esquema 
 ```powershell
 python -m pytest -q
 ```
+
+## Tutor adaptativo e IA opcional
+
+Las tablas se crean automáticamente en SQLite. También puede ejecutarse la migración explícita:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\data\migrate_learning_v1.py
+```
+
+El tutor funciona sin IA. Para enriquecer explicaciones configura `AI_PROVIDER=openai`,
+`OPENAI_API_KEY` y, opcionalmente, los tres perfiles `MODEL_FAST`, `MODEL_BALANCED`
+y `MODEL_REASONING`. Dominio, prioridad, repaso y selección nunca dependen del modelo.
 
 ## Estructura
 
