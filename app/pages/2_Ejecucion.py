@@ -43,6 +43,7 @@ except ImportError:
 from core.generators.llm import LLMGenerator
 from core.guided_learning import build_guided_learning_brief
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
+from core.session_recovery import recover_question_ids
 
 # --- v21: Safe Attribute Assignment Mikey ---
 def safe_setattr(obj, attr, value):
@@ -240,7 +241,10 @@ if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
                 st.switch_page("pages/3_Resultados.py")
 
     else:
-        st.warning("No hay un examen activo. Ve a 'Nuevo Simulacro'.")
+        st.markdown("### No hay un simulacro activo")
+        st.caption("El simulacro anterior terminó al actualizar el banco de preguntas.")
+        if st.button("Crear un simulacro nuevo", type="primary", use_container_width=True):
+            st.switch_page("pages/1_Nuevo_Simulacro.py")
     st.stop()
 
 is_daily_session = st.session_state.get("study_session_kind") == "daily"
@@ -282,6 +286,26 @@ if is_daily_session and st.session_state.get("daily_run_paused", False):
 
 current_q_id = q_ids[current_idx]
 question = db.query(Question).filter(Question.question_id == current_q_id).first()
+
+# Una sesión puede conservar identificadores que dejaron de existir después de
+# actualizar un banco local. Recuperamos el simulacro con las preguntas aún
+# válidas en lugar de dejar la pantalla en blanco al intentar renderizar None.
+if question is None:
+    valid_ids = {
+        row[0] for row in db.query(Question.question_id).filter(
+            Question.question_id.in_(q_ids)
+        ).all()
+    }
+    recovered_ids, recovered_position = recover_question_ids(q_ids, valid_ids, current_idx)
+    if not recovered_ids:
+        db.close()
+        st.session_state["exam_mode"] = False
+        st.session_state.pop("exam_questions", None)
+        st.rerun()
+    st.session_state["exam_questions"] = recovered_ids
+    st.session_state["current_idx"] = recovered_position
+    db.close()
+    st.rerun()
 
 if is_daily_session and not st.session_state.get("daily_learning_complete", False):
     loaded_questions = db.query(Question).filter(Question.question_id.in_(q_ids)).all()
