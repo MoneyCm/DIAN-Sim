@@ -955,10 +955,10 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             db.commit()
             
             progress.progress(100, text="¡Proceso Finalizado!")
-            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro Real!")
+            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro tipo examen!")
             st.balloons()
             
-            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro Real!")
+            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro tipo examen!")
             st.balloons()
             
         except Exception as e:

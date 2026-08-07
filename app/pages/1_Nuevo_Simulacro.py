@@ -102,7 +102,7 @@ if not AuthManager.check_auth():
 # UI Setup
 load_css()
 render_custom_sidebar()
-render_header(title="Práctica por Temas", subtitle="Elige una sesión breve y enfócate en una habilidad")
+render_header(title="Práctica personalizada", subtitle="Elige una sesión breve y enfócate en una habilidad")
 
 with st.container():
     st.markdown('<div class="dian-card">', unsafe_allow_html=True)
@@ -168,7 +168,7 @@ with st.container():
                 key="only_sit_manual",
             )
             hardcore_mode = False
-            st.caption("Para presión de tiempo y resultado ponderado usa **Simulacro Tipo Examen**.")
+            st.caption("Para presión de tiempo y resultado ponderado usa **Simulacro tipo examen**.")
             
             submitted_manual = st.form_submit_button("▶️ Iniciar práctica", type="primary", use_container_width=True)
             st.caption("Sugerencia de foco: comienza con 10 preguntas y sube gradualmente.")

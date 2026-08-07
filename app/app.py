@@ -168,9 +168,9 @@ p_adaptive_tutor = st.Page("pages/13_Tutor_Adaptativo.py", title="Tutor adaptati
 p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
 # Grupo: Práctica
-p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica por Temas", icon="📚")
+p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica personalizada", icon="📚")
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
-p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro Tipo Examen", icon="⏱️")
+p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro tipo examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
 
