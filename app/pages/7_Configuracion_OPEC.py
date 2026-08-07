@@ -1,5 +1,5 @@
 import streamlit as st
-import os, sys, json, re, unicodedata
+import os, sys, json, re
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -48,14 +48,6 @@ def extract_opec_profile_from_text(text):
     }
 
 
-def is_legacy_territorial_12_duplicate(competition):
-    """Hide the old manual Bolívar entry; keep the canonical profile visible."""
-    normalized = "".join(
-        char for char in unicodedata.normalize("NFD", competition.name.upper())
-        if unicodedata.category(char) != "Mn"
-    )
-
-
 TERRITORIAL_12_SEED = [
     ("¿Cuál es la finalidad de las pruebas del proceso de selección?", {"A": "Apreciar capacidad, idoneidad, adecuación y potencialidad para el empleo.", "B": "Reemplazar la verificación de requisitos mínimos.", "C": "Asignar automáticamente una vacante por antigüedad."}, "A", "Las pruebas buscan valorar las calidades y competencias requeridas para desempeñar eficazmente el empleo."),
     ("Para la OPEC 241130, ¿qué instrumento debe guardar coherencia con las metas proyectadas y la distribución de recursos?", {"A": "El POAI y los planes de acción por área.", "B": "El registro civil de los aspirantes.", "C": "El listado de inscritos del concurso."}, "A", "La función del empleo ordena elaborar el plan indicativo, planes de acción y POAI en concordancia con metas y recursos."),
@@ -75,15 +67,40 @@ TERRITORIAL_12_SEED = [
     ("¿Qué evidencia respalda mejor el seguimiento a metas de un proyecto?", {"A": "Indicadores definidos, línea base, meta y resultado periódico.", "B": "Una opinión sin datos.", "C": "Solo el nombre del proyecto."}, "A", "El seguimiento exige información verificable para medir resultados."),
 ]
 
+TERRITORIAL_12_SECOND_SEED = [
+    ("Para un empleo profesional ordinario de Territorial 12, ¿qué peso tiene la prueba de competencias funcionales?", {"A": "20%", "B": "60%", "C": "30%"}, "B", "La Tabla 6 del Acuerdo 36 asigna 60% a competencias funcionales.", "Acuerdo 36 de 2025, artículo 16, tabla 6"),
+    ("¿Cuál es el puntaje mínimo aprobatorio de la prueba funcional?", {"A": "65,00", "B": "70,00", "C": "No tiene mínimo"}, "A", "La prueba funcional es eliminatoria y exige 65,00 puntos.", "Acuerdo 36 de 2025, artículo 16, tabla 6"),
+    ("¿Qué carácter tiene la prueba de competencias comportamentales?", {"A": "Eliminatorio", "B": "Habilitante", "C": "Clasificatorio"}, "C", "El Acuerdo la define como clasificatoria.", "Acuerdo 36 de 2025, artículo 16, tabla 6"),
+    ("¿Qué peso tiene la prueba de competencias comportamentales para la OPEC 241130?", {"A": "20%", "B": "40%", "C": "60%"}, "A", "Para empleos ordinarios, la Tabla 6 le asigna 20%.", "Acuerdo 36 de 2025, artículo 16, tabla 6"),
+    ("¿Qué peso tiene la valoración de antecedentes para este empleo profesional?", {"A": "10%", "B": "20%", "C": "No se aplica"}, "B", "La Tabla 6 asigna 20% a la valoración de antecedentes.", "Acuerdo 36 de 2025, artículo 16, tabla 6"),
+    ("Un aspirante obtiene 64,99 en competencias funcionales. ¿Qué ocurre?", {"A": "Continúa por haber presentado la prueba", "B": "Solo pierde la valoración de antecedentes", "C": "No continúa porque no alcanzó el mínimo eliminatorio"}, "C", "Quien no obtiene 65,00 en la funcional queda excluido.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("¿A quiénes se publican los resultados de las pruebas clasificatorias?", {"A": "Solo a quienes superaron la prueba eliminatoria", "B": "A todos los inscritos", "C": "Únicamente a quienes reclamaron"}, "A", "El Anexo condiciona su publicación a superar la prueba eliminatoria.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("¿Qué mide principalmente la prueba funcional?", {"A": "La antigüedad del aspirante", "B": "La aplicación de conocimientos, capacidades y habilidades en contexto laboral", "C": "Solo rasgos de personalidad"}, "B", "La definición se centra en aplicar conocimientos y capacidades al empleo específico.", "Anexo Técnico Territorial 12, numeral 4, literal a"),
+    ("¿Qué evalúa la prueba comportamental?", {"A": "Capacidades, habilidades, rasgos y actitudes que potencian el desempeño", "B": "Únicamente conocimientos jurídicos", "C": "La documentación aportada en SIMO"}, "A", "El literal b del numeral 4 define ese objeto.", "Anexo Técnico Territorial 12, numeral 4, literal b"),
+    ("¿Cómo se califican las pruebas funcional y comportamental?", {"A": "En escala de 1 a 5", "B": "Solo como aprobado o no aprobado", "C": "De 0 a 100, con parte entera y dos decimales truncados"}, "C", "El Anexo fija una escala de cero a cien y dos decimales truncados.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("¿Con cuánta anticipación mínima debe informarse la citación a pruebas?", {"A": "Dos días calendario", "B": "Cinco días hábiles", "C": "Quince días hábiles"}, "B", "La citación debe informarse por lo menos con cinco días hábiles de anticipación.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("¿Dónde consulta el aspirante la citación oficial?", {"A": "En el sitio de la CNSC, enlace SIMO", "B": "En redes sociales no oficiales", "C": "En la alcaldía del municipio"}, "A", "La CNSC comunica la citación mediante su sitio web y SIMO.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("¿Las pruebas funcional y comportamental se aplican en fechas distintas?", {"A": "Sí, siempre con una semana de diferencia", "B": "Depende del puntaje previo", "C": "No; se aplican en la misma fecha y hora"}, "C", "El Anexo dispone aplicación en la misma fecha y hora.", "Anexo Técnico Territorial 12, numeral 4"),
+    ("Para la OPEC ubicada en Turbaco, ¿es Turbaco una ciudad prevista para pruebas escritas?", {"A": "No, solo Bogotá", "B": "Sí", "C": "Solo para pruebas de conducción"}, "B", "Turbaco figura entre las ciudades de aplicación de pruebas escritas.", "Anexo Técnico Territorial 12, numeral 4.2"),
+    ("¿Cuál es el plazo para reclamar contra los resultados de pruebas escritas?", {"A": "Cinco días hábiles siguientes a la publicación", "B": "Dos meses", "C": "Un día calendario"}, "A", "El numeral 4.4 establece cinco días hábiles.", "Anexo Técnico Territorial 12, numeral 4.4"),
+    ("¿Por qué medio se presenta una reclamación contra resultados?", {"A": "Correo personal del evaluador", "B": "Ventanilla física de la Gobernación", "C": "Únicamente mediante SIMO"}, "C", "El Anexo exige presentar la reclamación por SIMO.", "Anexo Técnico Territorial 12, numeral 4.4"),
+    ("¿Puede un aspirante reclamar sobre los resultados de otra persona?", {"A": "Sí, si conoce su número de documento", "B": "No; solo puede reclamar frente a sus propios resultados", "C": "Sí, con autorización verbal"}, "B", "El derecho de reclamación se limita a los resultados propios.", "Anexo Técnico Territorial 12, numeral 4.4"),
+    ("Durante una reclamación de VRM, ¿pueden agregarse documentos nuevos?", {"A": "No; se consideran extemporáneos", "B": "Sí, sin límite", "C": "Solo después de la lista de elegibles"}, "A", "La reclamación no permite complementar o reemplazar documentos aportados antes del cierre.", "Anexo Técnico Territorial 12, numeral 3.5"),
+    ("¿Qué elementos están prohibidos en el sitio de aplicación?", {"A": "Únicamente alimentos", "B": "Solo documentos impresos", "C": "Material de consulta y dispositivos electrónicos, entre otros elementos señalados"}, "C", "El Anexo prohíbe documentos de consulta y dispositivos electrónicos o de grabación.", "Anexo Técnico Territorial 12, numeral 4, nota 1"),
+    ("Si se usa cédula digital, ¿qué regla aplica al teléfono?", {"A": "Puede usarse durante toda la prueba", "B": "Puede ingresar excepcionalmente, pero debe permanecer apagado y ubicarse donde indiquen", "C": "Puede utilizarse como calculadora"}, "B", "La excepción es solo para identificación y exige mantenerlo apagado.", "Anexo Técnico Territorial 12, numeral 4, nota 1"),
+]
+
 
 def seed_territorial_12_questions(db, competition_id):
     from db.models import Question
     import uuid
     created = 0
-    for stem, options, correct, rationale in TERRITORIAL_12_SEED:
+    seed_rows = [(stem, options, correct, rationale, "Ficha OPEC 241130 y Acuerdo 36") for stem, options, correct, rationale in TERRITORIAL_12_SEED]
+    seed_rows.extend(TERRITORIAL_12_SECOND_SEED)
+    for stem, options, correct, rationale, source_ref in seed_rows:
         if db.query(Question).filter(Question.competition_id == competition_id, Question.stem == stem).first():
             continue
-        db.add(Question(competition_id=competition_id, question_id=str(uuid.uuid4()), stem=stem, options_json=options, correct_key=correct, rationale=rationale, track="FUNCIONAL", competency="Planeación y gestión pública", topic="Territorial 12 - Bolívar", macro_dominio="Planeación territorial", micro_competencia="Planeación, seguimiento y evaluación", difficulty=2, source_refs="Acuerdo 36 y Anexo Técnico Territorial 12", hash_norm=str(uuid.uuid4())))
+        db.add(Question(competition_id=competition_id, question_id=str(uuid.uuid4()), stem=stem, options_json=options, correct_key=correct, rationale=rationale, track="FUNCIONAL", competency="Planeación y gestión pública", topic="Territorial 12 - Bolívar", macro_dominio="Planeación territorial", micro_competencia="Planeación, seguimiento y evaluación", difficulty=2, source_refs=source_ref, hash_norm=str(uuid.uuid4())))
         created += 1
     db.commit()
     return created
@@ -98,10 +115,6 @@ def load_saved_opec_profile():
             return json.load(source)
     except (OSError, json.JSONDecodeError):
         return None
-    return (
-        "PROCESO DE SELECCION MODALIDAD ABIERTO TERRITORIAL 12" in normalized
-        and "GOBERNACION DE BOLIVAR" in normalized
-    )
 
 if not AuthManager.check_auth():
     st.warning("Por favor inicia sesión en la página principal.")
