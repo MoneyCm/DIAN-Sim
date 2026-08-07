@@ -15,6 +15,7 @@ from core.auth import AuthManager
 from core.competitions import ensure_builtin_competitions
 from core.competition_catalog import is_hidden_catalog_duplicate, load_catalog_profiles
 from core.competition_detection import competition_matches, detect_competition_from_simo
+from core.opec_profiles import unique_opec_profiles
 from core.question_banks.alimentacion_escolar import (
     TARGET_COUNT as ALIMENTACION_ESCOLAR_TARGET,
     seed_advanced_cases as seed_alimentacion_escolar_advanced_cases,
@@ -434,21 +435,29 @@ if (
         db = SessionLocal()
         try:
             db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
-            db.add(UserOPEC(
-                user_id=u_id,
-                competition_id=selected_competition_id,
-                opec_number=position["opec_number"],
-                job_title=f"{position['denomination']} Grado {position['grade']}",
-                level=position["level"],
-                purpose=saved_profile.get("purpose"),
-                functions=saved_profile.get("functions", []),
-                requirements="\n".join([
+            saved_values = {
+                "competition_id": selected_competition_id,
+                "job_title": f"{position['denomination']} Grado {position['grade']}",
+                "level": position["level"],
+                "purpose": saved_profile.get("purpose"),
+                "functions": saved_profile.get("functions", []),
+                "requirements": "\n".join([
                     *(f"Estudio: {item}" for item in saved_profile.get("requirements", {}).get("education", [])),
                     f"Experiencia: {saved_profile.get('requirements', {}).get('experience', '')}",
                     f"Otros: {saved_profile.get('requirements', {}).get('other', '')}",
                 ]),
-                is_active=True,
-            ))
+                "is_active": True,
+            }
+            saved_existing = db.query(UserOPEC).filter_by(
+                user_id=u_id, opec_number=position["opec_number"]
+            ).order_by(UserOPEC.updated_at.desc()).first()
+            if saved_existing:
+                for field, value in saved_values.items():
+                    setattr(saved_existing, field, value)
+            else:
+                db.add(UserOPEC(
+                    user_id=u_id, opec_number=position["opec_number"], **saved_values
+                ))
             db.commit()
             st.session_state.pop("opec_onboarding", None)
             st.success("Ficha asociada a tu cuenta de Google.")
@@ -585,10 +594,10 @@ with col1:
                             db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
                             existing = db.query(UserOPEC).filter_by(
                                 user_id=u_id,
-                                competition_id=target_competition_id,
                                 opec_number=extracted["opec_number"],
-                            ).first()
+                            ).order_by(UserOPEC.updated_at.desc()).first()
                             values = {
+                                "competition_id": target_competition_id,
                                 "job_title": extracted["job_title"],
                                 "level": extracted["level"],
                                 "purpose": extracted["purpose"],
@@ -623,8 +632,9 @@ with col2:
     st.subheader("🎯 Resumen y Gestión Multi-Cargo")
     
     db_list = SessionLocal()
-    all_user_opecs = db_list.query(UserOPEC).filter_by(user_id=u_id).order_by(UserOPEC.updated_at.desc()).all()
+    stored_user_opecs = db_list.query(UserOPEC).filter_by(user_id=u_id).order_by(UserOPEC.updated_at.desc()).all()
     db_list.close()
+    all_user_opecs = unique_opec_profiles(stored_user_opecs)
     
     if all_user_opecs:
         st.write(f"Tienes **{len(all_user_opecs)}/5** cargos configurados.")
