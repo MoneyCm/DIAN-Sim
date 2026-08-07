@@ -14,6 +14,7 @@ from ui_utils import load_css, render_header
 from core.auth import AuthManager
 from core.competitions import ensure_builtin_competitions
 from core.competition_catalog import is_hidden_catalog_duplicate, load_catalog_profiles
+from core.competition_detection import competition_matches, detect_competition_from_simo
 from core.question_banks.alimentacion_escolar import (
     TARGET_COUNT as ALIMENTACION_ESCOLAR_TARGET,
     seed_advanced_cases as seed_alimentacion_escolar_advanced_cases,
@@ -52,6 +53,7 @@ def extract_opec_profile_from_text(text):
         "purpose": re.sub(r"\s+", " ", section(r"Prop[oó]sito", r"Funciones|Requisitos|Equivalencias")).strip(),
         "functions": functions,
         "requirements": re.sub(r"\s+", " ", section(r"Requisitos", r"Equivalencias|Vacantes")).strip(),
+        "competition": detect_competition_from_simo(text),
     }
 
 
@@ -355,6 +357,11 @@ competitions = [
 ]
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]
+pending_competition_id = st.session_state.pop("pending_selected_competition_id", None)
+if pending_competition_id in competition_ids:
+    # This runs before the widget is instantiated, so Streamlit can safely
+    # move the selector to a competition just created from a pasted SIMO file.
+    st.session_state["selected_competition_id"] = pending_competition_id
 default_competition_id = (
     current_opec.competition_id if current_opec and current_opec.competition_id in competition_ids
     else (competition_ids[0] if competition_ids else None)
@@ -529,6 +536,18 @@ with col1:
                 st.markdown(f"**Cargo:** {extracted['job_title']}  ")
                 st.markdown(f"**Nivel:** {extracted['level']}  ")
                 st.markdown(f"**Funciones detectadas:** {len(extracted['functions'])}")
+                detected_competition = extracted.get("competition")
+                if detected_competition:
+                    st.markdown(f"**Concurso detectado:** {detected_competition['name']}  ")
+                    if selected_competition and not competition_matches(
+                        detected_competition,
+                        selected_name=selected_competition.name,
+                        selected_entity=selected_competition.entity or "",
+                    ):
+                        st.warning(
+                            f"La ficha pertenece a {detected_competition['name']}; "
+                            f"se guardará en ese concurso y no en {selected_competition.name}."
+                        )
                 with st.expander("Ver datos extraídos", expanded=False):
                     st.write(extracted["purpose"])
                     st.write(extracted["functions"])
@@ -540,10 +559,33 @@ with col1:
                     else:
                         db = SessionLocal()
                         try:
+                            target_competition_id = selected_competition_id
+                            detected = extracted.get("competition")
+                            if detected and (
+                                not selected_competition
+                                or not competition_matches(
+                                    detected,
+                                    selected_name=selected_competition.name,
+                                    selected_entity=selected_competition.entity or "",
+                                )
+                            ):
+                                target_competition = db.query(Competition).filter_by(
+                                    code=detected["code"]
+                                ).first()
+                                if target_competition is None:
+                                    target_competition = Competition(
+                                        code=detected["code"], name=detected["name"],
+                                        entity=detected["entity"], is_active=True,
+                                        description="Concurso detectado automáticamente desde ficha SIMO.",
+                                    )
+                                    db.add(target_competition)
+                                    db.flush()
+                                target_competition_id = target_competition.id
+
                             db.query(UserOPEC).filter_by(user_id=u_id).update({UserOPEC.is_active: False})
                             existing = db.query(UserOPEC).filter_by(
                                 user_id=u_id,
-                                competition_id=selected_competition_id,
+                                competition_id=target_competition_id,
                                 opec_number=extracted["opec_number"],
                             ).first()
                             values = {
@@ -560,12 +602,13 @@ with col1:
                             else:
                                 db.add(UserOPEC(
                                     user_id=u_id,
-                                    competition_id=selected_competition_id,
+                                    competition_id=target_competition_id,
                                     opec_number=extracted["opec_number"],
                                     **values,
                                 ))
                             db.commit()
                             st.session_state.pop("opec_onboarding", None)
+                            st.session_state["pending_selected_competition_id"] = target_competition_id
                             st.success("Ficha cargada y concurso activado.")
                             st.rerun()
                         except Exception as exc:
