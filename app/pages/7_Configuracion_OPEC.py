@@ -8,8 +8,8 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
-from db.models import Competition, UserOPEC
-from ui_utils import load_css, render_header, render_custom_sidebar
+from db.models import Competition, Question, UserOPEC
+from ui_utils import load_css, render_header
 
 from core.auth import AuthManager
 
@@ -324,7 +324,6 @@ if not AuthManager.check_auth():
 load_css()
 if st.session_state.get("opec_onboarding"):
     st.info("👋 Bienvenido. Completa primero los datos de la ficha del cargo. Después se habilitarán tu dashboard, plan diario y simulacros personalizados.")
-render_custom_sidebar()
 render_header(title="Mi Meta: OPEC", subtitle="Configura tu cargo y enfoca tu preparación")
 
 def get_active_opec(competition_id=None):
