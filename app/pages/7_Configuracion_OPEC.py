@@ -637,7 +637,8 @@ with col2:
     all_user_opecs = unique_opec_profiles(stored_user_opecs)
     
     if all_user_opecs:
-        st.write(f"Tienes **{len(all_user_opecs)}/5** cargos configurados.")
+        configured_label = "cargo configurado" if len(all_user_opecs) == 1 else "cargos configurados"
+        st.write(f"Tienes **{len(all_user_opecs)}** {configured_label}.")
         
         for o in all_user_opecs:
             with st.expander(f"{'⭐' if o.is_active else '📁'} {o.job_title} (OPEC {o.opec_number})", expanded=o.is_active):
@@ -666,9 +667,6 @@ with col2:
         st.warning("No tienes una OPEC configurada todavía. El simulador usará temas generales hasta que definas tu meta.")
         st.image("https://img.icons8.com/color/96/000000/target.png")
 
-    if len(all_user_opecs) >= 5:
-        st.error("⚠️ Has alcanzado el límite de 5 cargos. Elimina uno para agregar uno nuevo.")
-    
 st.divider()
 
 if selected_competition_id and active_opec:
