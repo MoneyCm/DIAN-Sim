@@ -159,12 +159,18 @@ def _official_inventory():
         db.close()
 
 
-def _active_exam_context():
+def _active_exam_context(official_case_count=None):
     db = next(get_db())
     try:
         competition = get_active_competition(db, st.session_state.get("user_id"))
         code = getattr(competition, "code", None)
-        return competition, blueprint_for_competition(code, is_pro=AuthManager.is_pro())
+        try:
+            blueprint = blueprint_for_competition(
+                code, is_pro=AuthManager.is_pro(), official_case_count=official_case_count
+            )
+        except TypeError:
+            blueprint = blueprint_for_competition(code, is_pro=AuthManager.is_pro())
+        return competition, blueprint
     finally:
         db.close()
 
@@ -213,9 +219,15 @@ def load_exam_cases():
             user_id, count=2, competition_id=competition_id
         ) if user_id else []
         competition = get_active_competition(db, user_id)
-        blueprint = blueprint_for_competition(
-            getattr(competition, "code", None), is_pro=AuthManager.is_pro()
-        )
+        try:
+            blueprint = blueprint_for_competition(
+                getattr(competition, "code", None), is_pro=AuthManager.is_pro(),
+                official_case_count=len(blocks),
+            )
+        except TypeError:
+            blueprint = blueprint_for_competition(
+                getattr(competition, "code", None), is_pro=AuthManager.is_pro()
+            )
         random.shuffle(blocks)
         return select_balanced_blocks(blocks, blueprint.target_cases, smart_topics)
     except Exception as exc:
@@ -280,8 +292,7 @@ def finish_exam():
 
 if not st.session_state.exam_active:
     # --- PANTALLA DE INICIO CON PROTOCOLO ---
-    active_competition, exam_blueprint = _active_exam_context()
-    st.title(f"⏱️ {exam_blueprint.title}")
+    active_competition, _ = _active_exam_context()
     
     # Modo Simulacro
     st.markdown("""
@@ -297,6 +308,8 @@ if not st.session_state.exam_active:
     """)
     
     official_cases, review_cases = _official_inventory()
+    active_competition, exam_blueprint = _active_exam_context(official_cases)
+    st.title(f"⏱️ {exam_blueprint.title}")
     target_cases = exam_blueprint.target_cases
     inventory_cols = st.columns(3)
     inventory_cols[0].metric("Casos oficiales", official_cases)

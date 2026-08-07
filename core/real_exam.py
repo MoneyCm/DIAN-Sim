@@ -23,9 +23,17 @@ class RealExamBlueprint:
         return self.target_questions * self.minutes_per_question
 
 
-def blueprint_for_competition(code: str | None, *, is_pro: bool = False):
+def blueprint_for_competition(code: str | None, *, is_pro: bool = False,
+                              official_case_count: int | None = None):
     if code == UAPA_COMPETITION_CODE:
         return RealExamBlueprint("Simulacro UApA · Arquitectura y Gestión TI", 10)
+    if official_case_count is not None:
+        if official_case_count >= 20:
+            return RealExamBlueprint("Simulacro Tipo Examen · 60 preguntas", 20)
+        if official_case_count >= 10:
+            return RealExamBlueprint("Simulacro Tipo Examen · 30 preguntas", 10)
+        if official_case_count >= 3:
+            return RealExamBlueprint("Simulacro Tipo Examen · Banco inicial", official_case_count)
     return RealExamBlueprint("Simulacro Tipo Examen", 3 if is_pro else 2)
 
 

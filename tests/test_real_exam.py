@@ -19,6 +19,12 @@ def test_default_blueprint_preserves_free_and_pro_limits():
     assert blueprint_for_competition("DIAN-2676", is_pro=True).target_cases == 3
 
 
+def test_generic_competition_scales_from_verified_inventory():
+    assert blueprint_for_competition("NUEVO", official_case_count=10).target_questions == 30
+    assert blueprint_for_competition("NUEVO", official_case_count=20).target_questions == 60
+    assert blueprint_for_competition("NUEVO", official_case_count=6).target_questions == 18
+
+
 def test_balanced_selection_spreads_topics_before_repeating():
     blocks = [
         SimpleNamespace(id="a1", topic="A"), SimpleNamespace(id="a2", topic="A"),

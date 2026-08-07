@@ -618,11 +618,36 @@ with col2:
     
 st.divider()
 
+if selected_competition_id and active_opec:
+    from core.competition_readiness import inspect_competition
+
+    readiness_db = SessionLocal()
+    try:
+        readiness = inspect_competition(
+            readiness_db, selected_competition_id, is_pro=AuthManager.is_pro()
+        )
+    finally:
+        readiness_db.close()
+    st.subheader("🧭 Configuración automática del concurso")
+    readiness_cols = st.columns(3)
+    readiness_cols[0].metric("Preguntas", readiness.question_count)
+    readiness_cols[1].metric("Casos verificados", readiness.official_case_count)
+    readiness_cols[2].metric(
+        "Examen disponible",
+        f"{readiness.exam_questions} preguntas" if readiness.exam_questions else "Pendiente",
+    )
+    st.caption(
+        f"Funcionales: {readiness.functional_count} · "
+        f"Comportamentales: {readiness.behavioral_count} · "
+        f"Duración tipo examen: {readiness.exam_minutes} min"
+    )
+    st.info(f"Siguiente acción recomendada: {readiness.next_action}")
+
 # --- AUTO-SEED SECTION v5.4 ---
 st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
 st.markdown("""
 Si no quieres crear preguntas una por una, usa esta opción. El sistema leerá tu **Cargo y Funciones** y generará automáticamente:
-*   3 Casos Protagónicos completos.
+*   10 casos tipo examen, con 3 preguntas relacionadas por caso.
 *   Hasta 60 preguntas funcionales.
 *   Hasta 20 preguntas comportamentales.
 *   Hasta 20 preguntas de integridad/valores.
@@ -668,10 +693,16 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             total_steps = 4
             current_step = 0
             
-            # 1. Generate Case Studies
-            status.info("Generando 3 Casos Protagónicos...")
-            existing_cases = db.query(CaseStudy).filter(CaseStudy.competition_id == selected_competition_id).count()
-            for i in range(max(0, 3 - existing_cases)):
+            # 1. Generate verified case triplets for the real exam
+            from core.exam_format import is_official_functional_payload, official_question_groups
+            status.info("Generando hasta 10 casos tipo examen...")
+            existing_case_rows = db.query(CaseStudy).filter(
+                CaseStudy.competition_id == selected_competition_id
+            ).all()
+            existing_cases = sum(
+                1 for case in existing_case_rows if official_question_groups(case)
+            )
+            for i in range(max(0, 10 - existing_cases)):
                 try:
                     case_data = gen.generate_case_study(
                         topic=f"Caso {i+1}: {active_opec.job_title} - {active_opec.purpose}",
@@ -679,6 +710,9 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                         difficulty=2
                     )
                     
+                    if not is_official_functional_payload(case_data):
+                        raise ValueError("El caso no cumple el formato de tres preguntas funcionales.")
+
                     # Save Case
                     new_case = CaseStudy(
                         competition_id=selected_competition_id,
@@ -709,6 +743,10 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                             macro_dominio=macro_dom,
                             topic=active_opec.job_title,
                             difficulty=2,
+                            question_type="SITUATIONAL",
+                            source_refs=f"Ficha OPEC {active_opec.opec_number}",
+                            is_verified=True,
+                            quality_report={"review": "source_grounded", "origin": "auto_seed_opec"},
                             hash_norm=str(uuid.uuid4())
                         )
                         db.add(new_q)
