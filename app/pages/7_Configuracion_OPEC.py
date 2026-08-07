@@ -671,6 +671,7 @@ st.divider()
 
 if selected_competition_id and active_opec:
     from core.competition_readiness import inspect_competition
+    from core.guide_registry import guide_status
 
     readiness_db = SessionLocal()
     try:
@@ -693,6 +694,13 @@ if selected_competition_id and active_opec:
         f"Duración tipo examen: {readiness.exam_minutes} min"
     )
     st.info(f"Siguiente acción recomendada: {readiness.next_action}")
+    thematic_source = guide_status(selected_competition.code)
+    if thematic_source["status"] == "pending_official_guide":
+        st.warning(
+            f"Temario provisional: {thematic_source['label']} · versión {thematic_source['version']}. "
+            "Cuando se publique la guía oficial, el banco deberá contrastarse y versionarse de nuevo."
+        )
+        st.caption(thematic_source["next_action"])
 
 # --- AUTO-SEED SECTION v5.4 ---
 st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")

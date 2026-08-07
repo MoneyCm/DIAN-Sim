@@ -92,11 +92,23 @@ def calculate_topic_priority(
     return round(score, 6)
 
 
+def difficulty_for_mastery(mastery_score: float, attempts: int = 0) -> int:
+    """Unlock difficulty gradually; new topics always begin at the basic level."""
+    mastery = min(max(float(mastery_score or 0.0), 0.0), 100.0)
+    if int(attempts or 0) < 3 or mastery < 40.0:
+        return 1
+    if mastery < 75.0:
+        return 2
+    return 3
+
+
 def select_next_question(
     questions: Iterable,
     topic_priorities: Mapping[str, float],
     *,
     excluded_question_ids: Optional[set[str]] = None,
+    topic_mastery_scores: Optional[Mapping[str, float]] = None,
+    topic_attempt_counts: Optional[Mapping[str, int]] = None,
 ):
     """Selecciona de forma reproducible la mejor pregunta disponible."""
     excluded = excluded_question_ids or set()
@@ -106,9 +118,13 @@ def select_next_question(
 
     def rank(question):
         topic_id = topic_id_for(question.track, question.competency, question.topic)
-        difficulty_bonus = min(max(int(question.difficulty or 2), 1), 3) * 0.001
+        mastery = (topic_mastery_scores or {}).get(topic_id, 0.0)
+        attempts = (topic_attempt_counts or {}).get(topic_id, 0)
+        target_difficulty = difficulty_for_mastery(mastery, attempts)
+        question_difficulty = min(max(int(question.difficulty or 2), 1), 3)
         return (
-            -(topic_priorities.get(topic_id, 0.5) + difficulty_bonus),
+            abs(question_difficulty - target_difficulty),
+            -topic_priorities.get(topic_id, 0.5),
             str(question.question_id),
         )
 

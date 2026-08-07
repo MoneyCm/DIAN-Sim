@@ -397,9 +397,10 @@ def select_questions_for_simulation(
     n: int = 20,
 ) -> List[Question]:
     """Selector adaptativo general usado por los simulacros configurables."""
-    # Los casos verificados se mantienen como tripletas completas, como en el
-    # formato GOA, antes de completar el cupo con preguntas adaptativas sueltas.
+    # En práctica personalizada, los casos completos se desbloquean cuando el
+    # usuario ya demuestra dominio intermedio. Un tema nuevo comienza en nivel 1.
     from core.exam_format import official_question_groups
+    from core.learning.engine import difficulty_for_mastery
 
     selected = []
     selected_ids = set()
@@ -414,7 +415,12 @@ def select_questions_for_simulation(
         seen_cases.add(case_id)
         for group in official_question_groups(case):
             if {item.question_id for item in group}.issubset(eligible_ids):
-                case_groups.append(group)
+                group_mastery = min(
+                    float(getattr(skills_map.get((item.track, item.competency, item.topic)), "mastery_score", 0.0) or 0.0)
+                    for item in group
+                )
+                if group_mastery >= 60.0:
+                    case_groups.append(group)
     random.shuffle(case_groups)
     for group in case_groups:
         if len(selected) + len(group) > n:
@@ -423,9 +429,7 @@ def select_questions_for_simulation(
         selected_ids.update(question.question_id for question in group)
 
     remaining_n = n - len(selected)
-    weak_questions = []
-    medium_questions = []
-    strong_questions = []
+    ranked_questions = []
 
     for question in all_questions:
         if question.question_id in selected_ids:
@@ -434,27 +438,25 @@ def select_questions_for_simulation(
         skill = skills_map.get(key)
         mastery = skill.mastery_score if skill else 0.0
 
-        if mastery < 50:
-            weak_questions.append(question)
-        elif mastery < 80:
-            medium_questions.append(question)
+        target = difficulty_for_mastery(mastery, 3 if skill else 0)
+        difficulty = min(max(int(question.difficulty or 2), 1), 3)
+        ranked_questions.append((abs(difficulty - target), mastery, random.random(), question))
+
+    ranked_questions.sort(key=lambda item: (item[0], item[1], item[2]))
+    adaptive_selected = []
+    topic_counts = {}
+    per_topic_limit = max(2, math.ceil(max(remaining_n, 1) * 0.20))
+    deferred = []
+    for item in ranked_questions:
+        question = item[3]
+        topic = question.topic or "Sin tema"
+        if topic_counts.get(topic, 0) < per_topic_limit and len(adaptive_selected) < remaining_n:
+            adaptive_selected.append(question)
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
         else:
-            strong_questions.append(question)
-
-    n_weak = int(remaining_n * 0.60)
-    n_medium = int(remaining_n * 0.25)
-
-    def sample_safe(pool, count):
-        return random.sample(pool, min(len(pool), count))
-
-    adaptive_selected = sample_safe(weak_questions, n_weak)
-    remaining_weak_slots = n_weak - len(adaptive_selected)
-    adaptive_selected.extend(sample_safe(medium_questions, n_medium + max(0, remaining_weak_slots)))
-    adaptive_selected.extend(sample_safe(strong_questions, remaining_n - len(adaptive_selected)))
-
+            deferred.append(question)
     if len(adaptive_selected) < remaining_n:
-        remaining = [question for question in all_questions if question not in selected and question not in adaptive_selected]
-        adaptive_selected.extend(sample_safe(remaining, remaining_n - len(adaptive_selected)))
+        adaptive_selected.extend(deferred[:remaining_n - len(adaptive_selected)])
 
     # No barajar internamente las tripletas; cada caso debe aparecer seguido.
     return selected + adaptive_selected

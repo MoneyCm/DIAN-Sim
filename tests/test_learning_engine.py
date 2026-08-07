@@ -6,6 +6,7 @@ import pytest
 from core.learning.engine import (
     calculate_mastery,
     calculate_topic_priority,
+    difficulty_for_mastery,
     schedule_next_review,
     select_next_question,
     topic_id_for,
@@ -66,3 +67,26 @@ def test_select_next_question_uses_priority_and_exclusions():
     }
     assert select_next_question(questions, priorities).question_id == "q1"
     assert select_next_question(questions, priorities, excluded_question_ids={"q1"}).question_id == "q2"
+
+
+def test_difficulty_unlocks_only_after_enough_evidence_and_mastery():
+    assert difficulty_for_mastery(90, attempts=0) == 1
+    assert difficulty_for_mastery(39, attempts=8) == 1
+    assert difficulty_for_mastery(40, attempts=3) == 2
+    assert difficulty_for_mastery(74, attempts=20) == 2
+    assert difficulty_for_mastery(75, attempts=5) == 3
+
+
+def test_adaptive_selector_prefers_difficulty_matching_topic_mastery():
+    topic_id = topic_id_for("F", "C", "Arquitectura")
+    questions = [
+        SimpleNamespace(question_id="basic", track="F", competency="C", topic="Arquitectura", difficulty=1),
+        SimpleNamespace(question_id="advanced", track="F", competency="C", topic="Arquitectura", difficulty=3),
+    ]
+    priorities = {topic_id: 0.8}
+    assert select_next_question(
+        questions, priorities, topic_mastery_scores={topic_id: 10}, topic_attempt_counts={topic_id: 2}
+    ).question_id == "basic"
+    assert select_next_question(
+        questions, priorities, topic_mastery_scores={topic_id: 85}, topic_attempt_counts={topic_id: 8}
+    ).question_id == "advanced"

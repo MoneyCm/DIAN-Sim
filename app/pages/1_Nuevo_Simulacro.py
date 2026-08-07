@@ -254,6 +254,11 @@ with st.container():
             
             st.divider()
             st.markdown("### Simulacro de OPEC")
+            st.info(
+                "📈 **Progresión adaptativa por competencia:** cada tema nuevo comienza en Básico. "
+                "Al alcanzar 40% de dominio pasa a Intermedio y desde 75% pasa a Avanzado. "
+                "Los errores o la baja confianza pueden devolver temporalmente el tema a un nivel anterior."
+            )
             num_q_opec = st.select_slider(
                 "Duración", options=[5, 10, 15, 20], value=10,
                 format_func=lambda value: f"{value} preguntas · aprox. {max(8, value * 2)} min",

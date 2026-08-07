@@ -107,18 +107,29 @@ class LearningSessionService:
     def _select(self, session: LearningSession, now: datetime):
         questions = self._questions(session.competition_id)
         priorities = self._topic_priorities(session.user_id, session.competition_id, questions, now)
+        mastery_query = self.db.query(TopicMastery).filter_by(user_id=session.user_id)
+        if session.competition_id is not None:
+            mastery_query = mastery_query.filter_by(competition_id=session.competition_id)
+        mastery_rows = mastery_query.all()
+        mastery_scores = {row.topic_id: float(row.mastery_score or 0.0) for row in mastery_rows}
+        mastery_attempts = {row.topic_id: int(row.attempts or 0) for row in mastery_rows}
         attempted_ids = {
             str(row[0])
             for row in self.db.query(LearningAttempt.question_id)
             .filter(LearningAttempt.session_id == session.id)
             .all()
         }
-        selected = select_next_question(questions, priorities, excluded_question_ids=attempted_ids)
+        selected = select_next_question(
+            questions, priorities, excluded_question_ids=attempted_ids,
+            topic_mastery_scores=mastery_scores, topic_attempt_counts=mastery_attempts,
+        )
         if selected is None and questions:
             selected = select_next_question(
                 questions,
                 priorities,
                 excluded_question_ids={str(session.current_question_id)} if session.current_question_id else set(),
+                topic_mastery_scores=mastery_scores,
+                topic_attempt_counts=mastery_attempts,
             )
         return selected
 
