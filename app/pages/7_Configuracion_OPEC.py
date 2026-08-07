@@ -12,6 +12,8 @@ from db.models import Competition, Question, UserOPEC
 from ui_utils import load_css, render_header
 
 from core.auth import AuthManager
+from core.competitions import ensure_builtin_competitions
+from core.competition_catalog import is_hidden_catalog_duplicate, load_catalog_profiles
 
 # pass # Removed st.set_page_config
 
@@ -340,9 +342,11 @@ def get_active_opec(competition_id=None):
 
 u_id = st.session_state.get("user_id")
 competition_db = SessionLocal()
+ensure_builtin_competitions(competition_db)
+catalog_profiles = load_catalog_profiles()
 competitions = [
     competition for competition in competition_db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
-    if competition.code in {"DIAN-2676", "TERRITORIAL-12-BOLIVAR-2685"}
+    if not is_hidden_catalog_duplicate(competition, catalog_profiles)
 ]
 current_opec = get_active_opec()
 competition_ids = [competition.id for competition in competitions]

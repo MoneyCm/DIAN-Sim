@@ -7,6 +7,30 @@ from db.models import Competition, UserOPEC
 
 DEFAULT_COMPETITION_CODE = "DIAN-2676"
 
+BUILTIN_COMPETITIONS = (
+    {
+        "code": "ALIMENTACION-ESCOLAR-ABIERTO",
+        "name": "Alimentación Escolar - Alimentos para Aprender - Abierto",
+        "entity": "Unidad Administrativa Especial de Alimentación Escolar - Alimentos para Aprender",
+        "description": "Proceso de selección modalidad Abierto de la UApA.",
+    },
+)
+
+
+def ensure_builtin_competitions(db: Session) -> None:
+    """Registra los concursos soportados por la interfaz de forma idempotente."""
+    changed = False
+    for values in BUILTIN_COMPETITIONS:
+        competition = db.query(Competition).filter_by(code=values["code"]).first()
+        if competition is None:
+            db.add(Competition(**values, is_active=True))
+            changed = True
+        elif not competition.is_active:
+            competition.is_active = True
+            changed = True
+    if changed:
+        db.commit()
+
 
 def get_default_competition(db: Session) -> Optional[Competition]:
     return db.query(Competition).filter_by(code=DEFAULT_COMPETITION_CODE).first()

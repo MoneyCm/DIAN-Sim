@@ -29,12 +29,20 @@ def render_header(title: str = None, subtitle: str = None):
         logo_name = "logo.png"
         try:
             from db.session import SessionLocal
+            from db.models import Competition
             from core.competitions import get_active_competition
             db = SessionLocal()
-            competition = get_active_competition(db, st.session_state.get("user_id")) if st.session_state.get("user_id") else None
+            selected_id = st.session_state.get("selected_competition_id")
+            competition = db.get(Competition, selected_id) if selected_id else None
+            if competition is None and st.session_state.get("user_id"):
+                competition = get_active_competition(db, st.session_state.get("user_id"))
             db.close()
-            if competition and competition.code == "TERRITORIAL-12-BOLIVAR-2685":
-                logo_name = "territorial12-bolivar.png"
+            competition_logos = {
+                "TERRITORIAL-12-BOLIVAR-2685": "territorial12-bolivar.png",
+                "ALIMENTACION-ESCOLAR-ABIERTO": "alimentacion-escolar.png",
+            }
+            if competition:
+                logo_name = competition_logos.get(competition.code, logo_name)
         except Exception:
             pass
         logo_path = os.path.join(os.path.dirname(__file__), "assets", logo_name)
