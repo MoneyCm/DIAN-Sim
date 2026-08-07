@@ -14,6 +14,10 @@ from ui_utils import load_css, render_header
 from core.auth import AuthManager
 from core.competitions import ensure_builtin_competitions
 from core.competition_catalog import is_hidden_catalog_duplicate, load_catalog_profiles
+from core.question_banks.alimentacion_escolar import (
+    TARGET_COUNT as ALIMENTACION_ESCOLAR_TARGET,
+    seed_questions as seed_alimentacion_escolar_questions,
+)
 
 # pass # Removed st.set_page_config
 
@@ -379,6 +383,29 @@ if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR
                 f"Se agregaron {created} preguntas. "
                 f"Banco actual de Territorial 12: {total} preguntas."
             )
+        finally:
+            seed_db.close()
+
+if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-ABIERTO":
+    seed_db = SessionLocal()
+    try:
+        current_total = seed_db.query(Question).filter(
+            Question.competition_id == selected_competition_id
+        ).count()
+    finally:
+        seed_db.close()
+    st.caption(f"Banco funcional del concurso: {current_total}/{ALIMENTACION_ESCOLAR_TARGET} preguntas")
+    if st.button("Completar banco de 100 preguntas UApA", use_container_width=True):
+        seed_db = SessionLocal()
+        try:
+            created = seed_alimentacion_escolar_questions(seed_db, selected_competition_id)
+            total = seed_db.query(Question).filter(
+                Question.competition_id == selected_competition_id
+            ).count()
+            st.success(f"Se agregaron {created} preguntas. Banco actual de UApA: {total} preguntas.")
+        except Exception as exc:
+            seed_db.rollback()
+            st.error(f"No se pudo completar el banco UApA: {exc}")
         finally:
             seed_db.close()
 
