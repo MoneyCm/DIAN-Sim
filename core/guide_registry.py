@@ -13,9 +13,9 @@ def guide_status(competition_code: str) -> dict:
     except (OSError, ValueError):
         registry = {}
     return registry.get(competition_code, {
-        "status": "unregistered",
-        "label": "Fuentes oficiales pendientes de registrar",
-        "version": "unversioned",
+        "status": "pending_official_guide",
+        "label": "Matriz provisional construida desde la ficha OPEC",
+        "version": "opec-base-v1",
         "official_sources": [],
         "next_action": "Registrar la guía oficial y reconstruir la matriz temática.",
     })

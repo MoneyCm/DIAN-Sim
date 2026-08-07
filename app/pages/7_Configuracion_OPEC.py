@@ -707,9 +707,12 @@ st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
 st.markdown("""
 Si no quieres crear preguntas una por una, usa esta opción. El sistema leerá tu **Cargo y Funciones** y generará automáticamente:
 *   10 casos tipo examen, con 3 preguntas relacionadas por caso.
-*   Hasta 60 preguntas funcionales.
-*   Hasta 20 preguntas comportamentales.
-*   Hasta 20 preguntas de integridad/valores.
+*   Entre 48 y 60 preguntas funcionales, clasificadas por función y competencia.
+*   11 preguntas comportamentales y 11 de integridad/valores.
+*   Niveles básico, intermedio y avanzado para la práctica adaptativa.
+
+La base progresiva se crea localmente y no requiere una clave de IA. Al volver a ejecutar
+Auto-Seed, el sistema reconoce el banco existente y evita duplicarlo.
 """)
 
 if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_container_width=True):
@@ -737,12 +740,8 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             gemini_key = get_api_key("gemini")
             api_key = mistral_key or gemini_key
             provider = "mistral" if mistral_key else "gemini"
-            if not api_key:
-                st.error("Configura una API Key de Gemini o Mistral en Generador IA antes de crear la base.")
-                st.stop()
-            
-            # Simple fallback if keys missing (handled by LLMGenerator typically or errors out)
-            gen = LLMGenerator(provider=provider, api_key=api_key if api_key else "dummy")
+            # La IA es opcional: el banco progresivo y los casos de respaldo se crean localmente.
+            gen = LLMGenerator(provider=provider, api_key=api_key) if api_key else None
             
             progress = st.progress(0, text="Analizando perfil OPEC...")
             status = st.empty()
@@ -771,7 +770,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                         f"OPEC {active_opec.opec_number}. Propósito: {active_opec.purpose}. "
                         f"Funciones: {active_opec.functions}."
                     )
-                    for attempt in range(0 if is_adres else 2):
+                    for attempt in range(0 if is_adres or gen is None else 2):
                         try:
                             candidate = gen.generate_case_study(
                                 topic=f"Caso {case_number}: {active_opec.job_title}",
@@ -841,26 +840,20 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             progress.progress(25, text="Casos generados. Iniciando preguntas funcionales...")
             
             # 2. Functional Questions
-            status.info("Generando preguntas funcionales...")
+            status.info("Clasificando funciones y construyendo los tres niveles de dificultad...")
             func_text = (
                 f"Cargo: {active_opec.job_title}\nPropósito: {active_opec.purpose}\n"
                 f"Funciones: {str(active_opec.functions)}\nRequisitos: {active_opec.requirements}"
             )
-            existing_functional = db.query(Question).filter(
+            existing_progressive = db.query(Question).filter(
                 Question.competition_id == selected_competition_id,
-                Question.track == "FUNCIONAL",
+                Question.case_id.is_(None),
+                Question.source_refs.contains("guía oficial pendiente"),
             ).count()
-            functional_needed = max(0, 60 - existing_functional)
-            try:
-                q_func = gen.generate_from_text(
-                    func_text, count=functional_needed, difficulty=2, user_id=u_id
-                ) if functional_needed else []
-            except Exception as exc:
-                status.info("Cuota de IA no disponible; completando preguntas funcionales desde la ficha OPEC.")
-                print(f"Functional AI fallback: {exc}")
-                q_func = build_fallback_questions(
-                    active_opec, "FUNCIONAL", functional_needed, existing_functional
-                )
+            from core.question_banks.opec_progressive import build_progressive_bank
+            q_func = [] if existing_progressive else build_progressive_bank(
+                active_opec, getattr(selected_competition, "code", "")
+            )
             
             for q in q_func:
                 new_q = Question(
@@ -870,12 +863,15 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                     options_json=q.get("options"),
                     correct_key=q.get("correct_key"),
                     rationale=q.get("rationale"),
-                    track="FUNCIONAL",
-                    topic=active_opec.job_title,
-                    competency="Funcional",
-                    micro_competencia="Conocimientos Técnicos",
-                    macro_dominio="Funcionamiento del Estado",
-                    difficulty=2,
+                    track=q.get("track", "FUNCIONAL"),
+                    topic=q.get("topic", active_opec.job_title),
+                    competency=q.get("competency", "Funcional"),
+                    micro_competencia=q.get("competency", "Conocimientos Técnicos"),
+                    macro_dominio="Función OPEC" if q.get("track") == "FUNCIONAL" else "Competencias transversales",
+                    difficulty=q.get("difficulty", 1),
+                    source_refs=q.get("source_refs"),
+                    is_verified=False,
+                    quality_report={"origin": "progressive_opec_local", "guide_status": "pending"},
                     hash_norm=str(uuid.uuid4())
                 )
                 db.add(new_q)
@@ -895,7 +891,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             try:
                 q_behav = gen.generate_from_text(
                     behav_text, count=behavioral_needed, difficulty=2, user_id=u_id
-                ) if behavioral_needed else []
+                ) if behavioral_needed and gen is not None else []
             except Exception as exc:
                 status.info("Cuota de IA no disponible; completando preguntas comportamentales localmente.")
                 print(f"Behavioral AI fallback: {exc}")
@@ -930,13 +926,13 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             int_text = f"CONTEXTO ÉTICO: Dilemas éticos, Código de Integridad del Servicio Público y valores para un servidor público territorial en el cargo {active_opec.job_title}."
             existing_integrity = db.query(Question).filter(
                 Question.competition_id == selected_competition_id,
-                Question.topic == "Integridad y Valores",
+                Question.competency.like("Integridad%"),
             ).count()
-            integrity_needed = max(0, 20 - existing_integrity)
+            integrity_needed = max(0, 11 - existing_integrity)
             try:
                 q_int = gen.generate_from_text(
                     int_text, count=integrity_needed, difficulty=2, user_id=u_id
-                ) if integrity_needed else []
+                ) if integrity_needed and gen is not None else []
             except Exception as exc:
                 status.info("Cuota de IA no disponible; completando integridad y valores localmente.")
                 print(f"Integrity AI fallback: {exc}")
