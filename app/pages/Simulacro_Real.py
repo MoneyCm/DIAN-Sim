@@ -19,8 +19,13 @@ from db.models import CaseStudy, Question, UserOPEC
 from ui_utils import load_css as inject_custom_css, render_favorite_button, escape_html
 from services.stats_service import StatsService
 from core.auth import AuthManager
-from core.competitions import get_active_competition_id
+from core.competitions import get_active_competition, get_active_competition_id
 from core.exam_format import build_official_case_blocks, official_question_groups
+from core.real_exam import (
+    UAPA_COMPETITION_CODE,
+    blueprint_for_competition,
+    select_balanced_blocks,
+)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 # pass # Removed st.set_page_config
@@ -153,6 +158,16 @@ def _official_inventory():
     finally:
         db.close()
 
+
+def _active_exam_context():
+    db = next(get_db())
+    try:
+        competition = get_active_competition(db, st.session_state.get("user_id"))
+        code = getattr(competition, "code", None)
+        return competition, blueprint_for_competition(code, is_pro=AuthManager.is_pro())
+    finally:
+        db.close()
+
 def _sanitize_exam_session_state():
     active_cases = st.session_state.get("exam_cases", []) or []
     if active_cases and not all(_case_is_valid_for_dian(case) for case in active_cases):
@@ -193,33 +208,16 @@ def load_exam_cases():
         if not blocks:
             return []
 
-        # Prefer weak topics, while preserving a random mix when no match exists.
+        # Prefer weak topics, while preserving balanced coverage by domain.
         smart_topics = StatsService.get_smart_mix_topics(
             user_id, count=2, competition_id=competition_id
         ) if user_id else []
-        selected = []
-        for topic in smart_topics:
-            match = next(
-                (
-                    block for block in blocks
-                    if block not in selected
-                    and any(
-                        topic == getattr(question, "topic", None)
-                        or topic == getattr(question, "micro_competencia", None)
-                        for question in block.questions
-                    )
-                ),
-                None,
-            )
-            if match:
-                selected.append(match)
-
-        target_case_count = 3 if AuthManager.is_pro() else 2
-        remaining = [block for block in blocks if block not in selected]
-        random.shuffle(remaining)
-        selected.extend(remaining[:max(0, target_case_count - len(selected))])
-        random.shuffle(selected)
-        return selected[:target_case_count]
+        competition = get_active_competition(db, user_id)
+        blueprint = blueprint_for_competition(
+            getattr(competition, "code", None), is_pro=AuthManager.is_pro()
+        )
+        random.shuffle(blocks)
+        return select_balanced_blocks(blocks, blueprint.target_cases, smart_topics)
     except Exception as exc:
         print(f"Error loading official GOA blocks: {exc}")
         return []
@@ -282,7 +280,8 @@ def finish_exam():
 
 if not st.session_state.exam_active:
     # --- PANTALLA DE INICIO CON PROTOCOLO ---
-    st.title("⏱️ Simulacro Tipo Examen - Alta Presión")
+    active_competition, exam_blueprint = _active_exam_context()
+    st.title(f"⏱️ {exam_blueprint.title}")
     
     # Modo Simulacro
     st.markdown("""
@@ -298,18 +297,24 @@ if not st.session_state.exam_active:
     """)
     
     official_cases, review_cases = _official_inventory()
-    target_cases = 30
+    target_cases = exam_blueprint.target_cases
     inventory_cols = st.columns(3)
     inventory_cols[0].metric("Casos oficiales", official_cases)
-    inventory_cols[1].metric("Meta inicial", target_cases)
+    inventory_cols[1].metric("Meta de casos", target_cases)
     inventory_cols[2].metric("Casos para revisar", review_cases)
     st.progress(min(official_cases / target_cases, 1.0))
+    st.markdown(
+        f"**Formato programado:** {min(official_cases, target_cases)} casos · "
+        f"{min(official_cases, target_cases) * exam_blueprint.questions_per_case} preguntas · "
+        f"{min(official_cases, target_cases) * exam_blueprint.questions_per_case * exam_blueprint.minutes_per_question} minutos."
+    )
     if official_cases < 2:
         st.warning(
             "El banco oficial aun no tiene suficientes casos para un simulacro completo. "
             "El material anterior se conserva en Practica/Requiere revision."
         )
-    if not AuthManager.is_pro():
+    is_uapa_exam = getattr(active_competition, "code", None) == UAPA_COMPETITION_CODE
+    if not AuthManager.is_pro() and not is_uapa_exam:
         st.info("💡 Como usuario **Free**, tu simulacro será una versión breve (máximo 2 casos).")
         if st.button("🚀 Desbloquear Simulacro Completo (100 Qs) con PRO", use_container_width=True):
             st.session_state["show_paywall"] = True
