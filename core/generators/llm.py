@@ -428,6 +428,49 @@ class LLMGenerator:
                     raise Exception(f"Límite de velocidad (Rate Limit) alcanzado: {error_msg}")
             raise Exception(f"Fallo en lote: {error_msg}")
 
+    def explain_socratically(self, question_data: dict) -> str:
+        """Orienta el razonamiento sin revelar ni recalificar la respuesta."""
+        from core.socratic_tutor import build_socratic_prompt
+
+        prompt = build_socratic_prompt(
+            competition=question_data.get("competition", "Concurso activo"),
+            stem=question_data.get("stem", ""),
+            options=question_data.get("options_json", {}),
+            selected_key=question_data.get("selected_key", "Sin respuesta"),
+            rationale=question_data.get("rationale", ""),
+            source=question_data.get("source_refs", ""),
+        )
+        if self.provider == "openai" and self.openai_client:
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name or "gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        if self.provider == "groq" and self.openai_client:
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name or "llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        if self.provider == "mistral" and self.mistral_client:
+            response = self.mistral_client.chat.complete(
+                model=self.model_name or "mistral-small-latest",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        if self.provider == "gemini" and self.gemini_client:
+            candidates = list(dict.fromkeys(
+                ([self.model_name] if self.model_name else []) + list(self.GEMINI_MODEL_FALLBACKS)
+            ))
+            for model_name in candidates:
+                try:
+                    response = self.gemini_client.models.generate_content(model=model_name, contents=prompt)
+                    if response and response.text:
+                        return response.text
+                except Exception:
+                    continue
+        raise RuntimeError("El proveedor de IA no devolvió orientación.")
+
     def explain_question(self, question_data: dict) -> str:
         """Provides a socratic and educational explanation for a question."""
         

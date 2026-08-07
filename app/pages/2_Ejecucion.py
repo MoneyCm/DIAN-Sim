@@ -44,6 +44,7 @@ from core.generators.llm import LLMGenerator
 from core.guided_learning import build_guided_learning_brief
 from ui_utils import load_css, render_header, render_favorite_button, escape_html
 from core.session_recovery import recover_question_ids
+from core.socratic_tutor import local_socratic_hint
 
 # --- v21: Safe Attribute Assignment Mikey ---
 def safe_setattr(obj, attr, value):
@@ -598,8 +599,20 @@ with col2:
             if question.source_refs:
                 st.caption(f"📖 Fuente: {question.source_refs}")
     elif not is_hardcore:
-        if st.button("🤖 Tutor IA (Socrático)", use_container_width=True):
+        selected_key = st.session_state["answers"].get(current_q_id)
+        st.caption("Ayuda opcional: orienta tu razonamiento, no revela la respuesta ni cambia el puntaje.")
+        if st.button(
+            "🧭 Revisar mi razonamiento",
+            use_container_width=True,
+            disabled=not selected_key,
+        ):
             with st.spinner("Analizando..."):
+                selected_text = question.options_json.get(selected_key, "")
+                fallback_hint = local_socratic_hint(
+                    topic=question.topic,
+                    selected_text=selected_text,
+                    source=question.source_refs or "",
+                )
                 try:
                     from core.config import get_api_key
                     current_provider = st.session_state.get("current_provider", "Gemini")
