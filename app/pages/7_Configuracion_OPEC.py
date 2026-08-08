@@ -371,6 +371,78 @@ with st.container(border=True):
     guide_cols[0].markdown("**1. Copia**  \nLa ficha del empleo en SIMO")
     guide_cols[1].markdown("**2. Pega**  \nEl texto en ‘Ficha del empleo’")
     guide_cols[2].markdown("**3. Confirma**  \nY empieza tu preparación")
+    st.markdown("#### ¿Solo tienes el número OPEC?")
+    lookup_col, lookup_button_col = st.columns([3, 1])
+    with lookup_col:
+        lookup_number = st.text_input(
+            "Número OPEC",
+            placeholder="Ej: 252097",
+            key="quick_opec_number",
+            label_visibility="collapsed",
+        )
+    with lookup_button_col:
+        lookup_requested = st.button(
+            "🔎 Buscar ficha", use_container_width=True,
+            disabled=not bool(lookup_number.strip()),
+        )
+    if lookup_requested:
+        from core.opec_lookup import find_reusable_opec
+
+        lookup_db = SessionLocal()
+        try:
+            st.session_state["opec_lookup_result"] = find_reusable_opec(
+                lookup_db, lookup_number
+            )
+        finally:
+            lookup_db.close()
+        if st.session_state["opec_lookup_result"] is None:
+            st.warning(
+                "Esta OPEC todavía no está en el catálogo compartido. Consúltala en SIMO "
+                "y pega la ficha debajo; después quedará reutilizable por número."
+            )
+            st.link_button(
+                "Abrir búsqueda oficial de SIMO",
+                "https://simo.cnsc.gov.co/#ofertaEmpleo",
+                use_container_width=True,
+            )
+
+    reusable_profile = st.session_state.get("opec_lookup_result")
+    if reusable_profile:
+        st.success(
+            f"Ficha encontrada: OPEC {reusable_profile['opec_number']} · "
+            f"{reusable_profile['job_title']}"
+        )
+        st.caption(
+            f"Concurso: {reusable_profile['competition']['name']} · "
+            f"{len(reusable_profile['functions'])} funciones registradas. "
+            "Revisa la información antes de usarla porque SIMO puede actualizar la oferta."
+        )
+        with st.expander("Revisar propósito, funciones y requisitos"):
+            st.write(reusable_profile["purpose"])
+            for index, function in enumerate(reusable_profile["functions"], start=1):
+                st.write(f"{index}. {function}")
+            st.write(f"**Requisitos:** {reusable_profile['requirements']}")
+        if st.button("✅ Usar esta ficha OPEC", type="primary", use_container_width=True):
+            from core.opec_lookup import attach_reusable_opec_to_user
+
+            attach_db = SessionLocal()
+            try:
+                attached = attach_reusable_opec_to_user(
+                    attach_db, u_id, reusable_profile
+                )
+                attach_db.commit()
+                target_competition_id = attached.competition_id
+                st.session_state.pop("opec_lookup_result", None)
+                st.session_state.pop("opec_onboarding", None)
+                if target_competition_id:
+                    st.session_state["pending_selected_competition_id"] = target_competition_id
+                st.success("Ficha asociada y activada para tu cuenta.")
+                st.rerun()
+            except Exception as exc:
+                attach_db.rollback()
+                st.error(f"No fue posible asociar la ficha: {exc}")
+            finally:
+                attach_db.close()
     if st.button("➕ Mi concurso no aparece y quiero registrarlo manualmente", use_container_width=True):
         st.session_state["show_new_competition_form"] = True
 
