@@ -3,6 +3,7 @@
 import re
 
 from core.question_banks.adres_practice import BEHAVIORAL, INTEGRITY, _rotate_options
+from core.official_source_research import source_titles_for_function
 
 
 BANK_VERSION = "banco progresivo universal v1"
@@ -59,7 +60,8 @@ def build_opec_progressive_questions(opec, competition_code: str = "") -> list[d
         }
         stem, correct, distractors, rationale = variants[difficulty]
         options, correct_key = _rotate_options(correct.capitalize() + ".", tuple(x + "." for x in distractors), index)
-        questions.append({"track": "FUNCIONAL", "competency": competency, "topic": f"F{number:02d} · {competency}", "difficulty": difficulty, "stem": stem, "options": options, "correct_key": correct_key, "rationale": rationale, "source_refs": f"{source} · Función {number}: {function_text[:240]}", "function_number": number})
+        official_refs = " · ".join(source_titles_for_function(function_text))
+        questions.append({"track": "FUNCIONAL", "competency": competency, "topic": f"F{number:02d} · {competency}", "difficulty": difficulty, "stem": stem, "options": options, "correct_key": correct_key, "rationale": rationale, "source_refs": f"{source} · {official_refs} · Función {number}: {function_text[:240]}", "function_number": number})
 
     for index, (competency, situation, action) in enumerate(BEHAVIORAL, start=1):
         difficulty = 1 + (index - 1) % 3

@@ -357,6 +357,23 @@ competitions = [
     if not is_hidden_catalog_duplicate(competition, catalog_profiles)
 ]
 current_opec = get_active_opec()
+
+# Inicio guiado: para una persona nueva la ficha SIMO es suficiente. El
+# concurso se detecta al confirmar y el registro manual queda como alternativa.
+with st.container(border=True):
+    st.subheader("👋 ¿Es tu primera vez?")
+    st.markdown(
+        "**La forma más fácil es pegar la ficha completa del empleo de SIMO.** "
+        "La aplicación identifica el concurso, la OPEC, el cargo y sus funciones; "
+        "no necesitas llenar cada dato por separado."
+    )
+    guide_cols = st.columns(3)
+    guide_cols[0].markdown("**1. Copia**  \nLa ficha del empleo en SIMO")
+    guide_cols[1].markdown("**2. Pega**  \nEl texto en ‘Ficha del empleo’")
+    guide_cols[2].markdown("**3. Confirma**  \nY empieza tu preparación")
+    if st.button("➕ Mi concurso no aparece y quiero registrarlo manualmente", use_container_width=True):
+        st.session_state["show_new_competition_form"] = True
+
 competition_ids = [competition.id for competition in competitions]
 pending_competition_id = st.session_state.pop("pending_selected_competition_id", None)
 if pending_competition_id in competition_ids:
@@ -368,7 +385,7 @@ default_competition_id = (
     else (competition_ids[0] if competition_ids else None)
 )
 selected_competition_id = st.selectbox(
-    "Concurso o proceso de selección",
+    "Concurso actual (puedes cambiarlo después)",
     competition_ids,
     index=competition_ids.index(default_competition_id) if default_competition_id in competition_ids else 0,
     format_func=lambda competition_id: next(
@@ -506,7 +523,10 @@ if active_opec and not active_opec.is_active:
 st.caption(
     "¿Tu concurso no aparece en la lista? Puedes registrarlo sin importar cuál esté seleccionado actualmente."
 )
-with st.expander("➕ Registrar un concurso nuevo (opción general)"):
+with st.expander(
+    "➕ Registrar un concurso nuevo manualmente",
+    expanded=st.session_state.get("show_new_competition_form", False),
+):
     with st.form("new_competition_form"):
         new_competition_code = st.text_input("Código del proceso", placeholder="Ej: TERRITORIAL-11")
         new_competition_name = st.text_input("Nombre del concurso", placeholder="Ej: Territorial 11")
@@ -522,14 +542,19 @@ with st.expander("➕ Registrar un concurso nuevo (opción general)"):
                     if existing_competition:
                         st.warning("Ese concurso ya está registrado.")
                     else:
-                        create_db.add(Competition(
+                        new_competition = Competition(
                             code=code,
                             name=new_competition_name.strip(),
                             entity=new_competition_entity.strip() or None,
                             is_active=True,
-                        ))
+                        )
+                        create_db.add(new_competition)
+                        create_db.flush()
+                        new_competition_id = new_competition.id
                         create_db.commit()
-                        st.success("Concurso registrado. Ya puedes asociarle una OPEC.")
+                        st.session_state["pending_selected_competition_id"] = new_competition_id
+                        st.session_state["show_new_competition_form"] = False
+                        st.success("Concurso registrado y seleccionado. Ahora pega la ficha OPEC.")
                         st.rerun()
                 finally:
                     create_db.close()
@@ -548,8 +573,8 @@ if st.session_state.get("debug_mode"):
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📋 Pegar ficha del empleo")
-    st.caption("Copia y pega aquí el texto completo de la ficha de empleo de SIMO. La aplicación extrae los datos y te muestra una vista previa antes de guardarlos.")
+    st.subheader("📋 Paso recomendado: pega la ficha del empleo")
+    st.caption("Copia en SIMO desde los datos del cargo hasta ‘Vacantes’. Detectaremos automáticamente el concurso y la OPEC antes de guardar.")
     employment_text = st.text_area(
         "Ficha de empleo de SIMO",
         placeholder="Pega aquí desde 'Nivel' hasta 'Vacantes'...",
@@ -726,6 +751,34 @@ if selected_competition_id and active_opec:
             "Cuando se publique la guía oficial, el banco deberá contrastarse y versionarse de nuevo."
         )
         st.caption(thematic_source["next_action"])
+
+    from core.official_source_research import build_official_source_matrix
+
+    source_matrix = build_official_source_matrix(active_opec, selected_competition)
+    monitoring_count = sum(
+        row["status"].startswith("monitorear") for row in source_matrix
+    )
+    with st.expander(
+        f"🔎 Investigación oficial provisional · {len(source_matrix)} fuentes",
+        expanded=not bool(current_opec),
+    ):
+        st.write(
+            "Esta matriz se construye automáticamente desde las funciones del empleo. "
+            "Las fuentes transversales sirven para estudiar desde ahora; las páginas de "
+            "CNSC y de la entidad se mantienen en vigilancia hasta que aparezca la guía propia."
+        )
+        for row in source_matrix:
+            status_label = (
+                "🟡 Monitorear publicación"
+                if row["status"].startswith("monitorear")
+                else "🟢 Fuente oficial disponible"
+            )
+            st.markdown(f"**[{row['title']}]({row['url']})** · {status_label}")
+            st.caption(f"{row['area']}: {row['reason']}")
+        st.info(
+            f"{monitoring_count} fuente(s) requieren seguimiento. "
+            "Una guía específica solo se marcará como verificada después de incorporarla y revisarla."
+        )
 
 # --- AUTO-SEED SECTION v5.4 ---
 st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
