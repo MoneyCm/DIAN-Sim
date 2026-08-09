@@ -49,8 +49,9 @@ def load_catalog_profiles() -> list[dict[str, Any]]:
     return profiles
 
 
-def sync_catalog_competitions(db) -> None:
-    """Create catalogued competitions and merge their legacy duplicates safely."""
+def sync_catalog_competitions(db) -> bool:
+    """Persist catalogued competitions and merge their legacy duplicates safely."""
+    changed = False
     for profile in load_catalog_profiles():
         source = profile["competition"]
         canonical = db.query(Competition).filter_by(code=source["code"]).first()
@@ -64,6 +65,7 @@ def sync_catalog_competitions(db) -> None:
             )
             db.add(canonical)
             db.flush()
+            changed = True
 
         # Earlier versions allowed entering the same Territorial 12 process
         # manually. Merge only the exact Bolívar process; other Territorial 12
@@ -80,6 +82,10 @@ def sync_catalog_competitions(db) -> None:
                     {model.competition_id: canonical.id}, synchronize_session=False
                 )
             db.delete(duplicate)
+            changed = True
+    if changed:
+        db.commit()
+    return changed
 
 
 def profile_for_competition(profiles: list[dict[str, Any]], code: str | None) -> dict[str, Any] | None:

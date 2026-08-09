@@ -20,6 +20,20 @@ try:
 except Exception as bootstrap_error:
     print(f"[OPEC 236769] Error al sincronizar banco curado: {bootstrap_error}")
 
+try:
+    from db.session import SessionLocal
+    from core.competitions import ensure_builtin_competitions
+    from core.competition_catalog import sync_catalog_competitions
+
+    catalog_db = SessionLocal()
+    try:
+        ensure_builtin_competitions(catalog_db)
+        sync_catalog_competitions(catalog_db)
+    finally:
+        catalog_db.close()
+except Exception as catalog_error:
+    print(f"[CATALOGO] Error al sincronizar concursos: {catalog_error}")
+
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
