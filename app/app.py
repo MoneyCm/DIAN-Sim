@@ -9,6 +9,17 @@ for import_path in (APP_DIR, PROJECT_ROOT):
     if import_path not in sys.path:
         sys.path.insert(0, import_path)
 
+# Carga explícita y única del banco revisado al activar el interruptor de
+# despliegue. Sin la variable de entorno no modifica ninguna base de datos.
+try:
+    from core.curated_opec_bootstrap import run_if_enabled as bootstrap_curated_opec
+
+    bootstrap_result = bootstrap_curated_opec()
+    if bootstrap_result:
+        print(f"[OPEC 236769] Banco curado sincronizado: {bootstrap_result}")
+except Exception as bootstrap_error:
+    print(f"[OPEC 236769] Error al sincronizar banco curado: {bootstrap_error}")
+
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
