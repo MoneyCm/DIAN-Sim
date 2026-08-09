@@ -27,6 +27,9 @@ from core.question_review import (
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
     matches_quality_filter, record_ai_audit, reject_candidate,
 )
+from core.question_quality import audit_bank, store_deterministic_audit
+
+QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
 # pass # Removed st.set_page_config
 
@@ -107,6 +110,35 @@ if action == "Consultar banco":
                 f"{dominant_count} de {len(bank_items)} preguntas ({dominant_pct:.0f}%). "
                 "No se corregirá cambiando letras mecánicamente; exige reescritura y revisión."
             )
+    local_audit_cols = st.columns([1, 2])
+    if local_audit_cols[0].button(
+        "🔬 Diagnóstico local del banco",
+        use_container_width=True,
+        help="Revisa estructura, trazabilidad y clasificación sin consumir IA ni aprobar preguntas.",
+    ):
+        summary = audit_bank(bank_items)
+        # Cualquier aspirante puede consultar el diagnóstico. Solo un
+        # administrador puede persistir el reporte en cada pregunta.
+        if is_admin_user:
+            for item in bank_items:
+                store_deterministic_audit(item, summary["reports"][str(item.question_id)])
+            db.commit()
+        st.session_state["bank_local_audit_summary"] = {
+            **{key: value for key, value in summary.items() if key != "reports"},
+            "competition_id": competition_id,
+            "persisted": is_admin_user,
+        }
+        st.session_state["bank_local_audit_reports"] = summary["reports"]
+        st.rerun()
+    local_summary = st.session_state.get("bank_local_audit_summary")
+    if local_summary and local_summary.get("competition_id") == competition_id:
+        storage_note = "Reporte guardado." if local_summary.get("persisted") else "Consulta de solo lectura."
+        local_audit_cols[1].info(
+            f"Diagnóstico local: {local_summary['passed']} sin fallas estructurales · "
+            f"{local_summary['review']} requieren revisión · clave dominante "
+            f"{local_summary['dominant_key'] or '—'} ({local_summary['dominant_key_pct']:.0f}%). "
+            f"{storage_note} Este control no certifica la exactitud jurídica."
+        )
     if is_admin_user and pending_reinforcements:
         st.info(
             f"🧪 Hay **{pending_reinforcements} refuerzos generados** pendientes de revisión. "
@@ -125,7 +157,7 @@ if action == "Consultar banco":
         # Quality Filter Mikey v36
         quality_f = st.selectbox(
             "Calidad",
-            [QUALITY_ALL, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED, QUALITY_PENDING],
+            [QUALITY_ALL, QUALITY_LOCAL_REVIEW, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED, QUALITY_PENDING],
             on_change=reset_pagination,
         )
     with col_filters[4]:
@@ -271,7 +303,11 @@ if action == "Consultar banco":
                 continue
             if diff_f and q.difficulty not in diff_f:
                 continue
-            if not matches_quality_filter(q, quality_f):
+            local_reports = st.session_state.get("bank_local_audit_reports", {})
+            if quality_f == QUALITY_LOCAL_REVIEW:
+                if local_reports.get(str(q.question_id), {}).get("status") != "REVIEW":
+                    continue
+            elif not matches_quality_filter(q, quality_f):
                 continue
             if format_f != "Todos" and question_format_status(q) != format_f:
                 continue
@@ -305,7 +341,14 @@ if action == "Consultar banco":
         filtered = query.all()
         if not is_admin_user:
             filtered = [q for q in filtered if is_safe_for_active_study(q)]
-        filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
+        local_reports = st.session_state.get("bank_local_audit_reports", {})
+        if quality_f == QUALITY_LOCAL_REVIEW:
+            filtered = [
+                q for q in filtered
+                if local_reports.get(str(q.question_id), {}).get("status") == "REVIEW"
+            ]
+        else:
+            filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
         if format_f != "Todos":
             filtered = [q for q in filtered if question_format_status(q) == format_f]
         total_count = len(filtered)
@@ -355,6 +398,16 @@ if action == "Consultar banco":
                 format_icon = "TIPO EXAMEN" if format_status == OFFICIAL_LABEL else "PRÁCTICA" if format_status == PRACTICE_LABEL else "REVISAR"
                 display_title = f"{status_icon} {format_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
                 with st.expander(display_title):
+                    transient_local_report = st.session_state.get(
+                        "bank_local_audit_reports", {}
+                    ).get(str(q.question_id))
+                    if transient_local_report and transient_local_report.get("status") == "REVIEW":
+                        st.warning(
+                            f"Diagnóstico local: {transient_local_report.get('score', 0)}/100. "
+                            "Esta pregunta requiere revisión."
+                        )
+                        for finding in transient_local_report.get("findings", []):
+                            st.write(f"- {finding.get('message')}")
                     st.caption(f"Formato: {format_status}")
                     st.markdown(f"**Enunciado:**\n{q.stem}")
                     ops = q.options_json if q.options_json else {}
@@ -460,6 +513,14 @@ if action == "Consultar banco":
                     if getattr(q, 'quality_report', None):
                         with st.expander("📄 Ver Reporte de Auditoría", expanded=False):
                             rep = q.quality_report
+                            local_rep = rep.get("deterministic_audit") if isinstance(rep, dict) else None
+                            if local_rep:
+                                st.markdown(
+                                    f"**Diagnóstico local:** {local_rep.get('score', 0)}/100 · "
+                                    f"{local_rep.get('status', 'REVIEW')}"
+                                )
+                                for finding in local_rep.get("findings", []):
+                                    st.write(f"- {finding.get('message')}")
                             ai_rep = rep.get("ai_audit") if isinstance(rep.get("ai_audit"), dict) else rep
                             score = ai_rep.get("score", "Sin calificar")
                             st.markdown(f"**Score IA:** {score}/10 | **Estado de control:** {rep.get('status')}")

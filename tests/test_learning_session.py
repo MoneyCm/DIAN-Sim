@@ -40,6 +40,8 @@ def seeded_db():
             correct_key="A",
             rationale="Explicación verificada.",
             source_refs="Fuente",
+            is_verified=True,
+            quality_report={"status": "APPROVED", "review": "source_grounded"},
             hash_norm=f"hash-{number}",
         ))
     db.commit()

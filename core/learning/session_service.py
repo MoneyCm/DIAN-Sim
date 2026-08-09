@@ -23,6 +23,7 @@ from core.learning.schemas import (
     SubmissionResult,
 )
 from core.spaced_repetition import schedule_review as schedule_legacy_review
+from core.legacy_question_audit import is_safe_for_active_study
 from db.models import (
     Attempt,
     LearningAttempt,
@@ -62,7 +63,10 @@ class LearningSessionService:
         query = self.db.query(Question)
         if competition_id is not None:
             query = query.filter(Question.competition_id == competition_id)
-        return query.order_by(Question.question_id).all()
+        questions = query.order_by(Question.question_id).all()
+        # The adaptive tutor must never expose candidates that have not passed
+        # the same source-grounded gate used by the rest of active study.
+        return [question for question in questions if is_safe_for_active_study(question)]
 
     def _topic_priorities(self, user_id: int, competition_id: Optional[int], questions, now):
         mastery_query = self.db.query(TopicMastery).filter(TopicMastery.user_id == user_id)
