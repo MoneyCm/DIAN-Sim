@@ -16,7 +16,10 @@ def is_enabled(env_name: str = BOOTSTRAP_ENV) -> bool:
 def run_if_enabled() -> dict[str, object] | None:
     """Load reviewed cases only when deployment explicitly requests them."""
     load_236769 = is_enabled()
-    load_241130 = is_enabled(OPEC_241130_BOOTSTRAP_ENV)
+    # The original curated-bank rollout flag remains enabled in production.
+    # Keep reviewed packs synchronized under that controlled rollout, while
+    # retaining a dedicated flag for installations that only need OPEC 241130.
+    load_241130 = is_enabled(OPEC_241130_BOOTSTRAP_ENV) or load_236769
     if not load_236769 and not load_241130:
         return None
 
