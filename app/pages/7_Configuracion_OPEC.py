@@ -749,7 +749,6 @@ with col1:
                             else:
                                 db.add(UserOPEC(
                                     user_id=u_id,
-                                    competition_id=target_competition_id,
                                     opec_number=extracted["opec_number"],
                                     **values,
                                 ))
