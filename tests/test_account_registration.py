@@ -1,6 +1,10 @@
 from sqlalchemy import create_engine, text
 
-from core.account_registration import UsernameAlreadyExists, create_password_account
+from core.account_registration import (
+    UsernameAlreadyExists,
+    create_google_account,
+    create_password_account,
+)
 
 
 def test_create_password_account_sets_required_free_subscription_tier():
@@ -8,7 +12,7 @@ def test_create_password_account_sets_required_free_subscription_tier():
     with engine.begin() as conn:
         conn.execute(text(
             "CREATE TABLE users ("
-            "id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, "
+            "id INTEGER PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, "
             "role TEXT NOT NULL, subscription_tier TEXT NOT NULL)"
         ))
 
@@ -26,7 +30,7 @@ def test_create_password_account_rejects_duplicate_username():
     with engine.begin() as conn:
         conn.execute(text(
             "CREATE TABLE users ("
-            "id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, "
+            "id INTEGER PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, "
             "role TEXT NOT NULL, subscription_tier TEXT NOT NULL)"
         ))
     create_password_account(engine, "marisol", "hash")
@@ -37,3 +41,21 @@ def test_create_password_account_rejects_duplicate_username():
         pass
     else:
         raise AssertionError("Expected a duplicate-username error")
+
+
+def test_create_google_account_sets_required_free_subscription_tier():
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE users ("
+            "id INTEGER PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, "
+            "role TEXT NOT NULL, subscription_tier TEXT NOT NULL)"
+        ))
+
+    user_id = create_google_account(engine, "marisol", "marisol@example.com")
+
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT username, email, password_hash, role, subscription_tier FROM users WHERE id = :id"
+        ), {"id": user_id}).one()
+    assert tuple(row) == ("marisol", "marisol@example.com", "GOOGLE_OAUTH", "user", "free")

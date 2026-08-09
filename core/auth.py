@@ -147,14 +147,8 @@ class AuthManager:
                         suffix += 1
                         new_name = f"{base_name}-{suffix}"
 
-                    with engine.begin() as insert_conn:
-                        user_id = insert_conn.execute(
-                            text(
-                                "INSERT INTO users (username, email, password_hash, role) "
-                                "VALUES (:u, :e, 'GOOGLE_OAUTH', 'user') RETURNING id"
-                            ),
-                            {"u": new_name, "e": email},
-                        ).scalar()
+                    from core.account_registration import create_google_account
+                    user_id = create_google_account(engine, new_name, email)
                     user_name, user_role = new_name, "user"
 
                 st.session_state["logged_in"] = True
