@@ -11,29 +11,6 @@ for import_path in (APP_DIR, PROJECT_ROOT):
 
 # Carga explícita y única del banco revisado al activar el interruptor de
 # despliegue. Sin la variable de entorno no modifica ninguna base de datos.
-try:
-    from core.curated_opec_bootstrap import run_if_enabled as bootstrap_curated_opec
-
-    bootstrap_result = bootstrap_curated_opec()
-    if bootstrap_result:
-        print(f"[OPEC 236769] Banco curado sincronizado: {bootstrap_result}")
-except Exception as bootstrap_error:
-    print(f"[OPEC 236769] Error al sincronizar banco curado: {bootstrap_error}")
-
-try:
-    from db.session import SessionLocal
-    from core.competitions import ensure_builtin_competitions
-    from core.competition_catalog import sync_catalog_competitions
-
-    catalog_db = SessionLocal()
-    try:
-        ensure_builtin_competitions(catalog_db)
-        sync_catalog_competitions(catalog_db)
-    finally:
-        catalog_db.close()
-except Exception as catalog_error:
-    print(f"[CATALOGO] Error al sincronizar concursos: {catalog_error}")
-
 # Mikey v7.2: Eliminamos imports ORM del top-level para evitar crasheos por desincronización
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
@@ -51,6 +28,36 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+@st.cache_resource(show_spinner=False)
+def prepare_runtime_catalog() -> None:
+    """Do deployment maintenance once per server process, not once per visit."""
+    try:
+        from core.curated_opec_bootstrap import run_if_enabled as bootstrap_curated_opec
+
+        bootstrap_result = bootstrap_curated_opec()
+        if bootstrap_result:
+            print(f"[OPEC] Banco curado sincronizado: {bootstrap_result}")
+    except Exception as bootstrap_error:
+        print(f"[OPEC] Error al sincronizar banco curado: {bootstrap_error}")
+
+    try:
+        from db.session import SessionLocal
+        from core.competitions import ensure_builtin_competitions
+        from core.competition_catalog import sync_catalog_competitions
+
+        catalog_db = SessionLocal()
+        try:
+            ensure_builtin_competitions(catalog_db)
+            sync_catalog_competitions(catalog_db)
+        finally:
+            catalog_db.close()
+    except Exception as catalog_error:
+        print(f"[CATALOGO] Error al sincronizar concursos: {catalog_error}")
+
+
+prepare_runtime_catalog()
 
 # --- FASE 3: LOGIN SYSTEM ---
 # --- ANTI-BUG CLOUD: Limpiar modelos obsoletos de la sesión ---

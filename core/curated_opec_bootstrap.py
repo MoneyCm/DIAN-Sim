@@ -9,6 +9,37 @@ BOOTSTRAP_ENV = "LOAD_CURATED_OPEC236769"
 OPEC_241130_BOOTSTRAP_ENV = "LOAD_CURATED_OPEC241130"
 
 
+def _bank_is_ready(competition_code: str, minimum_cases: int, minimum_questions: int) -> bool:
+    """Return whether a reviewed pack is already present.
+
+    The rollout switches can remain enabled after the first deployment. Loading
+    their idempotent seeders on every Streamlit rerun is costly on a remote
+    database: it performs hundreds of reads before the first screen is sent to
+    the user. A few aggregate queries are enough to decide whether maintenance
+    work is required.
+    """
+    from db.models import CaseStudy, Competition, Question
+    from db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        competition = db.query(Competition).filter_by(code=competition_code).first()
+        if competition is None:
+            return False
+        cases = db.query(CaseStudy).filter_by(competition_id=competition.id).count()
+        questions = (
+            db.query(Question)
+            .filter(
+                Question.competition_id == competition.id,
+                Question.is_verified.is_(True),
+            )
+            .count()
+        )
+        return cases >= minimum_cases and questions >= minimum_questions
+    finally:
+        db.close()
+
+
 def is_enabled(env_name: str = BOOTSTRAP_ENV) -> bool:
     return os.getenv(env_name, "").lower() in {"1", "true", "yes"}
 
@@ -24,7 +55,7 @@ def run_if_enabled() -> dict[str, object] | None:
         return None
 
     result: dict[str, object] = {}
-    if load_236769:
+    if load_236769 and not _bank_is_ready("DIAN-2676", minimum_cases=48, minimum_questions=144):
         from scripts.data.apply_legacy_question_audit import apply_audit
         from scripts.data.repair_curated_macrodomains import repair
         from scripts.data.seed_curated_gap_cases import seed as seed_initial_cases
@@ -41,7 +72,9 @@ def run_if_enabled() -> dict[str, object] | None:
             "domains": dict(domains),
             "legacy": legacy,
         }
-    if load_241130:
+    if load_241130 and not _bank_is_ready(
+        "TERRITORIAL-12-BOLIVAR-2685", minimum_cases=10, minimum_questions=30
+    ):
         from scripts.data.seed_curated_opec241130 import seed as seed_opec241130
 
         cases, questions = seed_opec241130(apply=True)
