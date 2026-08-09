@@ -168,24 +168,25 @@ def login_view():
                 elif new_pass != confirm_pass:
                     st.error("Las contraseñas no coinciden")
                 else:
-                    from sqlalchemy import text
                     from db.session import engine
-                    with engine.connect() as check_conn:
-                        sql_up = text("SELECT id FROM users WHERE username = :u")
-                        if check_conn.execute(sql_up, {"u": clean_user}).first():
-                            st.error("El usuario ya existe")
-                        else:
-                            try:
-                                hashed = AuthManager.hash_password(new_pass)
-                                with engine.begin() as ins_conn:
-                                    sql_ins = text(
-                                        "INSERT INTO users (username, password_hash, role) "
-                                        "VALUES (:u, :p, 'user')"
-                                    )
-                                    ins_conn.execute(sql_ins, {"u": clean_user, "p": hashed})
-                                st.success("Cuenta creada. ¡Ya puedes entrar!")
-                            except Exception as e:
-                                st.error(f"Error al registrar: {e}")
+                    from core.account_registration import (
+                        UsernameAlreadyExists,
+                        create_password_account,
+                    )
+                    try:
+                        create_password_account(
+                            engine, clean_user, AuthManager.hash_password(new_pass)
+                        )
+                    except UsernameAlreadyExists:
+                        st.error("El usuario ya existe")
+                    except Exception:
+                        print("[AUTH] Error al crear cuenta", file=sys.stderr)
+                        st.error("No se pudo crear la cuenta. Inténtalo de nuevo en unos minutos.")
+                    else:
+                        st.success("Cuenta creada. Iniciando sesión...")
+                        if AuthManager.login(clean_user, new_pass):
+                            st.rerun()
+                        st.info("Ya puedes entrar con el usuario y la contraseña que acabas de crear.")
 
 # --- NAVEGACIÓN CENTRALIZADA (st.navigation) v9.0 ---
 # Definición de páginas (st.Page deshabilita el menú automático caótico)
