@@ -25,8 +25,16 @@ from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
+    matches_quality_filter, record_ai_audit, reject_candidate,
 )
+
+try:
+    from core.question_review import is_pending_review_candidate
+except ImportError:
+    # Streamlit can briefly retain an older core module while the page has
+    # already been reloaded. Keep the bank available during that transition.
+    def is_pending_review_candidate(question):
+        return is_reinforcement_candidate(question)
 from core.question_quality import audit_bank, store_deterministic_audit
 
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
