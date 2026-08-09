@@ -6,6 +6,7 @@ from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
     is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
+    review_queue_summary,
 )
 
 
@@ -61,6 +62,28 @@ def test_progressive_opec_question_can_be_individually_approved():
     assert question.quality_report["origin"] == "progressive_opec_local"
     assert question.quality_report["reviewed_by"] == "reviewer"
     assert question.quality_report["reviewed_at"]
+
+
+def test_review_queue_counts_only_explicit_opec_candidates():
+    pending = candidate(
+        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+    )
+    approved = candidate(
+        is_verified=True,
+        quality_report={"origin": "progressive_opec_local", "status": "APPROVED"},
+    )
+    rejected = candidate(
+        quality_report={"origin": "progressive_opec_local", "status": "REJECTED"}
+    )
+    legacy = candidate(quality_report=None)
+
+    summary = review_queue_summary([pending, approved, rejected, legacy])
+
+    assert summary["total"] == 3
+    assert summary["pending"] == 1
+    assert summary["approved"] == 1
+    assert summary["rejected"] == 1
+    assert summary["next_question"] is pending
 
 
 def test_rejected_candidate_stays_out_of_active_study():

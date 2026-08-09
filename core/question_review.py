@@ -7,6 +7,8 @@ from typing import Optional
 
 
 REINFORCEMENT_REVIEW = "reinforcement_candidate"
+PROGRESSIVE_OPEC_REVIEW = "progressive_opec_local"
+MANUAL_QUESTION_REVIEW = "manual_question_review"
 QUALITY_ALL = "Todas"
 QUALITY_VERIFIED = "Solo verificadas ✅"
 QUALITY_PENDING = "Pendientes generales ⏳"
@@ -29,6 +31,35 @@ def is_pending_review_candidate(question) -> bool:
         return False
     report = getattr(question, "quality_report", None)
     return not (isinstance(report, dict) and report.get("status") == "REJECTED")
+
+
+def is_review_queue_item(question) -> bool:
+    """Return whether a question belongs to the explicit human-review queue."""
+    report = getattr(question, "quality_report", None)
+    return isinstance(report, dict) and report.get("origin") in {
+        REINFORCEMENT_REVIEW,
+        PROGRESSIVE_OPEC_REVIEW,
+        MANUAL_QUESTION_REVIEW,
+    }
+
+
+def review_queue_summary(questions) -> dict:
+    """Summarize the auditable candidates without treating old bank items as queue work."""
+    items = [question for question in questions if is_review_queue_item(question)]
+    pending = [question for question in items if is_pending_review_candidate(question)]
+    statuses = [
+        (getattr(question, "quality_report", None) or {}).get("status")
+        for question in items
+    ]
+    return {
+        "total": len(items),
+        "pending": len(pending),
+        "approved": statuses.count("APPROVED"),
+        "rejected": statuses.count("REJECTED"),
+        "next_question": min(
+            pending, key=lambda item: str(getattr(item, "question_id", "")), default=None
+        ),
+    }
 
 
 def candidate_validation_error(question) -> Optional[str]:
@@ -56,7 +87,7 @@ def approve_candidate(question, reviewer: str) -> None:
         raise ValueError(error)
     report = dict(question.quality_report or {})
     origin = report.get("origin") or (
-        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else "manual_question_review"
+        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else MANUAL_QUESTION_REVIEW
     )
     report.update(
         status="APPROVED",
@@ -74,7 +105,7 @@ def reject_candidate(question, reviewer: str, reason: str = "") -> None:
         raise ValueError("La pregunta no está pendiente de revisión.")
     report = dict(question.quality_report or {})
     origin = report.get("origin") or (
-        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else "manual_question_review"
+        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else MANUAL_QUESTION_REVIEW
     )
     report.update(
         status="REJECTED",

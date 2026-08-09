@@ -29,13 +29,24 @@ from core.question_review import (
 )
 
 try:
-    from core.question_review import is_pending_review_candidate
+    from core.question_review import is_pending_review_candidate, review_queue_summary
+    REVIEW_QUEUE_COMPATIBLE = True
 except ImportError:
     # Streamlit can briefly retain an older core module while the page has
     # already been reloaded. Keep the bank available during that transition.
     def is_pending_review_candidate(question):
         return is_reinforcement_candidate(question)
-from core.question_quality import audit_bank, store_deterministic_audit
+
+    REVIEW_QUEUE_COMPATIBLE = False
+
+    def review_queue_summary(questions):
+        pending = [question for question in questions if is_reinforcement_candidate(question)]
+        return {
+            "total": len(pending), "pending": len(pending), "approved": 0,
+            "rejected": 0, "next_question": pending[0] if pending else None,
+        }
+
+from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
@@ -69,7 +80,7 @@ stats_s, rank = render_custom_sidebar()
 is_admin_user = AuthManager.is_admin()
 available_actions = ["Consultar banco"]
 if is_admin_user:
-    available_actions.extend(["Importar archivo", "Crear manualmente"])
+    available_actions.extend(["Revisión guiada", "Importar archivo", "Crear manualmente"])
 action = st.selectbox("Vista", available_actions, label_visibility="collapsed")
 st.divider()
 
@@ -90,7 +101,74 @@ opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)",
                        value=has_opec, 
                        help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
 
-if action == "Consultar banco":
+if action == "Revisión guiada":
+    competition_id = get_active_competition_id(db, u_id)
+    queue_query = db.query(Question)
+    if competition_id is not None:
+        queue_query = queue_query.filter(Question.competition_id == competition_id)
+    queue = review_queue_summary(queue_query.all())
+
+    st.subheader("Revisión guiada de candidatas")
+    if not REVIEW_QUEUE_COMPATIBLE:
+        st.info("Actualizando la cola de revisión. Recarga en un momento para incluir candidatas OPEC.")
+    queue_cols = st.columns(4)
+    queue_cols[0].metric("Total en cola", queue["total"])
+    queue_cols[1].metric("Pendientes", queue["pending"])
+    queue_cols[2].metric("Aprobadas", queue["approved"])
+    queue_cols[3].metric("Descartadas", queue["rejected"])
+    st.progress(
+        (queue["approved"] + queue["rejected"]) / queue["total"] if queue["total"] else 1.0,
+        text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
+    )
+
+    candidate = queue["next_question"]
+    if candidate is None:
+        st.success("No hay candidatas pendientes en esta OPEC.")
+    else:
+        report = audit_question_structure(candidate)
+        st.caption(f"Pendientes por revisar: {queue['pending']}")
+        st.markdown(f"### {candidate.topic or 'Pregunta sin tema'}")
+        st.markdown(f"**Enunciado:** {candidate.stem}")
+        for key, value in (candidate.options_json or {}).items():
+            st.write(f"**{key})** {value}")
+        st.markdown(f"**Clave propuesta:** {candidate.correct_key}")
+        st.caption(f"Justificación: {candidate.rationale or 'Sin justificación'}")
+        st.caption(f"Fuente declarada: {candidate.source_refs or 'Sin fuente'}")
+        if report["status"] == "REVIEW":
+            st.warning("El diagnóstico local encontró pendientes estructurales.")
+            for finding in report["findings"]:
+                st.write(f"- {finding['message']}")
+        else:
+            st.success("Diagnóstico local sin fallas estructurales. Verifica también la fuente de fondo.")
+
+        validation_error = candidate_validation_error(candidate)
+        if validation_error:
+            st.error(validation_error)
+        else:
+            confirmation = st.checkbox(
+                "Confirmo que verifiqué fuente, vigencia, enunciado, clave y justificación.",
+                key=f"queue_confirm_{candidate.question_id}",
+            )
+            rejection_reason = st.text_input(
+                "Motivo de descarte (opcional)", key=f"queue_reason_{candidate.question_id}"
+            )
+            approve_col, reject_col = st.columns(2)
+            if approve_col.button(
+                "Aprobar y continuar", disabled=not confirmation,
+                use_container_width=True, type="primary", key=f"queue_approve_{candidate.question_id}",
+            ):
+                approve_candidate(candidate, st.session_state.get("username", "admin"))
+                db.commit()
+                st.rerun()
+            if reject_col.button(
+                "Descartar y continuar", use_container_width=True,
+                key=f"queue_reject_{candidate.question_id}",
+            ):
+                reject_candidate(candidate, st.session_state.get("username", "admin"), rejection_reason)
+                db.commit()
+                st.rerun()
+
+elif action == "Consultar banco":
     competition_id = get_active_competition_id(db, u_id)
     pending_query = db.query(Question)
     if competition_id is not None:
