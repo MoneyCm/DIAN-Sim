@@ -819,11 +819,22 @@ if selected_competition_id and active_opec:
         readiness_db.close()
     st.subheader("🧭 Configuración automática del concurso")
     readiness_cols = st.columns(3)
-    readiness_cols[0].metric("Preguntas", readiness.question_count)
-    readiness_cols[1].metric("Casos verificados", readiness.official_case_count)
-    readiness_cols[2].metric(
-        "Examen disponible",
-        f"{readiness.exam_questions} preguntas" if readiness.exam_questions else "Pendiente",
+    readiness_cols[0].metric("Banco total", readiness.question_count)
+    readiness_cols[1].metric("Habilitadas para estudiar", readiness.enabled_question_count)
+    readiness_cols[2].metric("Pendientes de revision", readiness.pending_review_count)
+    thematic_source = guide_status(selected_competition.code)
+    if readiness.question_count == 0:
+        st.error("Sin banco de estudio")
+    elif thematic_source["status"] == "pending_official_guide":
+        st.warning("Banco provisional: estudia solo las preguntas habilitadas.")
+    elif readiness.pending_review_count:
+        st.warning("Banco mixto: hay material habilitado y candidatos pendientes de revision.")
+    else:
+        st.success("Banco listo para estudio")
+    st.caption(
+        f"Casos tipo examen: {readiness.official_case_count} - "
+        f"Examen disponible: {readiness.exam_questions} preguntas - "
+        f"Duracion: {readiness.exam_minutes} min"
     )
     st.caption(
         f"Funcionales: {readiness.functional_count} · "
@@ -831,7 +842,6 @@ if selected_competition_id and active_opec:
         f"Duración tipo examen: {readiness.exam_minutes} min"
     )
     st.info(f"Siguiente acción recomendada: {readiness.next_action}")
-    thematic_source = guide_status(selected_competition.code)
     if thematic_source["status"] == "pending_official_guide":
         st.warning(
             f"Temario provisional: {thematic_source['label']} · versión {thematic_source['version']}. "

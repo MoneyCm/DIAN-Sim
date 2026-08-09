@@ -6,3 +6,5 @@ def test_readiness_contract_exposes_generic_onboarding_fields():
     assert readiness.exam_questions == 30
     assert readiness.exam_minutes == 60
     assert readiness.official_case_count == 10
+    assert readiness.enabled_question_count == 0
+    assert readiness.pending_review_count == 0

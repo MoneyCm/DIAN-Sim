@@ -18,6 +18,8 @@ class CompetitionReadiness:
     exam_questions: int
     exam_minutes: int
     next_action: str
+    enabled_question_count: int = 0
+    pending_review_count: int = 0
 
 
 def inspect_competition(db, competition_id: int, *, is_pro: bool = False):
@@ -26,6 +28,8 @@ def inspect_competition(db, competition_id: int, *, is_pro: bool = False):
     total = questions.count()
     functional = questions.filter(Question.track == "FUNCIONAL").count()
     behavioral = questions.filter(Question.track == "COMPORTAMENTAL").count()
+    enabled = questions.filter(Question.is_verified.is_(True)).count()
+    pending_review = total - enabled
     cases = db.query(CaseStudy).options(joinedload(CaseStudy.questions)).filter(
         CaseStudy.competition_id == competition_id
     ).all()
@@ -46,9 +50,12 @@ def inspect_competition(db, competition_id: int, *, is_pro: bool = False):
         next_action = "Ampliar hasta 10 casos para habilitar un examen de 30 preguntas."
     elif total < 100:
         next_action = "Ampliar la cobertura temática del banco."
+    elif pending_review:
+        next_action = f"Revisar {pending_review} pregunta(s) provisional(es) antes de habilitarlas."
     else:
         next_action = "Banco listo para práctica y simulacro tipo examen."
     return CompetitionReadiness(
         total, functional, behavioral, official_cases, exam_questions,
         exam_questions * blueprint.minutes_per_question, next_action,
+        enabled, pending_review,
     )
