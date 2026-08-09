@@ -107,6 +107,46 @@ if action == "Revisión guiada":
     if competition_id is not None:
         queue_query = queue_query.filter(Question.competition_id == competition_id)
     queue = review_queue_summary(queue_query.all())
+    ai_queue_state_key = f"ai_review_queue_{competition_id}"
+    ai_queue_state = st.session_state.get(ai_queue_state_key)
+
+    if ai_queue_state and ai_queue_state.get("remaining"):
+        question_id = ai_queue_state["remaining"][0]
+        ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
+        if ai_candidate is None or not is_pending_review_candidate(ai_candidate):
+            ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
+            st.session_state[ai_queue_state_key] = ai_queue_state
+            st.rerun()
+        provider = ai_queue_state.get("provider", "Gemini")
+        api_key = get_api_key(provider)
+        if not api_key:
+            st.session_state.pop(ai_queue_state_key, None)
+            st.error("La auditoría por lote necesita una clave de IA configurada.")
+        else:
+            try:
+                auditor = LLMGenerator(provider, api_key)
+                ai_report = auditor.audit_question(
+                    {
+                        "topic": ai_candidate.topic,
+                        "stem": ai_candidate.stem,
+                        "options_json": ai_candidate.options_json,
+                        "correct_key": ai_candidate.correct_key,
+                        "rationale": ai_candidate.rationale,
+                    },
+                    source_context=str(ai_candidate.source_refs or ""),
+                )
+                if not isinstance(ai_report, dict):
+                    raise ValueError("La IA no devolvió un informe estructurado.")
+                record_ai_audit(ai_candidate, ai_report)
+                db.commit()
+                ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
+                ai_queue_state["completed"] += 1
+                st.session_state[ai_queue_state_key] = ai_queue_state
+                st.rerun()
+            except Exception as audit_error:
+                print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
+                st.session_state.pop(ai_queue_state_key, None)
+                st.error("La auditoría por lote se detuvo. Revisa la clave o inténtalo nuevamente.")
 
     st.subheader("Revisión guiada de candidatas")
     if not REVIEW_QUEUE_COMPATIBLE:
@@ -120,6 +160,40 @@ if action == "Revisión guiada":
         (queue["approved"] + queue["rejected"]) / queue["total"] if queue["total"] else 1.0,
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
+    if ai_queue_state and ai_queue_state.get("remaining"):
+        st.info(
+            f"Auditoría IA en curso: {ai_queue_state['completed']} de "
+            f"{ai_queue_state['total']} candidatas analizadas."
+        )
+    elif queue["pending"]:
+        ai_provider = st.selectbox(
+            "Proveedor para auditoría IA", ["Gemini", "OpenAI", "Mistral"],
+            key=f"ai_queue_provider_{competition_id}",
+        )
+        ai_confirm = st.checkbox(
+            "Auditar todas las pendientes con IA. Esta acción consume la clave configurada y no habilita preguntas.",
+            key=f"ai_queue_confirm_{competition_id}",
+        )
+        if st.button(
+            "Auditar toda la cola con IA", type="secondary", use_container_width=True,
+            disabled=not ai_confirm, key=f"ai_queue_start_{competition_id}",
+        ):
+            if not get_api_key(ai_provider):
+                st.error("Configura una clave de IA antes de iniciar la auditoría.")
+            else:
+                pending_ids = [
+                    str(question.question_id)
+                    for question in queue_query.all()
+                    if is_pending_review_candidate(question)
+                    and review_queue_summary([question])["total"]
+                ]
+                st.session_state[ai_queue_state_key] = {
+                    "remaining": pending_ids,
+                    "completed": 0,
+                    "total": len(pending_ids),
+                    "provider": ai_provider,
+                }
+                st.rerun()
 
     candidate = queue["next_question"]
     if candidate is None:
@@ -134,6 +208,14 @@ if action == "Revisión guiada":
         st.markdown(f"**Clave propuesta:** {candidate.correct_key}")
         st.caption(f"Justificación: {candidate.rationale or 'Sin justificación'}")
         st.caption(f"Fuente declarada: {candidate.source_refs or 'Sin fuente'}")
+        stored_ai_audit = (candidate.quality_report or {}).get("ai_audit")
+        if isinstance(stored_ai_audit, dict):
+            st.info(
+                f"Recomendación IA: {stored_ai_audit.get('status', 'Sin estado')} · "
+                f"puntaje {stored_ai_audit.get('score', '—')}/10"
+            )
+            if stored_ai_audit.get("critique"):
+                st.caption(f"Análisis IA: {stored_ai_audit['critique']}")
         if report["status"] == "REVIEW":
             st.warning("El diagnóstico local encontró pendientes estructurales.")
             for finding in report["findings"]:

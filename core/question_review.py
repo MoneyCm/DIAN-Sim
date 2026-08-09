@@ -121,17 +121,11 @@ def reject_candidate(question, reviewer: str, reason: str = "") -> None:
 
 def record_ai_audit(question, audit_report: dict) -> None:
     """Store an AI opinion without turning it into a trust decision."""
-    current = getattr(question, "quality_report", None)
-    if is_reinforcement_candidate(question):
-        report = dict(current)
-        report["ai_audit"] = audit_report
-        question.quality_report = report
-    else:
-        question.quality_report = {
-            "status": "PENDING_HUMAN_REVIEW",
-            "review": "ai_audit_only",
-            "ai_audit": audit_report,
-        }
+    report = dict(getattr(question, "quality_report", None) or {})
+    report.setdefault("status", "PENDING_HUMAN_REVIEW")
+    report.setdefault("review", "ai_audit_only")
+    report["ai_audit"] = audit_report
+    question.quality_report = report
     question.is_verified = False
 
 

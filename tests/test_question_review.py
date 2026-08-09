@@ -102,6 +102,18 @@ def test_ai_audit_never_verifies_or_loses_candidate_state():
     assert question.quality_report["ai_audit"]["score"] == 10
 
 
+def test_ai_audit_preserves_progressive_opec_queue_membership():
+    question = candidate(
+        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+    )
+
+    record_ai_audit(question, {"status": "IMPROVABLE", "score": 6})
+
+    assert question.is_verified is False
+    assert question.quality_report["origin"] == "progressive_opec_local"
+    assert question.quality_report["ai_audit"]["status"] == "IMPROVABLE"
+
+
 def test_quality_filters_separate_reinforcements_from_other_pending_items():
     reinforcement = candidate()
     legacy_pending = candidate(quality_report=None)
