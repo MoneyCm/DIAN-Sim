@@ -73,10 +73,17 @@ def run_if_enabled() -> dict[str, object] | None:
             "legacy": legacy,
         }
     if load_241130 and not _bank_is_ready(
-        "TERRITORIAL-12-BOLIVAR-2685", minimum_cases=10, minimum_questions=30
+        "TERRITORIAL-12-BOLIVAR-2685", minimum_cases=10, minimum_questions=130
     ):
+        from scripts.data.seed_complete_opec241130 import seed as seed_complete_opec241130
         from scripts.data.seed_curated_opec241130 import seed as seed_opec241130
 
         cases, questions = seed_opec241130(apply=True)
-        result["opec241130"] = {"cases": cases, "questions": questions}
+        complete_created, complete_total = seed_complete_opec241130(apply=True)
+        result["opec241130"] = {
+            "cases": cases,
+            "goa_questions": questions,
+            "bank_questions_added": complete_created,
+            "total_questions": complete_total,
+        }
     return result
