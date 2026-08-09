@@ -178,13 +178,6 @@ st.markdown("""
     .main .block-container > div > div {
         gap: 0.6rem !important;
     }
-    .stAlert,
-    .stInfo,
-    .stSuccess,
-    .stWarning,
-    .stError {
-        display: none !important;
-    }
     .stExpander,
     .stMetric {
         display: none !important;
