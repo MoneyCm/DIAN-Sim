@@ -834,7 +834,10 @@ if selected_competition_id and active_opec:
     elif thematic_source["status"] == "pending_official_guide":
         st.warning("Banco provisional: estudia solo las preguntas habilitadas.")
     elif pending_review_count:
-        st.warning("Banco mixto: hay material habilitado y candidatos pendientes de revision.")
+        if thematic_source["status"] == "official_framework_loaded":
+            st.warning("Marco oficial cargado: faltan revisiones individuales antes de habilitar el banco completo.")
+        else:
+            st.warning("Banco mixto: hay material habilitado y candidatos pendientes de revision.")
     else:
         st.success("Banco listo para estudio")
     st.caption(
@@ -852,6 +855,11 @@ if selected_competition_id and active_opec:
         st.warning(
             f"Temario provisional: {thematic_source['label']} · versión {thematic_source['version']}. "
             "Cuando se publique la guía oficial, el banco deberá contrastarse y versionarse de nuevo."
+        )
+        st.caption(thematic_source["next_action"])
+    elif thematic_source["status"] == "official_framework_loaded":
+        st.info(
+            f"Marco oficial registrado: {thematic_source['label']} - version {thematic_source['version']}."
         )
         st.caption(thematic_source["next_action"])
 

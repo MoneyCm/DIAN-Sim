@@ -22,10 +22,14 @@
     "next_action": "Completar la trazabilidad por pregunta y los casos GOA de la OPEC 241130 antes de usar el resultado como simulacro validado."
   },
   "ADRES-ABIERTO": {
-    "status": "pending_official_guide",
-    "label": "Banco base provisional construido desde la OPEC 252097",
-    "version": "opec-2026-08-v1",
-    "official_sources": [],
-    "next_action": "Incorporar guía de orientación, ejes y bibliografía oficial cuando la entidad o la CNSC los publiquen."
+    "status": "official_framework_loaded",
+    "label": "Acuerdo 79 y Anexo Técnico del Proceso de Selección 2805 de 2026 - ADRES",
+    "version": "cnsc-2026-04-30",
+    "official_sources": [
+      "https://www.cnsc.gov.co/node/64424",
+      "https://www.cnsc.gov.co/convocatorias/entidades-del-orden-nacional-2026?field_tipo_de_contenido_convocat_target_id=65",
+      "https://www.adres.gov.co/nuestra-entidad/talento-humano/Paginas/Concurso-entidades-nacionales-2026.aspx"
+    ],
+    "next_action": "Contrastar y revisar individualmente las preguntas provisionales frente a la ficha OPEC, el Acuerdo 79, el Anexo Técnico y las fuentes funcionales aplicables antes de habilitarlas."
   }
 }
