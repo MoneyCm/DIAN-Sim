@@ -64,7 +64,7 @@ def test_progressive_opec_question_can_be_individually_approved():
     assert question.quality_report["reviewed_at"]
 
 
-def test_review_queue_counts_only_explicit_opec_candidates():
+def test_review_queue_counts_explicit_and_legacy_source_candidates():
     pending = candidate(
         quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
     )
@@ -79,11 +79,21 @@ def test_review_queue_counts_only_explicit_opec_candidates():
 
     summary = review_queue_summary([pending, approved, rejected, legacy])
 
-    assert summary["total"] == 3
-    assert summary["pending"] == 1
+    assert summary["total"] == 4
+    assert summary["pending"] == 2
     assert summary["approved"] == 1
     assert summary["rejected"] == 1
     assert summary["next_question"] is pending
+
+
+def test_review_queue_includes_legacy_unverified_question_with_source():
+    legacy_candidate = candidate(quality_report=None)
+
+    summary = review_queue_summary([legacy_candidate])
+
+    assert summary["total"] == 1
+    assert summary["pending"] == 1
+    assert summary["next_question"] is legacy_candidate
 
 
 def test_rejected_candidate_stays_out_of_active_study():

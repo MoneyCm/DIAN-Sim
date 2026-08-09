@@ -36,11 +36,18 @@ def is_pending_review_candidate(question) -> bool:
 def is_review_queue_item(question) -> bool:
     """Return whether a question belongs to the explicit human-review queue."""
     report = getattr(question, "quality_report", None)
-    return isinstance(report, dict) and report.get("origin") in {
+    if isinstance(report, dict) and report.get("origin") in {
         REINFORCEMENT_REVIEW,
         PROGRESSIVE_OPEC_REVIEW,
         MANUAL_QUESTION_REVIEW,
-    }
+    }:
+        return True
+    # Older progressive banks did not persist their origin. If they remain
+    # unverified, have a declared source and were not rejected, they still
+    # require a review decision instead of disappearing from the queue.
+    return is_pending_review_candidate(question) and bool(
+        str(getattr(question, "source_refs", "") or "").strip()
+    )
 
 
 def review_queue_summary(questions) -> dict:
@@ -122,6 +129,7 @@ def reject_candidate(question, reviewer: str, reason: str = "") -> None:
 def record_ai_audit(question, audit_report: dict) -> None:
     """Store an AI opinion without turning it into a trust decision."""
     report = dict(getattr(question, "quality_report", None) or {})
+    report.setdefault("origin", MANUAL_QUESTION_REVIEW)
     report.setdefault("status", "PENDING_HUMAN_REVIEW")
     report.setdefault("review", "ai_audit_only")
     report["ai_audit"] = audit_report
