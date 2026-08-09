@@ -918,10 +918,14 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             # 1. Generate verified case triplets for the real exam
             from core.exam_format import is_official_functional_payload, official_question_groups
+            target_competition_id = active_opec.competition_id or selected_competition_id
+            target_competition = db.get(Competition, target_competition_id)
+            if target_competition is None:
+                raise RuntimeError("No se encontro el concurso asociado a la OPEC activa.")
             from core.opec_case_factory import build_fallback_opec_case, build_fallback_questions
             status.info("Generando hasta 10 casos tipo examen...")
             existing_case_rows = db.query(CaseStudy).filter(
-                CaseStudy.competition_id == selected_competition_id
+                CaseStudy.competition_id == target_competition_id
             ).all()
             existing_cases = sum(
                 1 for case in existing_case_rows if official_question_groups(case)
@@ -929,7 +933,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             for i in range(max(0, 10 - existing_cases)):
                 case_number = existing_cases + i + 1
                 try:
-                    is_adres = getattr(selected_competition, "code", None) == "ADRES-ABIERTO"
+                    is_adres = target_competition.code == "ADRES-ABIERTO"
                     case_data = build_fallback_opec_case(active_opec, case_number) if is_adres else None
                     source_context = (
                         f"OPEC {active_opec.opec_number}. Propósito: {active_opec.purpose}. "
@@ -959,7 +963,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
 
                     # Save Case
                     new_case = CaseStudy(
-                        competition_id=selected_competition_id,
+                        competition_id=target_competition_id,
                         id=str(uuid.uuid4()),
                         title=case_data.get("title", "Caso Generado"),
                         text=case_data.get("text"),
@@ -974,7 +978,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                         micro_comp = q.get('micro_competencia') or q.get('competency') or "General"
                         macro_dom = q.get('macro_dominio') or "Transversal"
                         new_q = Question(
-                            competition_id=selected_competition_id,
+                            competition_id=target_competition_id,
                             question_id=str(uuid.uuid4()),
                             case_id=new_case.id,
                             stem=q.get("stem"),
@@ -1011,18 +1015,18 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 f"Funciones: {str(active_opec.functions)}\nRequisitos: {active_opec.requirements}"
             )
             existing_progressive = db.query(Question).filter(
-                Question.competition_id == selected_competition_id,
+                Question.competition_id == target_competition_id,
                 Question.case_id.is_(None),
                 Question.source_refs.contains("guía oficial pendiente"),
             ).count()
             from core.question_banks.opec_progressive import build_progressive_bank
             q_func = [] if existing_progressive else build_progressive_bank(
-                active_opec, getattr(selected_competition, "code", "")
+                active_opec, target_competition.code
             )
             
             for q in q_func:
                 new_q = Question(
-                    competition_id=selected_competition_id,
+                    competition_id=target_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),
@@ -1049,7 +1053,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             status.info("Generando preguntas comportamentales...")
             behav_text = f"CONTEXTO COMPORTAMENTAL: Generar preguntas sobre Liderazgo, Trabajo en Equipo y Orientación al Resultado para el cargo {active_opec.job_title}."
             existing_behavioral = db.query(Question).filter(
-                Question.competition_id == selected_competition_id,
+                Question.competition_id == target_competition_id,
                 Question.track == "COMPORTAMENTAL",
             ).count()
             behavioral_needed = max(0, 20 - existing_behavioral)
@@ -1066,7 +1070,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             
             for q in q_behav:
                 new_q = Question(
-                    competition_id=selected_competition_id,
+                    competition_id=target_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),
@@ -1090,7 +1094,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             status.info("Generando preguntas de valores e integridad...")
             int_text = f"CONTEXTO ÉTICO: Dilemas éticos, Código de Integridad del Servicio Público y valores para un servidor público territorial en el cargo {active_opec.job_title}."
             existing_integrity = db.query(Question).filter(
-                Question.competition_id == selected_competition_id,
+                Question.competition_id == target_competition_id,
                 Question.competency.like("Integridad%"),
             ).count()
             integrity_needed = max(0, 11 - existing_integrity)
@@ -1107,7 +1111,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
              
             for q in q_int:
                 new_q = Question(
-                    competition_id=selected_competition_id,
+                    competition_id=target_competition_id,
                     question_id=str(uuid.uuid4()),
                     stem=q.get("stem"),
                     options_json=q.get("options"),
