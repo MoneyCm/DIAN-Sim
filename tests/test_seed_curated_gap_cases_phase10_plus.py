@@ -1,9 +1,9 @@
 from scripts.data.seed_curated_gap_cases_phase10_plus import PHASES_10_TO_16, macro_domain
 
 
-def test_incremental_seed_contains_21_complete_cases():
-    assert len(PHASES_10_TO_16) == 21
-    assert sum(len(case["questions"]) for case in PHASES_10_TO_16) == 63
+def test_incremental_seed_contains_22_complete_cases():
+    assert len(PHASES_10_TO_16) == 22
+    assert sum(len(case["questions"]) for case in PHASES_10_TO_16) == 66
     assert all(len(case["questions"]) == 3 for case in PHASES_10_TO_16)
 
 

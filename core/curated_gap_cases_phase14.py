@@ -19,7 +19,7 @@ def q(stem, a, b, c, rationale, source):
 F4_SOURCE = (
     "DIAN, ficha de empleo AT-FL-3006 Gestor III, función de organización de información y "
     "propuestas; procedimiento PR-COA-0501 Auditoría Posterior al Despacho, versión 1, y "
-    "OD-COA-0006 Guía de Implementación APD (Listado Maestro de Documentos, consulta 2026-08-01)."
+    "OD-COA-0106 Guía de Implementación APD (Listado Maestro de Documentos, consulta 2026-08-08)."
 )
 
 LP_SOURCE = (
@@ -29,6 +29,46 @@ LP_SOURCE = (
 
 
 CURATED_GAP_CASES_PHASE14 = [
+    {
+        "id": "goa-236769-f4-priorizacion-pta-apd-02",
+        "title": "Priorización trazable para el Plan de Trabajo Anual APD",
+        "topic": "F4 - Organización de información y propuestas de fiscalización",
+        "difficulty": 3,
+        "text": (
+            "Una Dirección Seccional debe consolidar propuestas para una Auditoría Posterior al "
+            "Despacho. Tiene información sobre sectores, tipo de usuario, valor de operaciones y "
+            "alertas de riesgo, pero un analista propone priorizar solo a los usuarios con mayor "
+            "valor importado. Antes de la reunión de nivel directivo, otra persona quiere circular "
+            "por un correo personal la lista de posibles seleccionados. La reunión rechaza el primer "
+            "borrador del Plan de Trabajo Anual por falta de soporte de priorización."
+        ),
+        "questions": [
+            q(
+                "¿Cómo debe organizarse la propuesta antes de llevarla a decisión?",
+                "Integrando criterios objetivos como sectores sensibles, análisis de riesgos, tipo de obligado y volumen de operaciones, con sus soportes.",
+                "Priorizando únicamente el valor importado, sin analizar los demás criterios disponibles.",
+                "Eligiendo libremente los casos que parezcan más sencillos de cerrar.",
+                "La guía APD prevé una selección objetiva a partir de sectores sensibles, análisis de riesgos, tipo de obligado, volumen de operaciones y otros factores. El gestor debe organizar esa información de forma trazable para sustentar la propuesta.",
+                F4_SOURCE,
+            ),
+            q(
+                "¿Qué manejo corresponde a la lista de posibles seleccionados mientras se analiza la propuesta?",
+                "Conservar su confidencialidad y usar los mecanismos institucionales de control, sin difundirla por canales personales.",
+                "Compartirla libremente porque todavía no se ha iniciado la auditoría.",
+                "Publicarla para que los usuarios seleccionados preparen sus descargos anticipadamente.",
+                "PR-COA-0501 dispone que se propende por la confidencialidad de los seleccionados en las etapas de selección, ejecución y evaluación de la Auditoría Posterior al Despacho.",
+                F4_SOURCE,
+            ),
+            q(
+                "Si la reunión rechaza el borrador del Plan de Trabajo Anual por falta de soporte, ¿cuál es el paso procedimental?",
+                "Devolverlo a la actividad de preparación para completar y corregir la propuesta antes de someterla nuevamente.",
+                "Aplicar de inmediato los criterios de selección y abrir auditorías pese al rechazo.",
+                "Archivar definitivamente todos los insumos sin permitir ajustes.",
+                "En el flujo de PR-COA-0501, cuando el Plan de Trabajo Anual es rechazado se retorna a la actividad de preparación; la decisión no autoriza ejecutar una propuesta incompleta.",
+                F4_SOURCE,
+            ),
+        ],
+    },
     {
         "id": "goa-236769-f4-propuesta-apd-directivo-01",
         "title": "Preparación de una propuesta de auditoría para decisión directiva",

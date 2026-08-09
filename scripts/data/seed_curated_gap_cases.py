@@ -13,8 +13,20 @@ from core.curated_gap_cases_phase7 import CURATED_GAP_CASES_PHASE7
 from core.curated_gap_cases_phase8 import CURATED_GAP_CASES_PHASE8
 from core.curated_gap_cases_phase9 import CURATED_GAP_CASES_PHASE9
 from core.dedupe import compute_hash
-from db.models import CaseStudy, Question
+from core.opec_236769 import function_label
+from db.models import CaseStudy, Competition, Question
 from db.session import SessionLocal
+
+
+COMPETITION_CODE = "DIAN-2676"
+
+
+def dian_competition(db) -> Competition:
+    """Resolve the target competition instead of relying on a database id."""
+    competition = db.query(Competition).filter_by(code=COMPETITION_CODE).first()
+    if competition is None:
+        raise RuntimeError(f"No existe el concurso {COMPETITION_CODE}.")
+    return competition
 
 
 def balanced_question(item: dict, index: int) -> tuple[dict, str]:
@@ -38,6 +50,7 @@ def seed(apply: bool = False) -> tuple[int, int]:
     db = SessionLocal()
     cases_added = questions_added = 0
     try:
+        competition = dian_competition(db)
         all_cases = (
             CURATED_GAP_CASES
             + CURATED_GAP_CASES_PHASE2
@@ -50,12 +63,13 @@ def seed(apply: bool = False) -> tuple[int, int]:
             + CURATED_GAP_CASES_PHASE9
         )
         for data in all_cases:
+            micro_competencia = function_label(data["id"], data["topic"])
             case_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data["id"]))
             case = db.get(CaseStudy, case_id)
             if case is None:
                 case = CaseStudy(
                     id=case_id,
-                    competition_id=1,
+                    competition_id=competition.id,
                     title=data["title"],
                     text=data["text"],
                     topic=data["topic"],
@@ -72,17 +86,28 @@ def seed(apply: bool = False) -> tuple[int, int]:
                     existing.correct_key = correct_key
                     existing.rationale = item["rationale"]
                     existing.source_refs = item["source_ref"]
+                    existing.competition_id = competition.id
+                    existing.case_id = case_id
+                    existing.track = "FUNCIONAL"
+                    existing.competency = data["topic"]
+                    existing.topic = data["topic"]
+                    existing.micro_competencia = micro_competencia
+                    existing.difficulty = data["difficulty"]
+                    existing.question_type = "SITUATIONAL"
                     existing.is_verified = True
+                    existing.quality_report = {
+                        "status": "APPROVED", "review": "human_source_grounded"
+                    }
                     continue
                 db.add(Question(
                     question_id=str(uuid.uuid4()),
-                    competition_id=1,
+                    competition_id=competition.id,
                     case_id=case_id,
                     track="FUNCIONAL",
                     competency=data["topic"],
                     topic=data["topic"],
                     macro_dominio="Fiscalización y liquidación",
-                    micro_competencia=data["topic"],
+                    micro_competencia=micro_competencia,
                     difficulty=data["difficulty"],
                     question_type="SITUATIONAL",
                     stem=item["stem"],

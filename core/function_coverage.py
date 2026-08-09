@@ -9,6 +9,7 @@ from core.exam_format import has_source_grounded_review
 MIN_QUESTIONS_PER_FUNCTION = 5
 MIN_ATTEMPTS_FOR_PRACTICE = 3
 MIN_SHARED_TERMS = 3
+EXPLICIT_OPEC_FUNCTION = re.compile(r"\bOPEC\s+236769\s+F([1-9])\b", re.I)
 
 STOPWORDS = {
     "acuerdo", "asignadas", "autoridad", "cargo", "competencia", "cumplimiento",
@@ -61,6 +62,22 @@ def build_function_coverage(functions, questions, performances) -> tuple[list[di
     unmatched = 0
 
     for question in questions:
+        explicit_match = EXPLICIT_OPEC_FUNCTION.search(
+            str(getattr(question, "micro_competencia", "") or "")
+        )
+        if explicit_match:
+            index = int(explicit_match.group(1)) - 1
+            if index < len(buckets):
+                bucket = buckets[index]
+                bucket["questions"] += 1
+                bucket["shared"].append(MIN_SHARED_TERMS)
+                if bool(getattr(question, "is_verified", False)) and has_source_grounded_review(question):
+                    bucket["trusted"] += 1
+                performance = performance_by_question.get(question.question_id)
+                attempts = int(performance.hits or 0) + int(performance.misses or 0) if performance else 0
+                if attempts >= MIN_ATTEMPTS_FOR_PRACTICE:
+                    bucket["practiced"] += 1
+                continue
         q_terms = _terms(_question_text(question))
         candidates = []
         for index, terms in enumerate(function_terms):

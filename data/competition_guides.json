@@ -1,4 +1,15 @@
 {
+  "DIAN-2676": {
+    "status": "official_sources_loaded",
+    "label": "Acuerdo y Anexo Técnico del Proceso de Selección DIAN 2676",
+    "version": "cnsc-2025-11-07",
+    "official_sources": [
+      "https://cnsc.gov.co/convocatorias/dian-2676",
+      "https://cnsc.gov.co/node/54168",
+      "https://www.dian.gov.co/Prensa/Paginas/NG-CNSC-abrio-proceso-de-seleccion-para-proveer-cargos-en-la-DIAN-mediante-el-Acuerdo-21-de-2025.aspx"
+    ],
+    "next_action": "Mantener la ficha AT-FL-3006 y cada fuente de pregunta versionadas frente a las publicaciones de la CNSC y DIAN."
+  },
   "ADRES-ABIERTO": {
     "status": "pending_official_guide",
     "label": "Banco base provisional construido desde la OPEC 252097",
