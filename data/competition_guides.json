@@ -10,6 +10,17 @@
     ],
     "next_action": "Mantener la ficha AT-FL-3006 y cada fuente de pregunta versionadas frente a las publicaciones de la CNSC y DIAN."
   },
+  "TERRITORIAL-12-BOLIVAR-2685": {
+    "status": "official_sources_loaded",
+    "label": "Acuerdo 36 de 2025 y ficha OPEC 241130 del Proceso 2685 - Territorial 12",
+    "version": "cnsc-2025-11-27",
+    "official_sources": [
+      "https://www.cnsc.gov.co/node/55042",
+      "https://www.cnsc.gov.co/convocatorias/territorial-12?field_tipo_de_contenido_convocat_target_id=65",
+      "https://simo.cnsc.gov.co/#ofertaEmpleo"
+    ],
+    "next_action": "Completar la trazabilidad por pregunta y los casos GOA de la OPEC 241130 antes de usar el resultado como simulacro validado."
+  },
   "ADRES-ABIERTO": {
     "status": "pending_official_guide",
     "label": "Banco base provisional construido desde la OPEC 252097",
