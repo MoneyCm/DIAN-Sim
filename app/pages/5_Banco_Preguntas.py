@@ -29,26 +29,68 @@ from core.question_review import (
 )
 
 try:
-    from core.question_review import is_pending_review_candidate, review_queue_summary
-    REVIEW_QUEUE_COMPATIBLE = True
+    from core.question_review import is_pending_review_candidate
 except ImportError:
     # Streamlit can briefly retain an older core module while the page has
     # already been reloaded. Keep the bank available during that transition.
     def is_pending_review_candidate(question):
         return is_reinforcement_candidate(question)
 
-    REVIEW_QUEUE_COMPATIBLE = False
-
-    def review_queue_summary(questions):
-        pending = [question for question in questions if is_reinforcement_candidate(question)]
-        return {
-            "total": len(pending), "pending": len(pending), "approved": 0,
-            "rejected": 0, "next_question": pending[0] if pending else None,
-        }
-
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
+
+
+def queue_item(question):
+    report = getattr(question, "quality_report", None)
+    if isinstance(report, dict) and report.get("origin") in {
+        "reinforcement_candidate", "progressive_opec_local", "manual_question_review",
+    }:
+        return True
+    return not bool(getattr(question, "is_verified", False)) and bool(
+        str(getattr(question, "source_refs", "") or "").strip()
+    ) and not (isinstance(report, dict) and report.get("status") == "REJECTED")
+
+
+def queue_summary(questions):
+    items = [question for question in questions if queue_item(question)]
+    pending = [question for question in items if not bool(getattr(question, "is_verified", False))
+               and (getattr(question, "quality_report", None) or {}).get("status") != "REJECTED"]
+    statuses = [(getattr(question, "quality_report", None) or {}).get("status") for question in items]
+    return {
+        "total": len(items), "pending": len(pending),
+        "approved": statuses.count("APPROVED"), "rejected": statuses.count("REJECTED"),
+        "next_question": min(pending, key=lambda item: str(item.question_id), default=None),
+    }
+
+
+def queue_validation_error(question):
+    options = getattr(question, "options_json", None)
+    if not str(getattr(question, "source_refs", "") or "").strip():
+        return "Falta una fuente verificable."
+    if not str(getattr(question, "stem", "") or "").strip():
+        return "Falta el enunciado."
+    if not isinstance(options, dict) or set(options) != {"A", "B", "C"}:
+        return "La candidata debe tener exactamente tres opciones: A, B y C."
+    if getattr(question, "correct_key", None) not in options:
+        return "La clave no corresponde a una opción disponible."
+    if not str(getattr(question, "rationale", "") or "").strip():
+        return "Falta la justificación de la respuesta."
+    return None
+
+
+def save_queue_decision(question, reviewer, approved, reason=""):
+    report = dict(getattr(question, "quality_report", None) or {})
+    report.update(
+        status="APPROVED" if approved else "REJECTED",
+        review="human_source_grounded" if approved else "human_rejected",
+        origin=report.get("origin", "manual_question_review"),
+        reviewed_by=reviewer,
+        reviewed_at=datetime.date.today().isoformat(),
+        rejection_reason="" if approved else reason.strip(),
+    )
+    question.quality_report = report
+    question.is_verified = bool(approved)
 
 # pass # Removed st.set_page_config
 
@@ -106,14 +148,14 @@ if action == "Revisión guiada":
     queue_query = db.query(Question)
     if competition_id is not None:
         queue_query = queue_query.filter(Question.competition_id == competition_id)
-    queue = review_queue_summary(queue_query.all())
+    queue = queue_summary(queue_query.all())
     ai_queue_state_key = f"ai_review_queue_{competition_id}"
     ai_queue_state = st.session_state.get(ai_queue_state_key)
 
     if ai_queue_state and ai_queue_state.get("remaining"):
         question_id = ai_queue_state["remaining"][0]
         ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
-        if ai_candidate is None or not is_pending_review_candidate(ai_candidate):
+        if ai_candidate is None or not queue_item(ai_candidate) or bool(ai_candidate.is_verified):
             ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
             st.session_state[ai_queue_state_key] = ai_queue_state
             st.rerun()
@@ -149,8 +191,6 @@ if action == "Revisión guiada":
                 st.error("La auditoría por lote se detuvo. Revisa la clave o inténtalo nuevamente.")
 
     st.subheader("Revisión guiada de candidatas")
-    if not REVIEW_QUEUE_COMPATIBLE:
-        st.info("Actualizando la cola de revisión. Recarga en un momento para incluir candidatas OPEC.")
     queue_cols = st.columns(4)
     queue_cols[0].metric("Total en cola", queue["total"])
     queue_cols[1].metric("Pendientes", queue["pending"])
@@ -184,8 +224,7 @@ if action == "Revisión guiada":
                 pending_ids = [
                     str(question.question_id)
                     for question in queue_query.all()
-                    if is_pending_review_candidate(question)
-                    and review_queue_summary([question])["total"]
+                    if queue_item(question) and not bool(question.is_verified)
                 ]
                 st.session_state[ai_queue_state_key] = {
                     "remaining": pending_ids,
@@ -223,7 +262,7 @@ if action == "Revisión guiada":
         else:
             st.success("Diagnóstico local sin fallas estructurales. Verifica también la fuente de fondo.")
 
-        validation_error = candidate_validation_error(candidate)
+        validation_error = queue_validation_error(candidate)
         if validation_error:
             st.error(validation_error)
         else:
@@ -239,14 +278,16 @@ if action == "Revisión guiada":
                 "Aprobar y continuar", disabled=not confirmation,
                 use_container_width=True, type="primary", key=f"queue_approve_{candidate.question_id}",
             ):
-                approve_candidate(candidate, st.session_state.get("username", "admin"))
+                save_queue_decision(candidate, st.session_state.get("username", "admin"), True)
                 db.commit()
                 st.rerun()
             if reject_col.button(
                 "Descartar y continuar", use_container_width=True,
                 key=f"queue_reject_{candidate.question_id}",
             ):
-                reject_candidate(candidate, st.session_state.get("username", "admin"), rejection_reason)
+                save_queue_decision(
+                    candidate, st.session_state.get("username", "admin"), False, rejection_reason
+                )
                 db.commit()
                 st.rerun()
 
