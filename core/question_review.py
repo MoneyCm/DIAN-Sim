@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 
@@ -22,10 +23,18 @@ def is_reinforcement_candidate(question) -> bool:
     )
 
 
+def is_pending_review_candidate(question) -> bool:
+    """Return whether an unverified question is eligible for a human decision."""
+    if bool(getattr(question, "is_verified", False)):
+        return False
+    report = getattr(question, "quality_report", None)
+    return not (isinstance(report, dict) and report.get("status") == "REJECTED")
+
+
 def candidate_validation_error(question) -> Optional[str]:
     """Return the first reason a candidate cannot be manually approved."""
-    if not is_reinforcement_candidate(question):
-        return "La pregunta no es un refuerzo pendiente de revisión."
+    if not is_pending_review_candidate(question):
+        return "La pregunta no está pendiente de revisión."
     if not str(getattr(question, "source_refs", "") or "").strip():
         return "Falta una fuente normativa verificable."
     if not str(getattr(question, "stem", "") or "").strip():
@@ -46,25 +55,33 @@ def approve_candidate(question, reviewer: str) -> None:
     if error:
         raise ValueError(error)
     report = dict(question.quality_report or {})
+    origin = report.get("origin") or (
+        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else "manual_question_review"
+    )
     report.update(
         status="APPROVED",
         review="human_source_grounded",
-        origin=REINFORCEMENT_REVIEW,
+        origin=origin,
         reviewed_by=reviewer,
+        reviewed_at=date.today().isoformat(),
     )
     question.quality_report = report
     question.is_verified = True
 
 
 def reject_candidate(question, reviewer: str, reason: str = "") -> None:
-    if not is_reinforcement_candidate(question):
-        raise ValueError("La pregunta no es un refuerzo pendiente de revisión.")
+    if not is_pending_review_candidate(question):
+        raise ValueError("La pregunta no está pendiente de revisión.")
     report = dict(question.quality_report or {})
+    origin = report.get("origin") or (
+        REINFORCEMENT_REVIEW if is_reinforcement_candidate(question) else "manual_question_review"
+    )
     report.update(
         status="REJECTED",
         review="human_rejected",
-        origin=REINFORCEMENT_REVIEW,
+        origin=origin,
         reviewed_by=reviewer,
+        reviewed_at=date.today().isoformat(),
         rejection_reason=reason.strip(),
     )
     question.quality_report = report

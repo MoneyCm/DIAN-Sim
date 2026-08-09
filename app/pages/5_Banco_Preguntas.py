@@ -25,7 +25,7 @@ from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    matches_quality_filter, record_ai_audit, reject_candidate,
+    is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
 )
 from core.question_quality import audit_bank, store_deterministic_audit
 
@@ -422,8 +422,11 @@ if action == "Consultar banco":
                     if q.source_refs:
                         st.caption(f"Fuente: {q.source_refs}")
 
-                    if is_reinforcement_candidate(q):
-                        st.warning("Refuerzo generado por IA: pendiente de comprobación normativa.")
+                    if is_pending_review_candidate(q):
+                        if is_reinforcement_candidate(q):
+                            st.warning("Refuerzo generado por IA: pendiente de comprobación normativa.")
+                        else:
+                            st.warning("Pregunta candidata: requiere comprobación individual antes de entrar al estudio activo.")
                         validation_error = candidate_validation_error(q)
                         if validation_error:
                             st.error(validation_error)
@@ -441,7 +444,7 @@ if action == "Consultar banco":
                             ):
                                 approve_candidate(q, st.session_state.get("username", "admin"))
                                 db.commit()
-                                st.success("Refuerzo aprobado. Ya puede entrar en la práctica activa.")
+                                st.success("Pregunta aprobada. Ya puede entrar en la práctica activa.")
                                 st.rerun()
                             if reject_col.button(
                                 "⛔ Descartar candidato",

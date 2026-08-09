@@ -5,7 +5,7 @@ import pytest
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    matches_quality_filter, record_ai_audit, reject_candidate,
+    is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
 
@@ -44,6 +44,23 @@ def test_incomplete_candidate_cannot_be_approved(field, value):
     assert candidate_validation_error(question)
     with pytest.raises(ValueError):
         approve_candidate(question, "admin")
+
+
+def test_progressive_opec_question_can_be_individually_approved():
+    question = candidate(
+        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+    )
+
+    assert is_pending_review_candidate(question)
+    assert candidate_validation_error(question) is None
+    approve_candidate(question, "reviewer")
+
+    assert question.is_verified is True
+    assert question.quality_report["status"] == "APPROVED"
+    assert question.quality_report["review"] == "human_source_grounded"
+    assert question.quality_report["origin"] == "progressive_opec_local"
+    assert question.quality_report["reviewed_by"] == "reviewer"
+    assert question.quality_report["reviewed_at"]
 
 
 def test_rejected_candidate_stays_out_of_active_study():
