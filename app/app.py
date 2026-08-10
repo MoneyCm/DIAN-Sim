@@ -53,6 +53,7 @@ def prepare_runtime_catalog() -> None:
         from db.session import SessionLocal
         from core.competitions import ensure_builtin_competitions
         from core.competition_catalog import sync_catalog_competitions
+        from core.curated_opec_bootstrap import ensure_opec242699_bank
 
         catalog_db = SessionLocal()
         try:
@@ -60,6 +61,9 @@ def prepare_runtime_catalog() -> None:
             sync_catalog_competitions(catalog_db)
         finally:
             catalog_db.close()
+        prepared_bank = ensure_opec242699_bank()
+        if prepared_bank:
+            print(f"[OPEC] Banco inicial 242699 sincronizado: {prepared_bank}")
     except Exception as catalog_error:
         print(f"[CATALOGO] Error al sincronizar concursos: {catalog_error}")
 

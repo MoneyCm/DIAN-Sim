@@ -33,7 +33,37 @@ def find_reusable_opec(db, opec_number: object) -> dict | None:
     )
     row = next((candidate for candidate in rows if _is_complete(candidate)), None)
     if row is None:
-        return None
+        # A canonical profile can be reused before any individual user has
+        # saved it. This avoids asking each aspirant to paste the same public
+        # SIMO employment sheet.
+        from core.competition_catalog import load_catalog_profiles, profile_requirements_text
+
+        profile = next(
+            (
+                item for item in load_catalog_profiles()
+                if normalize_opec_number(item.get("position", {}).get("opec_number")) == number
+            ),
+            None,
+        )
+        if profile is None:
+            return None
+        source_competition = profile["competition"]
+        competition = db.query(Competition).filter_by(code=source_competition["code"]).first()
+        return {
+            "opec_number": number,
+            "job_title": profile["position"].get("denomination") or f"Empleo OPEC {number}",
+            "level": profile["position"].get("level"),
+            "purpose": profile.get("purpose") or "",
+            "functions": list(profile.get("functions") or []),
+            "requirements": profile_requirements_text(profile),
+            "competition": {
+                "id": competition.id if competition else None,
+                "code": source_competition["code"],
+                "name": source_competition["name"],
+                "entity": source_competition.get("entity"),
+            },
+            "catalog_status": "perfil_oficial_preconfigurado",
+        }
     competition = db.get(Competition, row.competition_id) if row.competition_id else None
     return {
         "opec_number": number,

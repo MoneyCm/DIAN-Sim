@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "competition": {
+    "code": "DIAN-2676-OPEC-242699",
+    "name": "DIAN 2676 · OPEC 242699 · Analista I",
+    "selection_process_number": "2676",
+    "entity": "DIAN",
+    "modality": "Ingreso",
+    "registration_deadline": "2026-02-07"
+  },
+  "position": {
+    "opec_number": "242699",
+    "denomination": "Analista I",
+    "code": "201",
+    "grade": "1",
+    "level": "Técnico",
+    "vacancies": 1,
+    "municipality": "Bogotá D.C."
+  },
+  "purpose": "TP-DE-2013. Preparar las acciones de asistencia técnica, administrativa y operación en la gestión de planes y proyectos relacionados con los procesos, subprocesos, despacho y seccional, de conformidad con la normatividad vigente, la política institucional y los lineamientos establecidos.",
+  "functions": [
+    "Desarrollar actividades de apoyo en los subprocesos y servicios de transporte, bienes, seguros, infraestructura, documentación y administración de bienes muebles e inmuebles de la DIAN.",
+    "Realizar las actividades técnicas propias de la oficina o secciones, de acuerdo con la normatividad vigente y los procedimientos técnicos establecidos.",
+    "Registrar y apoyar la gestión de los hechos financieros: certificados de disponibilidad presupuestal, registros presupuestales, reservas, obligaciones y órdenes de pago en los sistemas financieros.",
+    "Desempeñar las demás funciones comunes asignadas de acuerdo con la naturaleza del empleo.",
+    "Apoyar la administración, ingreso, custodia, disposición y egreso de mercancías y bienes aprehendidos, decomisados, abandonados a favor de la Nación, incluida su comercialización conforme al procedimiento aplicable.",
+    "Realizar la inspección, clasificación, alistamiento y disposición de inventarios y del estado de los bienes.",
+    "Apoyar la planeación, desarrollo, control y evaluación de los componentes de la oficina o subproceso.",
+    "Procesar la información requerida para los planes, programas y proyectos de la dependencia.",
+    "Proyectar actos administrativos y documentos técnicos, administrativos y operativos requeridos por la dependencia.",
+    "Apoyar la operación, seguimiento y soporte técnico de la plataforma y de los servicios de información de la entidad."
+  ],
+  "requirements": {
+    "education": ["Título de formación técnica profesional o tecnológica en núcleos básicos de conocimiento definidos en la ficha oficial"],
+    "experience": "No requiere experiencia",
+    "other": "Tarjeta o matrícula profesional vigente cuando la ley lo requiera"
+  },
+  "suggested_topics": [
+    "Gestión administrativa y logística DIAN",
+    "Gestión presupuestal y financiera",
+    "Administración de mercancías y bienes",
+    "Inventarios y custodia",
+    "Planeación, seguimiento e indicadores",
+    "Procesamiento de información",
+    "Actos administrativos y documentación",
+    "Soporte a plataformas y servicios de información",
+    "Integridad y servicio público"
+  ],
+  "source_status": "Perfil transcrito de la ficha oficial SIMO OPEC 242699 aportada por el aspirante. La ficha y el Manual Específico TP-DE-2013 son la referencia de alcance; cada pregunta del banco inicial conserva su función y fuente."
+}

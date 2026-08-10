@@ -10,6 +10,17 @@
     ],
     "next_action": "Mantener la ficha AT-FL-3006 y cada fuente de pregunta versionadas frente a las publicaciones de la CNSC y DIAN."
   },
+  "DIAN-2676-OPEC-242699": {
+    "status": "official_sources_loaded",
+    "label": "Ficha SIMO OPEC 242699 y Manual Específico DIAN TP-DE-2013",
+    "version": "simo-opec-242699-provided-2026-08-09",
+    "official_sources": [
+      "https://simo.cnsc.gov.co/documents/get-document?docId=bb016629-8248-49dd-b7cb-30719aaf1bf0819230151&contentType=application/pdf",
+      "https://cnsc.gov.co/convocatorias/dian-2676",
+      "https://www.dian.gov.co/Prensa/Paginas/NG-CNSC-abrio-proceso-de-seleccion-para-proveer-cargos-en-la-DIAN-mediante-el-Acuerdo-21-de-2025.aspx"
+    ],
+    "next_action": "Contrastar el banco contra cualquier guía o eje específico que publique la CNSC para el proceso DIAN 2676 y versionar las preguntas afectadas."
+  },
   "TERRITORIAL-12-BOLIVAR-2685": {
     "status": "official_sources_loaded",
     "label": "Acuerdo 36 de 2025 y ficha OPEC 241130 del Proceso 2685 - Territorial 12",

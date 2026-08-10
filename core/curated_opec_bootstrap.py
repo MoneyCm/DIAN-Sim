@@ -7,6 +7,7 @@ import os
 
 BOOTSTRAP_ENV = "LOAD_CURATED_OPEC236769"
 OPEC_241130_BOOTSTRAP_ENV = "LOAD_CURATED_OPEC241130"
+OPEC_242699_BOOTSTRAP_ENV = "LOAD_CURATED_OPEC242699"
 
 
 def _bank_is_ready(competition_code: str, minimum_cases: int, minimum_questions: int) -> bool:
@@ -44,6 +45,21 @@ def is_enabled(env_name: str = BOOTSTRAP_ENV) -> bool:
     return os.getenv(env_name, "").lower() in {"1", "true", "yes"}
 
 
+def ensure_opec242699_bank() -> dict[str, int] | None:
+    """Ensure the catalogued OPEC 242699 bank is available after deployment."""
+    if _bank_is_ready("DIAN-2676-OPEC-242699", minimum_cases=10, minimum_questions=100):
+        return None
+    from core.question_banks.dian_analista_i_242699 import seed_bank
+    from db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        cases, questions = seed_bank(db)
+        return {"cases": cases, "questions": questions}
+    finally:
+        db.close()
+
+
 def run_if_enabled() -> dict[str, object] | None:
     """Load reviewed cases only when deployment explicitly requests them."""
     load_236769 = is_enabled()
@@ -51,7 +67,8 @@ def run_if_enabled() -> dict[str, object] | None:
     # Keep reviewed packs synchronized under that controlled rollout, while
     # retaining a dedicated flag for installations that only need OPEC 241130.
     load_241130 = is_enabled(OPEC_241130_BOOTSTRAP_ENV) or load_236769
-    if not load_236769 and not load_241130:
+    load_242699 = is_enabled(OPEC_242699_BOOTSTRAP_ENV) or load_236769
+    if not load_236769 and not load_241130 and not load_242699:
         return None
 
     result: dict[str, object] = {}
@@ -86,4 +103,8 @@ def run_if_enabled() -> dict[str, object] | None:
             "bank_questions_added": complete_created,
             "total_questions": complete_total,
         }
+    if load_242699 and not _bank_is_ready(
+        "DIAN-2676-OPEC-242699", minimum_cases=10, minimum_questions=100
+    ):
+        result["opec242699"] = ensure_opec242699_bank() or {"cases": 0, "questions": 0}
     return result

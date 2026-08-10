@@ -56,3 +56,16 @@ def test_reusable_profile_can_be_attached_and_activated_for_another_user():
     assert row.is_active is True
     assert row.user_id == user.id
     assert normalize_opec_number("OPEC # 123-456") == "123456"
+
+
+def test_catalogued_opec_can_be_found_before_a_user_saves_it():
+    db = _db()
+    competition = Competition(
+        code="DIAN-2676-OPEC-242699", name="DIAN 2676 · OPEC 242699 · Analista I", is_active=True
+    )
+    db.add(competition)
+    db.commit()
+    result = find_reusable_opec(db, "242699")
+    assert result["catalog_status"] == "perfil_oficial_preconfigurado"
+    assert result["competition"]["id"] == competition.id
+    assert len(result["functions"]) == 10
