@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+import importlib
 
 # Add root to python path to import modules
 APP_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -18,7 +19,13 @@ try:
     from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 except ImportError:
     from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
-from core.auth import AuthManager
+from core import auth as auth_module
+
+# Streamlit can retain a previously imported auth module across a hot reload.
+# Reload only when its implementation marker is older than this app version.
+if getattr(auth_module, "AUTH_RUNTIME_VERSION", None) != "google-free-tier-v2":
+    auth_module = importlib.reload(auth_module)
+AuthManager = auth_module.AuthManager
 from core.access_control import is_admin
 from core.rank_system import get_rank_info
 

@@ -11,6 +11,7 @@ from core.auth_session import create_session_token, verify_session_token
 
 AUTH_COOKIE = "dian_sim_session"
 AUTH_TTL_SECONDS = 30 * 24 * 60 * 60
+AUTH_RUNTIME_VERSION = "google-free-tier-v2"
 
 
 def _cookie_secret() -> str:
