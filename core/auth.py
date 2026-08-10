@@ -1,4 +1,5 @@
 import bcrypt
+import importlib
 import os
 import sys
 import time
@@ -11,7 +12,7 @@ from core.auth_session import create_session_token, verify_session_token
 
 AUTH_COOKIE = "dian_sim_session"
 AUTH_TTL_SECONDS = 30 * 24 * 60 * 60
-AUTH_RUNTIME_VERSION = "google-free-tier-v2"
+AUTH_RUNTIME_VERSION = "google-free-tier-v3"
 
 
 def _cookie_secret() -> str:
@@ -148,8 +149,13 @@ class AuthManager:
                         suffix += 1
                         new_name = f"{base_name}-{suffix}"
 
-                    from core.account_registration import create_google_account
-                    user_id = create_google_account(engine, new_name, email)
+                    # Streamlit can retain an imported helper after a hot
+                    # deploy. Reload it at the account-creation boundary so
+                    # the INSERT always includes columns required by the
+                    # current production schema (notably subscription_tier).
+                    from core import account_registration
+                    account_registration = importlib.reload(account_registration)
+                    user_id = account_registration.create_google_account(engine, new_name, email)
                     user_name, user_role = new_name, "user"
 
                 st.session_state["logged_in"] = True
@@ -166,6 +172,10 @@ class AuthManager:
                 return True
         except Exception as exc:
             print(f"Google login error: {exc}", file=sys.stderr)
+            st.session_state["google_login_error"] = (
+                "No se pudo completar la cuenta con Google. Inténtalo de nuevo "
+                "en unos minutos; si continúa, avísanos sin crear otra cuenta."
+            )
             return False
 
     @staticmethod

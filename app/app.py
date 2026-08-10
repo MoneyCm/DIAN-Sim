@@ -23,7 +23,7 @@ from core import auth as auth_module
 
 # Streamlit can retain a previously imported auth module across a hot reload.
 # Reload only when its implementation marker is older than this app version.
-if getattr(auth_module, "AUTH_RUNTIME_VERSION", None) != "google-free-tier-v2":
+if getattr(auth_module, "AUTH_RUNTIME_VERSION", None) != "google-free-tier-v3":
     auth_module = importlib.reload(auth_module)
 AuthManager = auth_module.AuthManager
 from core.access_control import is_admin
@@ -105,6 +105,10 @@ def login_view():
 
     load_css()
     render_header(title="Acceso al Simulador", subtitle="Identifícate para continuar tu preparación")
+
+    google_login_error = st.session_state.pop("google_login_error", None)
+    if google_login_error:
+        st.error(google_login_error)
     
     col_l1, col_l2 = st.columns([1, 1])
     
@@ -180,15 +184,13 @@ def login_view():
                     st.error("Las contraseñas no coinciden")
                 else:
                     from db.session import engine
-                    from core.account_registration import (
-                        UsernameAlreadyExists,
-                        create_password_account,
-                    )
+                    from core import account_registration
+                    account_registration = importlib.reload(account_registration)
                     try:
-                        create_password_account(
+                        account_registration.create_password_account(
                             engine, clean_user, AuthManager.hash_password(new_pass)
                         )
-                    except UsernameAlreadyExists:
+                    except account_registration.UsernameAlreadyExists:
                         st.error("El usuario ya existe")
                     except Exception:
                         print("[AUTH] Error al crear cuenta", file=sys.stderr)
