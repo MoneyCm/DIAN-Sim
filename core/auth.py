@@ -12,7 +12,7 @@ from core.auth_session import create_session_token, verify_session_token
 
 AUTH_COOKIE = "dian_sim_session"
 AUTH_TTL_SECONDS = 30 * 24 * 60 * 60
-AUTH_RUNTIME_VERSION = "google-free-tier-v3"
+AUTH_RUNTIME_VERSION = "google-free-tier-v4"
 
 
 def _cookie_secret() -> str:
@@ -60,7 +60,10 @@ class AuthManager:
             return False
         from db.session import engine
         try:
-            with engine.connect() as conn:
+            # One transaction is important for hosted Postgres connections:
+            # do not keep a lookup connection open and acquire another one to
+            # create a first-time Google user.
+            with engine.begin() as conn:
                 row = conn.execute(
                     text("SELECT username, role FROM users WHERE id = :uid"),
                     {"uid": payload["uid"]},
@@ -155,7 +158,9 @@ class AuthManager:
                     # current production schema (notably subscription_tier).
                     from core import account_registration
                     account_registration = importlib.reload(account_registration)
-                    user_id = account_registration.create_google_account(engine, new_name, email)
+                    user_id = account_registration.create_google_account_in_transaction(
+                        conn, new_name, email
+                    )
                     user_name, user_role = new_name, "user"
 
                 st.session_state["logged_in"] = True

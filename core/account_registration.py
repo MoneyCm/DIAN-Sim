@@ -36,7 +36,17 @@ def create_password_account(engine, username: str, password_hash: str) -> None:
 def create_google_account(engine, username: str, email: str) -> int:
     """Create the local account that backs a verified Google sign-in."""
     with engine.begin() as insert_conn:
-        return insert_conn.execute(
-            text(GOOGLE_ACCOUNT_INSERT_SQL),
-            {"username": username, "email": email},
-        ).scalar_one()
+        return create_google_account_in_transaction(insert_conn, username, email)
+
+
+def create_google_account_in_transaction(connection, username: str, email: str) -> int:
+    """Create a Google account using the caller's active transaction.
+
+    Keeping lookup, insertion and onboarding checks on one connection prevents
+    a callback request from holding one pooled database connection while it
+    waits for a second one to insert the account.
+    """
+    return connection.execute(
+        text(GOOGLE_ACCOUNT_INSERT_SQL),
+        {"username": username, "email": email},
+    ).scalar_one()
