@@ -216,7 +216,8 @@ p_mis_opec = (
     if os.path.isfile(mis_opec_page_path)
     else None
 )
-p_config = st.Page("pages/7_Configuracion_OPEC.py", title="Configuración OPEC", icon="⚙️")
+p_config = st.Page("pages/15_Configuracion_OPEC.py", title="Configuración OPEC", icon="⚙️")
+p_opec_tools = st.Page("pages/7_Configuracion_OPEC.py", title="Herramientas OPEC", icon="🧰")
 p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Plan de estudio", icon="🗓️")
 p_study_map = st.Page("pages/12_Mapa_Estudio.py", title="Mapa de estudio", icon="🗺️")
 p_adaptive_tutor = st.Page("pages/13_Tutor_Adaptativo.py", title="Tutor adaptativo", icon="🧭")
@@ -241,7 +242,7 @@ p_admin = st.Page("pages/8_Panel_Admin.py", title="Panel de Control", icon="🛡
 account_pages = [p_dashboard, p_perfil]
 if p_mis_opec is not None:
     account_pages.append(p_mis_opec)
-account_pages.extend([p_config, p_study_plan, p_study_map, p_logout])
+account_pages.extend([p_config, p_opec_tools, p_study_plan, p_study_map, p_logout])
 
 pages = {
     "Mi Cuenta": account_pages,
