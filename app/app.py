@@ -216,7 +216,7 @@ p_mis_opec = (
     if os.path.isfile(mis_opec_page_path)
     else None
 )
-p_config = st.Page("pages/15_Configuracion_OPEC.py", title="Configuración OPEC", icon="⚙️")
+p_config = st.Page("pages/15_Centro_OPEC.py", title="Configuración OPEC", icon="⚙️")
 p_opec_tools = st.Page("pages/7_Configuracion_OPEC.py", title="Herramientas OPEC", icon="🧰")
 p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Plan de estudio", icon="🗓️")
 p_study_map = st.Page("pages/12_Mapa_Estudio.py", title="Mapa de estudio", icon="🗺️")
