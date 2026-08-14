@@ -29,16 +29,12 @@ from core.question_review import (
 )
 
 try:
-    from core.question_review import has_ai_audit, is_pending_review_candidate
+    from core.question_review import is_pending_review_candidate
 except ImportError:
     # Streamlit can briefly retain an older core module while the page has
     # already been reloaded. Keep the bank available during that transition.
     def is_pending_review_candidate(question):
         return is_reinforcement_candidate(question)
-
-    def has_ai_audit(question):
-        report = getattr(question, "quality_report", None)
-        return isinstance(report, dict) and isinstance(report.get("ai_audit"), dict)
 
 def automatic_rejection_reason(question):
     """Classify only content that is unsafe to retain as active study material.
@@ -67,6 +63,15 @@ def automatic_rejection_reason(question):
     if generated_source:
         return "Fuente generada o provisional, sin trazabilidad oficial verificable."
     return None
+
+
+def needs_ai_audit(question):
+    """Audit new candidates and retry only audits that ended in a technical error."""
+    report = getattr(question, "quality_report", None)
+    audit = report.get("ai_audit") if isinstance(report, dict) else None
+    if not isinstance(audit, dict):
+        return True
+    return str(audit.get("status", "")).strip().upper() == "ERROR"
 
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
@@ -191,7 +196,7 @@ if action == "Revisión guiada":
             ai_candidate is None
             or not queue_item(ai_candidate)
             or bool(ai_candidate.is_verified)
-            or has_ai_audit(ai_candidate)
+            or not needs_ai_audit(ai_candidate)
         ):
             ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
             ai_queue_state["completed"] += 1
@@ -306,7 +311,7 @@ if action == "Revisión guiada":
                 pending_ids = [
                     str(question.question_id)
                     for question in pending_questions
-                    if not has_ai_audit(question)
+                    if needs_ai_audit(question)
                 ]
                 if not pending_ids:
                     st.info("Todas las candidatas pendientes ya tienen una auditoría IA.")
