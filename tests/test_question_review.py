@@ -5,7 +5,7 @@ import pytest
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
+    has_ai_audit, is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
     review_queue_summary,
 )
 
@@ -106,9 +106,11 @@ def test_rejected_candidate_stays_out_of_active_study():
 
 def test_ai_audit_never_verifies_or_loses_candidate_state():
     question = candidate()
+    assert not has_ai_audit(question)
     record_ai_audit(question, {"status": "APPROVED", "score": 10})
     assert question.is_verified is False
     assert is_reinforcement_candidate(question)
+    assert has_ai_audit(question)
     assert question.quality_report["ai_audit"]["score"] == 10
 
 

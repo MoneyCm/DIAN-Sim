@@ -137,6 +137,16 @@ def record_ai_audit(question, audit_report: dict) -> None:
     question.is_verified = False
 
 
+def has_ai_audit(question) -> bool:
+    """Return whether an AI opinion has already been stored for a candidate.
+
+    AI auditing does not approve a candidate, so it remains in the human queue.
+    This marker lets an interrupted batch resume without using tokens twice.
+    """
+    report = getattr(question, "quality_report", None)
+    return isinstance(report, dict) and isinstance(report.get("ai_audit"), dict)
+
+
 def matches_quality_filter(question, selected: str) -> bool:
     if selected == QUALITY_VERIFIED:
         return bool(getattr(question, "is_verified", False))

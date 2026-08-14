@@ -25,7 +25,7 @@ from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    matches_quality_filter, record_ai_audit, reject_candidate,
+    has_ai_audit, matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
 try:
@@ -155,8 +155,14 @@ if action == "Revisión guiada":
     if ai_queue_state and ai_queue_state.get("remaining"):
         question_id = ai_queue_state["remaining"][0]
         ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
-        if ai_candidate is None or not queue_item(ai_candidate) or bool(ai_candidate.is_verified):
+        if (
+            ai_candidate is None
+            or not queue_item(ai_candidate)
+            or bool(ai_candidate.is_verified)
+            or has_ai_audit(ai_candidate)
+        ):
             ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
+            ai_queue_state["completed"] += 1
             st.session_state[ai_queue_state_key] = ai_queue_state
             st.rerun()
         provider = ai_queue_state.get("provider", "Gemini")
@@ -187,6 +193,9 @@ if action == "Revisión guiada":
                 st.rerun()
             except Exception as audit_error:
                 print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
+                # A failed database flush/commit puts the session into a
+                # rollback-only state. Recover it before rendering candidates.
+                db.rollback()
                 st.session_state.pop(ai_queue_state_key, None)
                 st.error("La auditoría por lote se detuvo. Revisa la clave o inténtalo nuevamente.")
 
@@ -221,18 +230,26 @@ if action == "Revisión guiada":
             if not get_api_key(ai_provider):
                 st.error("Configura una clave de IA antes de iniciar la auditoría.")
             else:
-                pending_ids = [
-                    str(question.question_id)
+                pending_questions = [
+                    question
                     for question in queue_query.all()
                     if queue_item(question) and not bool(question.is_verified)
                 ]
-                st.session_state[ai_queue_state_key] = {
-                    "remaining": pending_ids,
-                    "completed": 0,
-                    "total": len(pending_ids),
-                    "provider": ai_provider,
-                }
-                st.rerun()
+                pending_ids = [
+                    str(question.question_id)
+                    for question in pending_questions
+                    if not has_ai_audit(question)
+                ]
+                if not pending_ids:
+                    st.info("Todas las candidatas pendientes ya tienen una auditoría IA.")
+                else:
+                    st.session_state[ai_queue_state_key] = {
+                        "remaining": pending_ids,
+                        "completed": len(pending_questions) - len(pending_ids),
+                        "total": len(pending_questions),
+                        "provider": ai_provider,
+                    }
+                    st.rerun()
 
     candidate = queue["next_question"]
     if candidate is None:
