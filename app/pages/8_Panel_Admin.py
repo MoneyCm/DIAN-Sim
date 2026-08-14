@@ -18,6 +18,7 @@ from ui_utils import load_css, render_header
 from core.access_control import require_admin
 from core.normativa import NormativaManager
 from core.anki_enrichment import backfill_enrichments
+from core.admin_opec_assignment import AssignableOPECNotFound, assign_prepared_opec
 from core.config import get_api_key
 
 # pass # Removed st.set_page_config
@@ -116,7 +117,7 @@ with tab_stats:
 # --- TAB: USERS ---
 with tab_users:
     st.subheader("👥 Seguimiento de usuarios")
-    st.caption("Consulta actividad y avance sin modificar cuentas, contraseñas ni permisos.")
+    st.caption("Consulta actividad y avance. Puedes asignar una OPEC preparada, sin modificar contraseñas ni permisos.")
     db = SessionLocal()
     try:
         users = db.query(User).order_by(User.username).all()
@@ -218,7 +219,42 @@ with tab_users:
             else:
                 st.info("Este usuario todavía no ha configurado una OPEC.")
 
-    st.caption("🔒 Los roles y las cuentas no se modifican desde esta pantalla.")
+        with st.expander("Asignar una OPEC preparada a un usuario"):
+            st.caption(
+                "La asignación activa esa OPEC para la cuenta seleccionada. "
+                "Solo usa fichas que ya existan en el catálogo o banco compartido."
+            )
+            user_options = {
+                f"{item['Usuario']} · ID {item['ID']}": item["ID"]
+                for item in user_data
+            }
+            with st.form("admin_assign_prepared_opec"):
+                target_label = st.selectbox("Usuario", list(user_options))
+                target_opec = st.text_input("Número OPEC", placeholder="Ej.: 242699")
+                assign_requested = st.form_submit_button("Asignar y activar OPEC", type="primary")
+            if assign_requested:
+                if not target_opec.strip():
+                    st.error("Indica el número OPEC que quieres asignar.")
+                else:
+                    assign_db = SessionLocal()
+                    try:
+                        assigned = assign_prepared_opec(
+                            assign_db, user_options[target_label], target_opec
+                        )
+                        assign_db.commit()
+                        st.success(
+                            f"OPEC {assigned.opec_number} asignada y activada para {target_label.split(' · ')[0]}."
+                        )
+                    except AssignableOPECNotFound as exc:
+                        assign_db.rollback()
+                        st.warning(str(exc))
+                    except Exception as exc:
+                        assign_db.rollback()
+                        st.error(f"No se pudo asignar la OPEC: {exc}")
+                    finally:
+                        assign_db.close()
+
+    st.caption("🔒 Los roles, contraseñas y permisos no se modifican desde esta pantalla.")
 
 # --- TAB: NORMATIVA ---
 with tab_normativa:
