@@ -78,6 +78,7 @@ from core.question_quality import audit_bank, audit_question_structure, store_de
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
 AI_AUDIT_RESULT_VERSION = "v2"
+GEMINI_AUDIT_REQUEST_DELAY_SECONDS = 6
 
 
 def queue_item(question):
@@ -236,6 +237,10 @@ if action == "Revisión guiada":
                             ai_queue_state["last_error"] = str(ai_report.get("critique", ""))
                         else:
                             ai_queue_state["successful"] = ai_queue_state.get("successful", 0) + 1
+                        # Gemini free-tier quotas are burst-sensitive. A short
+                        # pause avoids turning an entire batch into 429 errors.
+                        if provider.lower() == "gemini":
+                            time.sleep(GEMINI_AUDIT_REQUEST_DELAY_SECONDS)
                 except Exception as audit_error:
                     print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
                     db.rollback()
