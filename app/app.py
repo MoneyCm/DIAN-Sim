@@ -246,16 +246,10 @@ if p_mis_opec is not None:
     account_pages.append(p_mis_opec)
 account_pages.extend([p_config, p_opec_tools, p_study_plan, p_study_map, p_logout])
 
-pages = {
-    "Inicio": [p_dashboard],
-    "Mi preparación": (
-        [p_mis_opec, p_study_plan, p_simulacro]
-        if p_mis_opec is not None else [p_study_plan, p_simulacro]
-    ),
-    "Mi progreso": [p_resultados],
-    "Más opciones": [p_adaptive_tutor, p_sim_real, p_repaso, p_study_map, p_etica],
-    "Mi cuenta": [p_perfil, p_logout],
-}
+learner_pages = [p_dashboard]
+if p_mis_opec is not None:
+    learner_pages.append(p_mis_opec)
+learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])
 
 # Determinar Navegación Activa (Condicional)
 if not AuthManager.check_auth():
@@ -273,9 +267,16 @@ else:
         pass
         
     if is_admin():
-        pages["Herramientas de administración"] = [
-            p_config, p_opec_tools, p_banco, p_admin, p_ia,
-        ]
+        pages = {
+            "Estudiar": learner_pages,
+            "Herramientas de administración": [
+                p_config, p_opec_tools, p_banco, p_admin, p_ia,
+            ],
+        }
+    else:
+        # A flat list keeps the learner menu to the four daily destinations
+        # plus account actions. Secondary study tools live in Inicio.
+        pages = learner_pages
     if st.session_state.get("opec_onboarding"):
         pg = st.navigation({"Primeros pasos": [p_config]})
     else:

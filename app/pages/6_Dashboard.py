@@ -113,6 +113,17 @@ try:
     with quick_change:
         st.page_link("pages/14_Mis_OPEC.py", label="Cambiar OPEC", icon="🎯", use_container_width=True)
 
+    with st.expander("Más opciones de estudio", expanded=False):
+        extra_one, extra_two, extra_three = st.columns(3)
+        with extra_one:
+            st.page_link("pages/13_Tutor_Adaptativo.py", label="Tutor adaptativo", icon="🧭", use_container_width=True)
+            st.page_link("pages/10_Repaso_Especial.py", label="Repasos", icon="🧠", use_container_width=True)
+        with extra_two:
+            st.page_link("pages/Simulacro_Real.py", label="Simulacro tipo examen", icon="⏱️", use_container_width=True)
+            st.page_link("pages/9_Etica_Integridad.py", label="Ética e integridad", icon="⚖️", use_container_width=True)
+        with extra_three:
+            st.page_link("pages/12_Mapa_Estudio.py", label="Mapa de estudio", icon="🗺️", use_container_width=True)
+
     # Plan diario adaptativo por disponibilidad y zona horaria de Colombia.
     bogota_now = datetime.datetime.now(ZoneInfo("America/Bogota"))
     study_config = db.query(StudyPlanConfig).filter_by(
