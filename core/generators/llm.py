@@ -646,7 +646,10 @@ class LLMGenerator:
                 if not content:
                     fb_client = getattr(self, 'fallback_client', None)
                     fb_type = getattr(self, 'fallback_type', 'openai')
-                    if not fb_client and hasattr(self, 'openai_client'): 
+                    # ``openai_client`` is initialized to None for a Gemini
+                    # request.  Checking only ``hasattr`` dereferenced None
+                    # here and hid the real Gemini error behind base_url.
+                    if not fb_client and self.openai_client:
                         fb_client = self.openai_client
                         fb_type = "openai" if "api.openai.com" in str(fb_client.base_url) else "groq"
                     
