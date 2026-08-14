@@ -40,33 +40,33 @@ except ImportError:
         report = getattr(question, "quality_report", None)
         return isinstance(report, dict) and isinstance(report.get("ai_audit"), dict)
 
-try:
-    from core.question_review import automatic_rejection_reason
-except ImportError:
-    # Same hot-reload guard: the safe fallback keeps the review queue online
-    # while a Streamlit worker still has the previous core module in memory.
-    def automatic_rejection_reason(question):
-        report = getattr(question, "quality_report", None)
-        report = report if isinstance(report, dict) else {}
-        audit = report.get("ai_audit")
-        status = str(audit.get("status", "")).strip().upper() if isinstance(audit, dict) else ""
-        source = str(getattr(question, "source_refs", "") or "").strip().lower()
-        generated_source = (
-            not source
-            or "batch gen" in source
-            or "banco base provisional" in source
-            or "guía oficial pendiente" in source
-            or "guia oficial pendiente" in source
-            or "inyección especial" in source
-            or "inyeccion especial" in source
-            or "antigravity" in source
-            or source.startswith(("mistral -", "openai -", "gemini -"))
-        )
-        if status == "REJECTED":
-            return "Dictamen IA de rechazo; requiere reescritura o nueva fuente oficial."
-        if generated_source:
-            return "Fuente generada o provisional, sin trazabilidad oficial verificable."
-        return None
+def automatic_rejection_reason(question):
+    """Classify only content that is unsafe to retain as active study material.
+
+    Kept on the page so a Cloud worker that still holds an older core module
+    cannot make the review screen use an outdated source rule.
+    """
+    report = getattr(question, "quality_report", None)
+    report = report if isinstance(report, dict) else {}
+    audit = report.get("ai_audit")
+    status = str(audit.get("status", "")).strip().upper() if isinstance(audit, dict) else ""
+    source = str(getattr(question, "source_refs", "") or "").strip().lower()
+    generated_source = (
+        not source
+        or "batch gen" in source
+        or "banco base provisional" in source
+        or "guía oficial pendiente" in source
+        or "guia oficial pendiente" in source
+        or "inyección especial" in source
+        or "inyeccion especial" in source
+        or "antigravity" in source
+        or source.startswith(("mistral -", "openai -", "gemini -"))
+    )
+    if status == "REJECTED":
+        return "Dictamen IA de rechazo; requiere reescritura o nueva fuente oficial."
+    if generated_source:
+        return "Fuente generada o provisional, sin trazabilidad oficial verificable."
+    return None
 
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
