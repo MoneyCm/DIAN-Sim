@@ -55,6 +55,17 @@
     transition: none !important;
 }
 
+/* Secondary study pages remain registered for contextual links on Inicio,
+   but are intentionally absent from the learner navigation. */
+[data-testid="stSidebarNav"] a[href$="/Plan_Estudio"],
+[data-testid="stSidebarNav"] a[href$="/Tutor_Adaptativo"],
+[data-testid="stSidebarNav"] a[href$="/Simulacro_Real"],
+[data-testid="stSidebarNav"] a[href$="/Repaso_Especial"],
+[data-testid="stSidebarNav"] a[href$="/Mapa_Estudio"],
+[data-testid="stSidebarNav"] a[href$="/Etica_Integridad"] {
+    display: none !important;
+}
+
 /* Headings */
 h1 {
     font-family: 'Space Grotesk', sans-serif !important;

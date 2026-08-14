@@ -250,6 +250,13 @@ learner_pages = [p_dashboard]
 if p_mis_opec is not None:
     learner_pages.append(p_mis_opec)
 learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])
+# Streamlit only permits ``st.page_link`` to pages registered in navigation.
+# These stay registered for contextual links from Inicio, while CSS keeps them
+# out of the learner sidebar.
+secondary_learner_pages = [
+    p_study_plan, p_adaptive_tutor, p_sim_real, p_repaso, p_study_map, p_etica,
+]
+registered_learner_pages = learner_pages + secondary_learner_pages
 
 # Determinar Navegación Activa (Condicional)
 if not AuthManager.check_auth():
@@ -268,7 +275,7 @@ else:
         
     if is_admin():
         pages = {
-            "Estudiar": learner_pages,
+            "Estudiar": registered_learner_pages,
             "Herramientas de administración": [
                 p_config, p_opec_tools, p_banco, p_admin, p_ia,
             ],
@@ -276,7 +283,7 @@ else:
     else:
         # A flat list keeps the learner menu to the four daily destinations
         # plus account actions. Secondary study tools live in Inicio.
-        pages = learner_pages
+        pages = registered_learner_pages
     if st.session_state.get("opec_onboarding"):
         pg = st.navigation({"Primeros pasos": [p_config]})
     else:
