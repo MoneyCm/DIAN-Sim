@@ -152,6 +152,28 @@ def save_queue_decision(question, reviewer, approved, reason=""):
     question.quality_report = report
     question.is_verified = bool(approved)
 
+
+def quality_state(question):
+    """Classify bank readiness without letting an AI opinion certify content."""
+    if bool(getattr(question, "is_verified", False)):
+        return "LISTA PARA ESTUDIAR", "Tiene una decisión de calidad registrada.", None
+
+    rejection_reason = automatic_rejection_reason(question)
+    if rejection_reason:
+        return "NO USAR", rejection_reason, None
+
+    source = assess_source_evidence(question)
+    structural = audit_question_structure(question)
+    if source["status"] != "DIRECT_OFFICIAL_SOURCE":
+        return "SIN EVIDENCIA OFICIAL", source["reason"], source
+    if structural["status"] != "PASS":
+        return "CORREGIR ESTRUCTURA", "El diagnóstico automático encontró campos por corregir.", source
+    return (
+        "EN CONTRASTE NORMATIVO",
+        "Tiene fuente oficial enlazada y estructura válida; falta comprobar la afirmación frente al texto vigente.",
+        source,
+    )
+
 # pass # Removed st.set_page_config
 
 if not AuthManager.check_auth():
@@ -182,8 +204,10 @@ stats_s, rank = render_custom_sidebar()
 is_admin_user = AuthManager.is_admin()
 available_actions = ["Consultar banco"]
 if is_admin_user:
-    available_actions.extend(["Revisión guiada", "Importar archivo", "Crear manualmente"])
-action = st.selectbox("Vista", available_actions, label_visibility="collapsed")
+    available_actions.extend(["Centro de calidad", "Importar archivo", "Crear manualmente"])
+if st.session_state.get("Vista") == "Revisión guiada":
+    st.session_state["Vista"] = "Centro de calidad"
+action = st.selectbox("Vista", available_actions, label_visibility="collapsed", key="Vista")
 st.divider()
 
 db = SessionLocal()
@@ -203,7 +227,79 @@ opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)",
                        value=has_opec, 
                        help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
 
-if action == "Revisión guiada":
+if action == "Centro de calidad":
+    competition_id = get_active_competition_id(db, u_id)
+    quality_query = db.query(Question)
+    if competition_id is not None:
+        quality_query = quality_query.filter(Question.competition_id == competition_id)
+    quality_questions = quality_query.all()
+    quality_rows = []
+    for question in quality_questions:
+        state, detail, source = quality_state(question)
+        quality_rows.append({
+            "question": question,
+            "state": state,
+            "detail": detail,
+            "source": source,
+        })
+
+    st.subheader("Centro de Calidad")
+    st.caption("Control automático del banco. No presenta preguntas para aprobar una por una ni usa la IA como certificación.")
+    state_counts = Counter(row["state"] for row in quality_rows)
+    quality_cols = st.columns(4)
+    quality_cols[0].metric("Listas para estudiar", state_counts["LISTA PARA ESTUDIAR"])
+    quality_cols[1].metric("En contraste normativo", state_counts["EN CONTRASTE NORMATIVO"])
+    quality_cols[2].metric("Corregir estructura", state_counts["CORREGIR ESTRUCTURA"])
+    quality_cols[3].metric(
+        "No usar / sin evidencia",
+        state_counts["NO USAR"] + state_counts["SIN EVIDENCIA OFICIAL"],
+    )
+    st.info(
+        "Las preguntas en contraste no entran a la práctica activa. Una fuente enlazada demuestra trazabilidad, "
+        "pero no certifica todavía que la clave y la justificación interpreten correctamente la norma."
+    )
+
+    if st.button(
+        "Actualizar diagnóstico automático",
+        use_container_width=True,
+        help="Revisa estructura y trazabilidad de todo el banco sin consumir IA ni cambiar qué preguntas están habilitadas.",
+    ):
+        try:
+            for row in quality_rows:
+                question = row["question"]
+                store_deterministic_audit(question, audit_question_structure(question))
+            db.commit()
+            st.success(f"Diagnóstico actualizado para {len(quality_rows)} preguntas.")
+            st.rerun()
+        except Exception:
+            db.rollback()
+            st.error("No se pudo guardar el diagnóstico automático. Inténtalo nuevamente.")
+
+    exceptions = [row for row in quality_rows if row["state"] != "LISTA PARA ESTUDIAR"]
+    if exceptions:
+        with st.expander(f"Ver {len(exceptions)} excepciones del banco"):
+            table = []
+            for row in exceptions:
+                question = row["question"]
+                source = row["source"] or assess_source_evidence(question)
+                table.append({
+                    "Estado": row["state"],
+                    "Tema": question.topic or "Sin tema",
+                    "Fuente declarada": question.source_refs or "Sin fuente",
+                    "Artículo": source.get("article") or "—",
+                    "Acción": row["detail"],
+                })
+            st.dataframe(pd.DataFrame(table), use_container_width=True, hide_index=True)
+
+    with st.expander("Cómo funciona este control"):
+        st.markdown(
+            "1. Comprueba la existencia de una fuente oficial enlazable.  \\n"
+            "2. Valida estructura: situación, opciones, clave, justificación, tema y competencia.  \\n"
+            "3. Excluye automáticamente material sin trazabilidad.  \\n"
+            "4. Deja el contraste jurídico de fondo como una etapa separada y controlada."
+        )
+
+elif False:  # Legacy guided review kept temporarily for backwards-compatible deployments.
     competition_id = get_active_competition_id(db, u_id)
     queue_query = db.query(Question)
     if competition_id is not None:
