@@ -12,7 +12,10 @@ from db.session import SessionLocal
 from db.models import Question
 from core.dedupe import compute_hash, find_duplicates
 from core.import_utils import validate_import_df
-from core.generators.llm import LLMGenerator
+from core.generators import llm as llm_module
+if getattr(llm_module, "LLM_AUDIT_RUNTIME_VERSION", None) != "safe-fallback-v2":
+    llm_module = importlib.reload(llm_module)
+LLMGenerator = llm_module.LLMGenerator
 from core.config import get_api_key
 from ui_utils import load_css, render_header, render_custom_sidebar
 

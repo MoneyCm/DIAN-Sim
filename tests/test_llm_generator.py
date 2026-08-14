@@ -57,3 +57,28 @@ def test_gemini_audit_reports_the_real_provider_error_without_optional_fallback(
     assert result["status"] == "ERROR"
     assert "Gemini unavailable" in result["critique"]
     assert "NoneType" not in result["critique"]
+
+
+def test_gemini_audit_handles_an_absent_fallback_client_without_base_url():
+    generator = LLMGenerator.__new__(LLMGenerator)
+    generator.provider = "gemini"
+    generator.model_name = None
+    generator.gemini_client = Mock()
+    generator.gemini_client.models.generate_content.side_effect = RuntimeError("Gemini unavailable")
+    generator.openai_client = None
+    generator.fallback_client = None
+    generator.fallback_type = "openai"
+
+    result = generator.audit_question(
+        {
+            "topic": "FiscalizaciÃ³n",
+            "stem": "Pregunta",
+            "options_json": {"A": "a", "B": "b", "C": "c"},
+            "correct_key": "A",
+            "rationale": "RazÃ³n",
+        },
+        source_context="Norma oficial",
+    )
+
+    assert result["status"] == "ERROR"
+    assert "NoneType" not in result["critique"]

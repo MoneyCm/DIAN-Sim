@@ -15,6 +15,9 @@ from .utils import repair_and_parse_json
 # from mistralai import Mistral # Moved to lazy import
 
 
+LLM_AUDIT_RUNTIME_VERSION = "safe-fallback-v2"
+
+
 class LLMGenerator:
     DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
     GEMINI_MODEL_FALLBACKS = ("gemini-2.5-flash", "gemini-flash-latest")
@@ -29,6 +32,8 @@ class LLMGenerator:
         self.openai_client = None
         self.gemini_client = None
         self.mistral_client = None
+        self.fallback_client = None
+        self.fallback_type = "openai"
 
         # Primary Client
         if self.provider == "openai" and self.api_key:
@@ -649,9 +654,11 @@ class LLMGenerator:
                     # ``openai_client`` is initialized to None for a Gemini
                     # request.  Checking only ``hasattr`` dereferenced None
                     # here and hid the real Gemini error behind base_url.
-                    if not fb_client and self.openai_client:
-                        fb_client = self.openai_client
-                        fb_type = "openai" if "api.openai.com" in str(fb_client.base_url) else "groq"
+                    primary_fallback = getattr(self, "openai_client", None)
+                    if not fb_client and primary_fallback is not None:
+                        fb_client = primary_fallback
+                        base_url = str(getattr(fb_client, "base_url", ""))
+                        fb_type = "openai" if "api.openai.com" in base_url else "groq"
                     
                     if fb_client:
                         print(f"⚠️ [v47.1] Gemini Audit Failed. Attempting Fallback Rescue with {fb_type}... Mikey")
