@@ -190,51 +190,76 @@ if action == "Revisión guiada":
     ai_queue_state = st.session_state.get(ai_queue_state_key)
 
     if ai_queue_state and ai_queue_state.get("remaining"):
-        question_id = ai_queue_state["remaining"][0]
-        ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
-        if (
-            ai_candidate is None
-            or not queue_item(ai_candidate)
-            or bool(ai_candidate.is_verified)
-            or not needs_ai_audit(ai_candidate)
-        ):
-            ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
-            ai_queue_state["completed"] += 1
-            st.session_state[ai_queue_state_key] = ai_queue_state
-            st.rerun()
         provider = ai_queue_state.get("provider", "Gemini")
         api_key = get_api_key(provider)
         if not api_key:
             st.session_state.pop(ai_queue_state_key, None)
             st.error("La auditoría por lote necesita una clave de IA configurada.")
         else:
-            try:
-                auditor = LLMGenerator(provider, api_key)
-                ai_report = auditor.audit_question(
-                    {
-                        "topic": ai_candidate.topic,
-                        "stem": ai_candidate.stem,
-                        "options_json": ai_candidate.options_json,
-                        "correct_key": ai_candidate.correct_key,
-                        "rationale": ai_candidate.rationale,
-                    },
-                    source_context=str(ai_candidate.source_refs or ""),
-                )
-                if not isinstance(ai_report, dict):
-                    raise ValueError("La IA no devolvió un informe estructurado.")
-                record_ai_audit(ai_candidate, ai_report)
-                db.commit()
-                ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
-                ai_queue_state["completed"] += 1
+            # Work in small visible batches. The old one-question rerun made
+            # the page flash without giving the user usable progress feedback.
+            batch_size = min(5, len(ai_queue_state["remaining"]))
+            batch_progress = st.progress(
+                ai_queue_state["completed"] / max(ai_queue_state["total"], 1),
+                text=(f"Auditando {ai_queue_state['completed']} de "
+                      f"{ai_queue_state['total']} candidatas…"),
+            )
+            auditor = LLMGenerator(provider, api_key)
+            for _ in range(batch_size):
+                question_id = ai_queue_state["remaining"][0]
+                try:
+                    ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
+                    if (
+                        ai_candidate is not None
+                        and queue_item(ai_candidate)
+                        and not bool(ai_candidate.is_verified)
+                        and needs_ai_audit(ai_candidate)
+                    ):
+                        ai_report = auditor.audit_question(
+                            {
+                                "topic": ai_candidate.topic,
+                                "stem": ai_candidate.stem,
+                                "options_json": ai_candidate.options_json,
+                                "correct_key": ai_candidate.correct_key,
+                                "rationale": ai_candidate.rationale,
+                            },
+                            source_context=str(ai_candidate.source_refs or ""),
+                        )
+                        if not isinstance(ai_report, dict):
+                            raise ValueError("La IA no devolvió un informe estructurado.")
+                        record_ai_audit(ai_candidate, ai_report)
+                        db.commit()
+                        if str(ai_report.get("status", "")).upper() == "ERROR":
+                            ai_queue_state["errors"] = ai_queue_state.get("errors", 0) + 1
+                            ai_queue_state["last_error"] = str(ai_report.get("critique", ""))
+                        else:
+                            ai_queue_state["successful"] = ai_queue_state.get("successful", 0) + 1
+                except Exception as audit_error:
+                    print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
+                    db.rollback()
+                    ai_queue_state["errors"] = ai_queue_state.get("errors", 0) + 1
+                    ai_queue_state["last_error"] = str(audit_error)
+                finally:
+                    ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
+                    ai_queue_state["completed"] += 1
+                    batch_progress.progress(
+                        ai_queue_state["completed"] / max(ai_queue_state["total"], 1),
+                        text=(f"Auditando {ai_queue_state['completed']} de "
+                              f"{ai_queue_state['total']} candidatas…"),
+                    )
+
+            if ai_queue_state["remaining"]:
                 st.session_state[ai_queue_state_key] = ai_queue_state
                 st.rerun()
-            except Exception as audit_error:
-                print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
-                # A failed database flush/commit puts the session into a
-                # rollback-only state. Recover it before rendering candidates.
-                db.rollback()
+            else:
                 st.session_state.pop(ai_queue_state_key, None)
-                st.error("La auditoría por lote se detuvo. Revisa la clave o inténtalo nuevamente.")
+                st.session_state[f"ai_review_result_{competition_id}"] = {
+                    "total": ai_queue_state["total"],
+                    "successful": ai_queue_state.get("successful", 0),
+                    "errors": ai_queue_state.get("errors", 0),
+                    "last_error": ai_queue_state.get("last_error", ""),
+                }
+                st.rerun()
 
     st.subheader("Revisión guiada de candidatas")
     queue_cols = st.columns(4)
@@ -246,6 +271,15 @@ if action == "Revisión guiada":
         (queue["approved"] + queue["rejected"]) / queue["total"] if queue["total"] else 1.0,
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
+    ai_last_result = st.session_state.get(f"ai_review_result_{competition_id}")
+    if ai_last_result:
+        if ai_last_result["errors"]:
+            st.warning(
+                f"Última auditoría: {ai_last_result['successful']} analizadas y "
+                f"{ai_last_result['errors']} con error técnico. Las fallidas siguen pendientes."
+            )
+        else:
+            st.success(f"Auditoría IA completada: {ai_last_result['successful']} candidatas analizadas.")
     auto_rejections = [
         (question, automatic_rejection_reason(question))
         for question in queue_query.all()
