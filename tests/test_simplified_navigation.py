@@ -14,4 +14,5 @@ def test_dashboard_exposes_the_three_primary_actions():
     assert "Acciones rápidas" in source
     assert "Continuar estudiando" in source
     assert "Practicar ahora" in source
+    assert "Mi plan de estudio" in source
     assert "Cambiar OPEC" in source

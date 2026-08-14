@@ -105,11 +105,13 @@ try:
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
     st.subheader("Acciones rápidas")
-    quick_opec, quick_practice, quick_change = st.columns(3)
+    quick_opec, quick_practice, quick_plan, quick_change = st.columns(4)
     with quick_opec:
         st.page_link("pages/13_Tutor_Adaptativo.py", label="Continuar estudiando", icon="🧭", use_container_width=True)
     with quick_practice:
         st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar ahora", icon="📚", use_container_width=True)
+    with quick_plan:
+        st.page_link("pages/11_Plan_Estudio.py", label="Mi plan de estudio", icon="🗓️", use_container_width=True)
     with quick_change:
         st.page_link("pages/14_Mis_OPEC.py", label="Cambiar OPEC", icon="🎯", use_container_width=True)
 
