@@ -57,6 +57,9 @@ except ImportError:
             or "banco base provisional" in source
             or "guía oficial pendiente" in source
             or "guia oficial pendiente" in source
+            or "inyección especial" in source
+            or "inyeccion especial" in source
+            or "antigravity" in source
             or source.startswith(("mistral -", "openai -", "gemini -"))
         )
         if status == "REJECTED":

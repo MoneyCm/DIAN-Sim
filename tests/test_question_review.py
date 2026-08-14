@@ -128,6 +128,7 @@ def test_ai_audit_preserves_progressive_opec_queue_membership():
 
 def test_automatic_rejection_only_retires_untraceable_or_explicitly_rejected_content():
     generated = candidate(source_refs="Mistral - Batch Gen v20")
+    injected = candidate(source_refs="Inyección Especial Antigravity - OPEC 236769")
     audit_error_with_official_source = candidate(
         source_refs="Decreto 1165 de 2019, artículo 172",
     )
@@ -136,6 +137,7 @@ def test_automatic_rejection_only_retires_untraceable_or_explicitly_rejected_con
     record_ai_audit(explicitly_rejected, {"status": "REJECTED", "score": 3})
 
     assert automatic_rejection_reason(generated)
+    assert automatic_rejection_reason(injected)
     assert automatic_rejection_reason(audit_error_with_official_source) is None
     assert automatic_rejection_reason(explicitly_rejected)
 
