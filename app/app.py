@@ -225,6 +225,8 @@ p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
 # Grupo: Práctica
 p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica personalizada", icon="📚")
+# La ejecución se abre desde una práctica iniciada; no necesita ocupar un
+# puesto permanente en el menú principal.
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
 p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro tipo examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
@@ -245,9 +247,12 @@ if p_mis_opec is not None:
 account_pages.extend([p_config, p_opec_tools, p_study_plan, p_study_map, p_logout])
 
 pages = {
-    "Mi Cuenta": account_pages,
-    "Práctica DIAN": [p_adaptive_tutor, p_simulacro, p_ejecucion, p_sim_real, p_repaso, p_resultados],
-    "Herramientas y Recursos": [p_banco, p_etica]
+    "Inicio": [p_dashboard],
+    "Mi preparación": [p_mis_opec, p_study_plan] if p_mis_opec is not None else [p_study_plan],
+    "Practicar": [p_adaptive_tutor, p_simulacro, p_sim_real, p_repaso],
+    "Progreso": [p_resultados],
+    "Más herramientas": [p_study_map, p_banco, p_etica, p_opec_tools],
+    "Cuenta": [p_perfil, p_config, p_logout],
 }
 
 # Determinar Navegación Activa (Condicional)
@@ -266,7 +271,7 @@ else:
         pass
         
     if is_admin():
-        pages["Sistemas (Admin)"] = [p_admin, p_ia]
+        pages["Administración"] = [p_admin, p_ia]
     if st.session_state.get("opec_onboarding"):
         pg = st.navigation({"Primeros pasos": [p_config]})
     else:

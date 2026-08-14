@@ -104,6 +104,15 @@ try:
         st.warning("⚠️ No has configurado una OPEC. Ve a 'Configuración OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
+    st.subheader("Acciones rápidas")
+    quick_opec, quick_practice, quick_change = st.columns(3)
+    with quick_opec:
+        st.page_link("pages/13_Tutor_Adaptativo.py", label="Continuar estudiando", icon="🧭", use_container_width=True)
+    with quick_practice:
+        st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar ahora", icon="📚", use_container_width=True)
+    with quick_change:
+        st.page_link("pages/14_Mis_OPEC.py", label="Cambiar OPEC", icon="🎯", use_container_width=True)
+
     # Plan diario adaptativo por disponibilidad y zona horaria de Colombia.
     bogota_now = datetime.datetime.now(ZoneInfo("America/Bogota"))
     study_config = db.query(StudyPlanConfig).filter_by(
