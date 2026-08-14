@@ -96,8 +96,15 @@ def attach_reusable_opec_to_user(db, user_id: int, profile: dict) -> UserOPEC:
         .order_by(UserOPEC.updated_at.desc())
         .first()
     )
+    competition_data = profile.get("competition", {})
+    competition_id = competition_data.get("id")
+    if competition_id is None and competition_data.get("code"):
+        competition = db.query(Competition).filter_by(code=competition_data["code"]).first()
+        competition_id = competition.id if competition else None
+    if competition_id is None:
+        raise ValueError("No se encontró el concurso asociado a esta OPEC.")
     values = {
-        "competition_id": profile.get("competition", {}).get("id"),
+        "competition_id": competition_id,
         "job_title": profile.get("job_title") or f"Empleo OPEC {number}",
         "level": profile.get("level"),
         "purpose": profile.get("purpose"),

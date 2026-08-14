@@ -207,6 +207,7 @@ def login_view():
 # Grupo: Mi Cuenta
 p_dashboard = st.Page("pages/6_Dashboard.py", title="Dashboard", icon="📊", default=True)
 p_perfil = st.Page("pages/7_Mi_Perfil.py", title="Mi Perfil", icon="👤")
+p_mis_opec = st.Page("pages/14_Mis_OPEC.py", title="Mis OPEC", icon="🎯")
 p_config = st.Page("pages/7_Configuracion_OPEC.py", title="Configuración OPEC", icon="⚙️")
 p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Plan de estudio", icon="🗓️")
 p_study_map = st.Page("pages/12_Mapa_Estudio.py", title="Mapa de estudio", icon="🗺️")
@@ -230,7 +231,7 @@ p_admin = st.Page("pages/8_Panel_Admin.py", title="Panel de Control", icon="🛡
 
 # Agrupar menú
 pages = {
-    "Mi Cuenta": [p_dashboard, p_perfil, p_config, p_study_plan, p_study_map, p_logout],
+    "Mi Cuenta": [p_dashboard, p_perfil, p_mis_opec, p_config, p_study_plan, p_study_map, p_logout],
     "Práctica DIAN": [p_adaptive_tutor, p_simulacro, p_ejecucion, p_sim_real, p_repaso, p_resultados],
     "Herramientas y Recursos": [p_banco, p_etica]
 }
