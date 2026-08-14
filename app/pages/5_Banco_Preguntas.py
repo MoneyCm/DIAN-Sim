@@ -60,6 +60,8 @@ def automatic_rejection_reason(question):
     )
     if status == "REJECTED":
         return "Dictamen IA de rechazo; requiere reescritura o nueva fuente oficial."
+    if assess_source_evidence(question)["status"] == "UNTRACEABLE":
+        return "No contiene fuente oficial directa ni ancla normativa reconocible."
     if generated_source:
         return "Fuente generada o provisional, sin trazabilidad oficial verificable."
     return None
@@ -74,6 +76,18 @@ def needs_ai_audit(question):
     return str(audit.get("status", "")).strip().upper() == "ERROR"
 
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
+
+try:
+    from core.source_evidence import assess_source_evidence
+except ImportError:
+    def assess_source_evidence(question):
+        source = str(getattr(question, "source_refs", "") or "").strip()
+        return {
+            "status": "SOURCE_CHECK_UNAVAILABLE" if source else "UNTRACEABLE",
+            "article": None,
+            "official_url": "",
+            "reason": "La comprobación de fuente se está actualizando.",
+        }
 
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
@@ -279,6 +293,28 @@ if action == "Revisión guiada":
         (queue["approved"] + queue["rejected"]) / queue["total"] if queue["total"] else 1.0,
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
+    evidence_candidates = [
+        question for question in queue_query.all()
+        if queue_item(question)
+        and not bool(question.is_verified)
+        and (not isinstance(getattr(question, "quality_report", None), dict)
+             or getattr(question, "quality_report", {}).get("status") != "REJECTED")
+    ]
+    evidence = [assess_source_evidence(question) for question in evidence_candidates]
+    source_cols = st.columns(3)
+    source_cols[0].metric("Fuente oficial enlazada", sum(
+        item["status"] == "DIRECT_OFFICIAL_SOURCE" for item in evidence
+    ))
+    source_cols[1].metric("Ancla normativa detectada", sum(
+        item["status"] == "OFFICIAL_CATALOG_MATCH" for item in evidence
+    ))
+    source_cols[2].metric("Sin evidencia suficiente", sum(
+        item["status"] == "UNTRACEABLE" for item in evidence
+    ))
+    st.caption(
+        "La fuente se comprueba antes de la IA: una ancla normativa requiere contraste "
+        "con el texto oficial vigente; no habilita una pregunta por sí sola."
+    )
     ai_last_result = st.session_state.get(f"ai_review_result_{competition_id}")
     if ai_last_result and ai_last_result.get("version") != AI_AUDIT_RESULT_VERSION:
         st.session_state.pop(f"ai_review_result_{competition_id}", None)
@@ -385,6 +421,17 @@ if action == "Revisión guiada":
         st.markdown(f"**Clave propuesta:** {candidate.correct_key}")
         st.caption(f"Justificación: {candidate.rationale or 'Sin justificación'}")
         st.caption(f"Fuente declarada: {candidate.source_refs or 'Sin fuente'}")
+        source_evidence = assess_source_evidence(candidate)
+        if source_evidence["status"] in {"DIRECT_OFFICIAL_SOURCE", "OFFICIAL_CATALOG_MATCH"}:
+            article_note = (
+                f" · Artículo detectado: {source_evidence['article']}"
+                if source_evidence["article"] else ""
+            )
+            st.info(f"Evidencia de fuente: {source_evidence['reason']}{article_note}")
+            if source_evidence["official_url"]:
+                st.link_button("Consultar fuente oficial", source_evidence["official_url"])
+        else:
+            st.warning(f"Evidencia de fuente insuficiente: {source_evidence['reason']}")
         stored_ai_audit = (candidate.quality_report or {}).get("ai_audit")
         if isinstance(stored_ai_audit, dict):
             st.info(
