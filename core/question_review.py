@@ -147,6 +147,34 @@ def has_ai_audit(question) -> bool:
     return isinstance(report, dict) and isinstance(report.get("ai_audit"), dict)
 
 
+def automatic_rejection_reason(question) -> Optional[str]:
+    """Return a conservative reason for automatically discarding a candidate.
+
+    This only retires content that has no traceable source or that an AI audit
+    explicitly rejects.  An audit *error* alone is not evidence against a
+    question, so it never triggers a rejection without an untraceable source.
+    """
+    report = getattr(question, "quality_report", None)
+    report = report if isinstance(report, dict) else {}
+    audit = report.get("ai_audit")
+    status = str(audit.get("status", "")).strip().upper() if isinstance(audit, dict) else ""
+    source = str(getattr(question, "source_refs", "") or "").strip().lower()
+    generated_source = (
+        not source
+        or "batch gen" in source
+        or "banco base provisional" in source
+        or "guía oficial pendiente" in source
+        or "guia oficial pendiente" in source
+        or source.startswith(("mistral -", "openai -", "gemini -"))
+    )
+
+    if status == "REJECTED":
+        return "Dictamen IA de rechazo; requiere reescritura o nueva fuente oficial."
+    if generated_source:
+        return "Fuente generada o provisional, sin trazabilidad oficial verificable."
+    return None
+
+
 def matches_quality_filter(question, selected: str) -> bool:
     if selected == QUALITY_VERIFIED:
         return bool(getattr(question, "is_verified", False))

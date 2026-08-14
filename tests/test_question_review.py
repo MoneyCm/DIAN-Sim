@@ -4,7 +4,7 @@ import pytest
 
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
-    approve_candidate, candidate_validation_error, is_reinforcement_candidate,
+    approve_candidate, automatic_rejection_reason, candidate_validation_error, is_reinforcement_candidate,
     has_ai_audit, is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
     review_queue_summary,
 )
@@ -124,6 +124,20 @@ def test_ai_audit_preserves_progressive_opec_queue_membership():
     assert question.is_verified is False
     assert question.quality_report["origin"] == "progressive_opec_local"
     assert question.quality_report["ai_audit"]["status"] == "IMPROVABLE"
+
+
+def test_automatic_rejection_only_retires_untraceable_or_explicitly_rejected_content():
+    generated = candidate(source_refs="Mistral - Batch Gen v20")
+    audit_error_with_official_source = candidate(
+        source_refs="Decreto 1165 de 2019, artículo 172",
+    )
+    record_ai_audit(audit_error_with_official_source, {"status": "ERROR", "score": 0})
+    explicitly_rejected = candidate(source_refs="Fuente oficial")
+    record_ai_audit(explicitly_rejected, {"status": "REJECTED", "score": 3})
+
+    assert automatic_rejection_reason(generated)
+    assert automatic_rejection_reason(audit_error_with_official_source) is None
+    assert automatic_rejection_reason(explicitly_rejected)
 
 
 def test_quality_filters_separate_reinforcements_from_other_pending_items():

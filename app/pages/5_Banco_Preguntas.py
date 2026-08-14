@@ -24,7 +24,7 @@ from core.exam_format import (
 from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
-    approve_candidate, candidate_validation_error, is_reinforcement_candidate,
+    approve_candidate, automatic_rejection_reason, candidate_validation_error, is_reinforcement_candidate,
     matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
@@ -213,6 +213,40 @@ if action == "Revisión guiada":
         (queue["approved"] + queue["rejected"]) / queue["total"] if queue["total"] else 1.0,
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
+    auto_rejections = [
+        (question, automatic_rejection_reason(question))
+        for question in queue_query.all()
+        if queue_item(question)
+        and not bool(question.is_verified)
+        and (automatic_rejection_reason(question) is not None)
+    ]
+    if auto_rejections:
+        st.info(
+            f"Clasificación automática disponible: {len(auto_rejections)} candidatas "
+            "pueden descartarse sin revisión individual por fuente no verificable "
+            "o dictamen IA de rechazo."
+        )
+        auto_confirm = st.checkbox(
+            "Descartar automáticamente estas candidatas. No se aprobará ninguna de forma automática.",
+            key=f"auto_reject_confirm_{competition_id}",
+        )
+        if st.button(
+            "Descartar candidatas no confiables automáticamente",
+            type="primary",
+            use_container_width=True,
+            disabled=not auto_confirm,
+            key=f"auto_reject_start_{competition_id}",
+        ):
+            reviewer = st.session_state.get("username", "admin")
+            try:
+                for question, reason in auto_rejections:
+                    save_queue_decision(question, reviewer, False, f"Automático: {reason}")
+                db.commit()
+                st.success(f"Se descartaron automáticamente {len(auto_rejections)} candidatas no confiables.")
+                st.rerun()
+            except Exception:
+                db.rollback()
+                st.error("No se pudo completar el descarte automático. Inténtalo nuevamente.")
     if ai_queue_state and ai_queue_state.get("remaining"):
         st.info(
             f"Auditoría IA en curso: {ai_queue_state['completed']} de "
