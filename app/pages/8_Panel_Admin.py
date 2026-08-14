@@ -26,9 +26,17 @@ from core.config import get_api_key
 require_admin()
 
 load_css()
-render_header(title="Panel de administración", subtitle="Usuarios, banco y recursos normativos")
+render_header(title="Panel de Control", subtitle="Estado de la app y gestión de usuarios")
 
-tab_stats, tab_users, tab_normativa, tab_anki = st.tabs(["📊 Estadísticas Globales", "👥 Gestión de Usuarios", "🏛️ Inteligencia Normativa", "🎴 Enriquecimiento Anki"])
+tab_stats, tab_users, tab_technical = st.tabs([
+    "📊 Estado general", "👥 Usuarios", "⚙️ Opciones técnicas"
+])
+with tab_technical:
+    st.info(
+        "Estas herramientas son de mantenimiento. No habilitan preguntas ni sustituyen el "
+        "Centro de Calidad, que es donde se controla el banco y sus fuentes."
+    )
+    tab_normativa, tab_anki = st.tabs(["📚 Biblioteca normativa", "🎴 Repasos Anki"])
 
 # --- TAB: STATS ---
 with tab_stats:
@@ -91,7 +99,7 @@ with tab_stats:
     else:
         st.info("Todavía no hay respuestas registradas en los últimos 30 días.")
 
-    st.subheader("📚 Estado del banco de preguntas")
+    st.subheader("📚 Resumen del banco")
     bank1, bank2, bank3 = st.columns(3)
     bank1.metric("Preguntas", total_questions)
     bank2.metric(
@@ -113,6 +121,7 @@ with tab_stats:
         f"Puntos acumulados por todos los usuarios: {total_points:,}. "
         "Las cifras de esta pestaña abarcan todos los concursos registrados."
     )
+    st.info("Para revisar fuentes, estructura y estados del banco, usa **Banco de preguntas → Centro de calidad**.")
 
 # --- TAB: USERS ---
 with tab_users:
@@ -258,10 +267,10 @@ with tab_users:
 
 # --- TAB: NORMATIVA ---
 with tab_normativa:
-    st.subheader("📚 Biblioteca normativa")
+    st.subheader("📚 Biblioteca normativa técnica")
     st.caption(
-        "Aquí se prepara el material legal que usa la búsqueda de fuentes del generador. "
-        "Esta sección no modifica el banco de preguntas automáticamente."
+        "Archivo técnico para documentos PDF y búsqueda semántica. No modifica ni certifica "
+        "preguntas automáticamente; el control de fuentes vive en el Centro de Calidad."
     )
     norm_path = Path(PROJECT_ROOT) / "data" / "normativa"
     norm_path.mkdir(parents=True, exist_ok=True)
@@ -398,7 +407,7 @@ with tab_normativa:
 
 # --- TAB: ANKI ENRICHMENT ---
 with tab_anki:
-    st.subheader("🧠 Material de repaso explicado")
+    st.subheader("🧠 Material de repaso explicado (técnico)")
     st.caption(
         "La IA prepara para cada pregunta una regla clave, una excepción y el distractor más engañoso. "
         "Este contenido mejora el repaso dentro de la app y también puede acompañar una exportación a Anki."
