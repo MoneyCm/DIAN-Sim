@@ -206,36 +206,12 @@ def render_custom_sidebar():
                 st.session_state["show_paywall"] = True
                 st.rerun()
 
-        st.sidebar.markdown('<div class="sidebar-category">🚀 Mi Entrenamiento</div>', unsafe_allow_html=True)
-        st.sidebar.markdown('<div class="sidebar-category">🛠️ Recursos de estudio</div>', unsafe_allow_html=True)
-        st.sidebar.markdown('<div class="sidebar-category">⚙️ Configuración</div>', unsafe_allow_html=True)
+        st.sidebar.caption("Tu avance")
         
     except Exception as e:
         # No capturar RerunException mikey v7.7
         if "RerunException" not in str(type(e)):
             st.sidebar.error(f"⚠️ Sidebar Error: {e}")
-    # Botón de logout de ALERTA mikey v7.22 (HTML Hard Link - The Nuclear Option)
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        """
-        <a href="/?logout=1" target="_self">
-            <button style="
-                width: 100%;
-                background-color: #FF4B4B;
-                color: white;
-                border: none;
-                padding: 0.5rem;
-                border-radius: 0.5rem;
-                cursor: pointer;
-                font-weight: 600;
-            ">
-                🚨 Cerrar Sesión
-            </button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
-    
     return stats_s, rank
 def get_db_info():
     """Retorna información del estado de la base de datos. Mikey"""

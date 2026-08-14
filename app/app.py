@@ -205,7 +205,7 @@ def login_view():
 # Definición de páginas (st.Page deshabilita el menú automático caótico)
 
 # Grupo: Mi Cuenta
-p_dashboard = st.Page("pages/6_Dashboard.py", title="Dashboard", icon="📊", default=True)
+p_dashboard = st.Page("pages/6_Dashboard.py", title="Inicio", icon="🏠", default=True)
 p_perfil = st.Page("pages/7_Mi_Perfil.py", title="Mi Perfil", icon="👤")
 # During a Streamlit Cloud source refresh, the navigation module can become
 # available one rerun before a newly added page file is mounted. Keep the
@@ -218,19 +218,19 @@ p_mis_opec = (
 )
 p_config = st.Page("pages/15_Centro_OPEC.py", title="Configuración OPEC", icon="⚙️")
 p_opec_tools = st.Page("pages/7_Configuracion_OPEC.py", title="Herramientas OPEC", icon="🧰")
-p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Plan de estudio", icon="🗓️")
+p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Mi plan de hoy", icon="🗓️")
 p_study_map = st.Page("pages/12_Mapa_Estudio.py", title="Mapa de estudio", icon="🗺️")
 p_adaptive_tutor = st.Page("pages/13_Tutor_Adaptativo.py", title="Tutor adaptativo", icon="🧭")
 p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
 # Grupo: Práctica
-p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Práctica personalizada", icon="📚")
+p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Practicar ahora", icon="📚")
 # La ejecución se abre desde una práctica iniciada; no necesita ocupar un
 # puesto permanente en el menú principal.
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
 p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro tipo examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
-p_resultados = st.Page("pages/3_Resultados.py", title="Resultados y Progreso", icon="📈")
+p_resultados = st.Page("pages/3_Resultados.py", title="Mi progreso", icon="📈")
 
 # Grupo: Recursos
 p_ia = st.Page("pages/4_Generador_IA.py", title="Generador IA", icon="🤖")
@@ -248,11 +248,13 @@ account_pages.extend([p_config, p_opec_tools, p_study_plan, p_study_map, p_logou
 
 pages = {
     "Inicio": [p_dashboard],
-    "Mi preparación": [p_mis_opec, p_study_plan] if p_mis_opec is not None else [p_study_plan],
-    "Practicar": [p_adaptive_tutor, p_simulacro, p_sim_real, p_repaso],
-    "Progreso": [p_resultados],
-    "Más herramientas": [p_study_map, p_banco, p_etica, p_opec_tools],
-    "Cuenta": [p_perfil, p_config, p_logout],
+    "Mi preparación": (
+        [p_mis_opec, p_study_plan, p_simulacro]
+        if p_mis_opec is not None else [p_study_plan, p_simulacro]
+    ),
+    "Mi progreso": [p_resultados],
+    "Más opciones": [p_adaptive_tutor, p_sim_real, p_repaso, p_study_map, p_etica],
+    "Mi cuenta": [p_perfil, p_logout],
 }
 
 # Determinar Navegación Activa (Condicional)
@@ -271,7 +273,9 @@ else:
         pass
         
     if is_admin():
-        pages["Administración"] = [p_admin, p_ia]
+        pages["Herramientas de administración"] = [
+            p_config, p_opec_tools, p_banco, p_admin, p_ia,
+        ]
     if st.session_state.get("opec_onboarding"):
         pg = st.navigation({"Primeros pasos": [p_config]})
     else:

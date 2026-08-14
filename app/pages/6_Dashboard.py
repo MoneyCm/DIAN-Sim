@@ -70,7 +70,7 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_header(title="Panel de Control", subtitle="Analítica de progreso y gamificación")
+render_header(title="Tu preparación de hoy", subtitle="Sigue un paso a la vez y avanza hacia tu OPEC.")
 
 db = SessionLocal()
 
@@ -101,17 +101,15 @@ try:
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.warning("⚠️ No has configurado una OPEC. Ve a 'Configuración OPEC' para enfocar tu estudio.")
+        st.warning("⚠️ Aún no tienes una OPEC activa. Ve a 'Mis OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
-    st.subheader("Acciones rápidas")
-    quick_opec, quick_practice, quick_plan, quick_change = st.columns(4)
-    with quick_opec:
-        st.page_link("pages/13_Tutor_Adaptativo.py", label="Continuar estudiando", icon="🧭", use_container_width=True)
+    st.subheader("¿Qué quieres hacer hoy?")
+    quick_practice, quick_plan, quick_change = st.columns(3)
     with quick_practice:
-        st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar ahora", icon="📚", use_container_width=True)
+        st.page_link("pages/1_Nuevo_Simulacro.py", label="Empezar práctica", icon="📚", use_container_width=True)
     with quick_plan:
-        st.page_link("pages/11_Plan_Estudio.py", label="Mi plan de estudio", icon="🗓️", use_container_width=True)
+        st.page_link("pages/11_Plan_Estudio.py", label="Ver mi plan", icon="🗓️", use_container_width=True)
     with quick_change:
         st.page_link("pages/14_Mis_OPEC.py", label="Cambiar OPEC", icon="🎯", use_container_width=True)
 
