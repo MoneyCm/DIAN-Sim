@@ -14,6 +14,8 @@ import unicodedata
 DIAN_ESTATUTO_FACTURACION_URL = (
     "https://micrositios.dian.gov.co/sistema-de-facturacion-electronica/estatuto-tributario/"
 )
+SUIN_DECRETO_1165_URL = "https://www.suin-juriscol.gov.co/viewDocument.asp?id=30036618"
+SUIN_CPACA_URL = "https://www.suin-juriscol.gov.co/viewDocument.asp?id=1680117"
 OFFICIAL_DOMAINS = (
     "dian.gov.co",
     "normograma.dian.gov.co",
@@ -61,24 +63,28 @@ def assess_source_evidence(question) -> dict:
         }
     if "estatuto tributario" in text and article:
         return {
-            "status": "OFFICIAL_CATALOG_MATCH",
+            "status": "DIRECT_OFFICIAL_SOURCE" if article == "616-1" else "OFFICIAL_CATALOG_MATCH",
             "article": article,
             "official_url": DIAN_ESTATUTO_FACTURACION_URL if article == "616-1" else "",
-            "reason": "Reconoce una norma tributaria y artículo; requiere contrastar la afirmación con el texto vigente.",
+            "reason": (
+                "Ancla el artículo en el micrositio oficial DIAN; requiere contrastar la afirmación con el texto vigente."
+                if article == "616-1" else
+                "Reconoce una norma tributaria y artículo; requiere contrastar la afirmación con el texto vigente."
+            ),
         }
     if "decreto 1165" in text and article:
         return {
-            "status": "OFFICIAL_CATALOG_MATCH",
+            "status": "DIRECT_OFFICIAL_SOURCE",
             "article": article,
-            "official_url": "",
-            "reason": "Reconoce Decreto 1165 y artículo; falta enlazar el texto oficial vigente aplicable.",
+            "official_url": SUIN_DECRETO_1165_URL,
+            "reason": "Ancla el artículo en el texto oficial del Decreto 1165; requiere contrastar la afirmación con la versión vigente.",
         }
     if "ley 1437" in text or "cpaca" in text:
         return {
-            "status": "OFFICIAL_CATALOG_MATCH",
+            "status": "DIRECT_OFFICIAL_SOURCE",
             "article": article,
-            "official_url": "",
-            "reason": "Reconoce CPACA; falta enlazar el texto oficial vigente aplicable.",
+            "official_url": SUIN_CPACA_URL,
+            "reason": "Ancla el artículo en el texto oficial del CPACA; requiere contrastar la afirmación con la versión vigente.",
         }
     return {
         "status": "UNTRACEABLE",
