@@ -242,6 +242,7 @@ if action == "Revisión guiada":
         (question, automatic_rejection_reason(question))
         for question in queue_query.all()
         if queue_item(question)
+        and is_pending_review_candidate(question)
         and not bool(question.is_verified)
         and (automatic_rejection_reason(question) is not None)
     ]
