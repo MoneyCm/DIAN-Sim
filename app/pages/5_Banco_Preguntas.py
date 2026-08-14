@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import os, sys, uuid, datetime, io, time
+import os, sys, uuid, datetime, io, time, importlib
 from collections import Counter
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
@@ -78,8 +78,11 @@ def needs_ai_audit(question):
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
 try:
-    from core.source_evidence import assess_source_evidence
-except ImportError:
+    from core import source_evidence as source_evidence_module
+    if getattr(source_evidence_module, "SOURCE_EVIDENCE_VERSION", None) != "official-links-v2":
+        source_evidence_module = importlib.reload(source_evidence_module)
+    assess_source_evidence = source_evidence_module.assess_source_evidence
+except Exception:
     def assess_source_evidence(question):
         source = str(getattr(question, "source_refs", "") or "").strip()
         return {

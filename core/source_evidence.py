@@ -11,6 +11,9 @@ import re
 import unicodedata
 
 
+SOURCE_EVIDENCE_VERSION = "official-links-v2"
+
+
 DIAN_ESTATUTO_FACTURACION_URL = (
     "https://micrositios.dian.gov.co/sistema-de-facturacion-electronica/estatuto-tributario/"
 )

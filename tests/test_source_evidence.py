@@ -1,6 +1,14 @@
 from types import SimpleNamespace
 
-from core.source_evidence import assess_source_evidence, record_source_evidence
+from core.source_evidence import (
+    SOURCE_EVIDENCE_VERSION,
+    assess_source_evidence,
+    record_source_evidence,
+)
+
+
+def test_source_evidence_registry_exposes_current_official_link_version():
+    assert SOURCE_EVIDENCE_VERSION == "official-links-v2"
 
 
 def question(**values):
