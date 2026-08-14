@@ -23,7 +23,7 @@ from core import auth as auth_module
 
 # Streamlit can retain a previously imported auth module across a hot reload.
 # Reload only when its implementation marker is older than this app version.
-if getattr(auth_module, "AUTH_RUNTIME_VERSION", None) != "google-free-tier-v4":
+if getattr(auth_module, "AUTH_RUNTIME_VERSION", None) != "google-free-tier-v5":
     auth_module = importlib.reload(auth_module)
 AuthManager = auth_module.AuthManager
 from core.access_control import is_admin

@@ -12,7 +12,7 @@ from core.auth_session import create_session_token, verify_session_token
 
 AUTH_COOKIE = "dian_sim_session"
 AUTH_TTL_SECONDS = 30 * 24 * 60 * 60
-AUTH_RUNTIME_VERSION = "google-free-tier-v4"
+AUTH_RUNTIME_VERSION = "google-free-tier-v5"
 
 
 def _cookie_secret() -> str:
@@ -133,7 +133,10 @@ class AuthManager:
         """Autentica por OIDC usando exclusivamente el email verificado."""
         from db.session import engine
         try:
-            with engine.connect() as conn:
+            # Google OIDC can be the very first visit from a user.  Use a
+            # committing transaction so the backing account survives the
+            # callback request instead of being rolled back on connection exit.
+            with engine.begin() as conn:
                 user = conn.execute(
                     text("SELECT id, username, role FROM users WHERE email = :e"),
                     {"e": email},

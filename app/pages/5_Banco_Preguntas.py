@@ -77,6 +77,8 @@ from core.question_quality import audit_bank, audit_question_structure, store_de
 
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
+AI_AUDIT_RESULT_VERSION = "v2"
+
 
 def queue_item(question):
     report = getattr(question, "quality_report", None)
@@ -254,6 +256,7 @@ if action == "Revisión guiada":
             else:
                 st.session_state.pop(ai_queue_state_key, None)
                 st.session_state[f"ai_review_result_{competition_id}"] = {
+                    "version": AI_AUDIT_RESULT_VERSION,
                     "total": ai_queue_state["total"],
                     "successful": ai_queue_state.get("successful", 0),
                     "errors": ai_queue_state.get("errors", 0),
@@ -272,6 +275,9 @@ if action == "Revisión guiada":
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
     ai_last_result = st.session_state.get(f"ai_review_result_{competition_id}")
+    if ai_last_result and ai_last_result.get("version") != AI_AUDIT_RESULT_VERSION:
+        st.session_state.pop(f"ai_review_result_{competition_id}", None)
+        ai_last_result = None
     if ai_last_result:
         if ai_last_result["errors"]:
             st.warning(
@@ -340,7 +346,10 @@ if action == "Revisión guiada":
                 pending_questions = [
                     question
                     for question in queue_query.all()
-                    if queue_item(question) and not bool(question.is_verified)
+                    if queue_item(question)
+                    and not bool(question.is_verified)
+                    and (not isinstance(getattr(question, "quality_report", None), dict)
+                         or getattr(question, "quality_report", {}).get("status") != "REJECTED")
                 ]
                 pending_ids = [
                     str(question.question_id)
