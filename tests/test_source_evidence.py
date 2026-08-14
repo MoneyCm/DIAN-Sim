@@ -8,7 +8,7 @@ from core.source_evidence import (
 
 
 def test_source_evidence_registry_exposes_current_official_link_version():
-    assert SOURCE_EVIDENCE_VERSION == "official-links-v2"
+    assert SOURCE_EVIDENCE_VERSION == "official-links-v3"
 
 
 def question(**values):
@@ -43,6 +43,25 @@ def test_decree_and_cpaca_anchors_link_to_their_official_texts():
     assert decree["official_url"].startswith("https://www.suin-juriscol.gov.co/")
     assert cpaca["status"] == "DIRECT_OFFICIAL_SOURCE"
     assert cpaca["official_url"].startswith("https://www.suin-juriscol.gov.co/")
+
+
+def test_other_estatuto_articles_link_to_the_official_statute_text():
+    evidence = assess_source_evidence(
+        question(source_refs="Estatuto Tributario Colombiano", stem="Articulo 746")
+    )
+
+    assert evidence["status"] == "DIRECT_OFFICIAL_SOURCE"
+    assert evidence["official_url"].startswith("https://suin-juriscol.gov.co/")
+
+
+def test_known_tax_and_dian_structure_decrees_link_to_official_texts():
+    decree_1625 = assess_source_evidence(question(source_refs="Decreto 1625 de 2016"))
+    decree_1742 = assess_source_evidence(question(source_refs="Decreto 1742 de 2020"))
+
+    assert decree_1625["status"] == "DIRECT_OFFICIAL_SOURCE"
+    assert "suin-juriscol.gov.co" in decree_1625["official_url"]
+    assert decree_1742["status"] == "DIRECT_OFFICIAL_SOURCE"
+    assert "funcionpublica.gov.co" in decree_1742["official_url"]
 
 
 def test_untraceable_source_is_not_promoted_by_an_ai_score():

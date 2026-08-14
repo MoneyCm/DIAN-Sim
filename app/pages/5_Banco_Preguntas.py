@@ -79,7 +79,7 @@ from core.question_quality import audit_bank, audit_question_structure, store_de
 
 try:
     from core import source_evidence as source_evidence_module
-    if getattr(source_evidence_module, "SOURCE_EVIDENCE_VERSION", None) != "official-links-v2":
+    if getattr(source_evidence_module, "SOURCE_EVIDENCE_VERSION", None) != "official-links-v3":
         source_evidence_module = importlib.reload(source_evidence_module)
     assess_source_evidence = source_evidence_module.assess_source_evidence
 except Exception:

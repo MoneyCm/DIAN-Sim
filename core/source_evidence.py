@@ -11,7 +11,7 @@ import re
 import unicodedata
 
 
-SOURCE_EVIDENCE_VERSION = "official-links-v2"
+SOURCE_EVIDENCE_VERSION = "official-links-v3"
 
 
 DIAN_ESTATUTO_FACTURACION_URL = (
@@ -19,6 +19,13 @@ DIAN_ESTATUTO_FACTURACION_URL = (
 )
 SUIN_DECRETO_1165_URL = "https://www.suin-juriscol.gov.co/viewDocument.asp?id=30036618"
 SUIN_CPACA_URL = "https://www.suin-juriscol.gov.co/viewDocument.asp?id=1680117"
+SUIN_ESTATUTO_TRIBUTARIO_URL = "https://suin-juriscol.gov.co/viewDocument.asp?id=1132325"
+SUIN_DECRETO_1625_URL = (
+    "https://www.suin-juriscol.gov.co/viewDocument.asp?ruta=Decretos%2F30030361"
+)
+FUNCION_PUBLICA_DECRETO_1742_URL = (
+    "https://www1.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=153986"
+)
 OFFICIAL_DOMAINS = (
     "dian.gov.co",
     "normograma.dian.gov.co",
@@ -66,9 +73,13 @@ def assess_source_evidence(question) -> dict:
         }
     if "estatuto tributario" in text and article:
         return {
-            "status": "DIRECT_OFFICIAL_SOURCE" if article == "616-1" else "OFFICIAL_CATALOG_MATCH",
+            "status": "DIRECT_OFFICIAL_SOURCE",
             "article": article,
-            "official_url": DIAN_ESTATUTO_FACTURACION_URL if article == "616-1" else "",
+            "official_url": (
+                DIAN_ESTATUTO_FACTURACION_URL
+                if article == "616-1"
+                else SUIN_ESTATUTO_TRIBUTARIO_URL
+            ),
             "reason": (
                 "Ancla el artículo en el micrositio oficial DIAN; requiere contrastar la afirmación con el texto vigente."
                 if article == "616-1" else
@@ -88,6 +99,20 @@ def assess_source_evidence(question) -> dict:
             "article": article,
             "official_url": SUIN_CPACA_URL,
             "reason": "Ancla el artículo en el texto oficial del CPACA; requiere contrastar la afirmación con la versión vigente.",
+        }
+    if "decreto 1625" in text:
+        return {
+            "status": "DIRECT_OFFICIAL_SOURCE",
+            "article": article,
+            "official_url": SUIN_DECRETO_1625_URL,
+            "reason": "Enlaza el texto oficial del Decreto 1625; requiere contrastar la afirmaci\u00f3n y su vigencia.",
+        }
+    if "decreto 1742" in text:
+        return {
+            "status": "DIRECT_OFFICIAL_SOURCE",
+            "article": article,
+            "official_url": FUNCION_PUBLICA_DECRETO_1742_URL,
+            "reason": "Enlaza el texto oficial de estructura de la DIAN; requiere contrastar la funci\u00f3n o competencia citada.",
         }
     return {
         "status": "UNTRACEABLE",
