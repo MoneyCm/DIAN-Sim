@@ -24,7 +24,7 @@ from core.exam_format import (
 from core.legacy_question_audit import is_safe_for_active_study
 from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
-    approve_candidate, automatic_rejection_reason, candidate_validation_error, is_reinforcement_candidate,
+    approve_candidate, candidate_validation_error, is_reinforcement_candidate,
     matches_quality_filter, record_ai_audit, reject_candidate,
 )
 
@@ -39,6 +39,31 @@ except ImportError:
     def has_ai_audit(question):
         report = getattr(question, "quality_report", None)
         return isinstance(report, dict) and isinstance(report.get("ai_audit"), dict)
+
+try:
+    from core.question_review import automatic_rejection_reason
+except ImportError:
+    # Same hot-reload guard: the safe fallback keeps the review queue online
+    # while a Streamlit worker still has the previous core module in memory.
+    def automatic_rejection_reason(question):
+        report = getattr(question, "quality_report", None)
+        report = report if isinstance(report, dict) else {}
+        audit = report.get("ai_audit")
+        status = str(audit.get("status", "")).strip().upper() if isinstance(audit, dict) else ""
+        source = str(getattr(question, "source_refs", "") or "").strip().lower()
+        generated_source = (
+            not source
+            or "batch gen" in source
+            or "banco base provisional" in source
+            or "guía oficial pendiente" in source
+            or "guia oficial pendiente" in source
+            or source.startswith(("mistral -", "openai -", "gemini -"))
+        )
+        if status == "REJECTED":
+            return "Dictamen IA de rechazo; requiere reescritura o nueva fuente oficial."
+        if generated_source:
+            return "Fuente generada o provisional, sin trazabilidad oficial verificable."
+        return None
 
 from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
 
