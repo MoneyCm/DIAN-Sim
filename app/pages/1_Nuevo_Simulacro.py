@@ -10,6 +10,8 @@ import pandas as pd
 from db.session import SessionLocal
 from db.models import Question, Skill, UserOPEC
 from core.adaptive import select_questions_for_simulation
+from core.exam_format import OFFICIAL_LABEL, question_format_status
+from core.opec_question_context import matches_manual_function_filter
 from ui_utils import load_css, render_header, render_custom_sidebar
 # V51.1: Nuclear Option - Direct Definition
 import core.profiles
@@ -270,7 +272,23 @@ with st.container():
                 st.session_state["opec_n"] = num_q_opec
                 st.rerun()
             with st.expander("Opciones de cobertura (opcional)", expanded=False):
-                st.info("¿No hay suficientes preguntas?")
+                function_options = {
+                    f"F{index}. {' '.join(str(function).split())[:105]}": index
+                    for index, function in enumerate(active_opec.functions or [], start=1)
+                }
+                selected_function_labels = st.multiselect(
+                    "Funciones del manual a priorizar",
+                    list(function_options),
+                    help="La práctica recomendada usa casos GOA vinculados explícitamente a estas funciones.",
+                    key="opec_function_labels",
+                )
+                if selected_function_labels:
+                    st.session_state["opec_function_filter"] = [
+                        function_options[label] for label in selected_function_labels
+                    ]
+                else:
+                    st.session_state["opec_function_filter"] = []
+                st.caption("El modo recomendado prioriza casos GOA y muestra la función del manual en cada pregunta.")
                 if AuthManager.is_admin():
                     if st.button("🤖 Crear candidatos para la OPEC", use_container_width=True):
                         st.switch_page("pages/4_Generador_IA.py")
@@ -287,6 +305,7 @@ run_sim = False
 
 if submitted_profile:
     run_sim = True
+    st.session_state.pop("practice_format_notice", None)
     # Logic for Profile Mode
     final_query_filters = {
         "topics": profile_topics, # From get_profile_topics above
@@ -297,6 +316,7 @@ if submitted_profile:
 
 if submitted_manual:
     run_sim = True
+    st.session_state.pop("practice_format_notice", None)
     final_query_filters = {
         "tracks": track_filter,
         "competencies": competency_filter,
@@ -331,6 +351,7 @@ if st.session_state.get("opec_run"):
         "only_situational": True 
     }
     num_questions = st.session_state.get("opec_n", 15)
+    selected_manual_functions = st.session_state.get("opec_function_filter", [])
     st.session_state["opec_run"] = False
 
 if run_sim:
@@ -368,6 +389,19 @@ if run_sim:
             final_candidates.append(q)
             
         selected_candidates = final_candidates
+        if "selected_manual_functions" in locals():
+            goa_candidates = [
+                question for question in selected_candidates
+                if question_format_status(question) == OFFICIAL_LABEL
+                and matches_manual_function_filter(
+                    question, opec.opec_number, selected_manual_functions
+                )
+            ]
+            if len(goa_candidates) >= 3:
+                selected_candidates = goa_candidates
+                st.session_state["practice_format_notice"] = "GOA"
+            else:
+                st.session_state["practice_format_notice"] = "SITUATIONAL_FALLBACK"
         
         # 2. Fetch Skills for Adaptive Logic
         u_id = st.session_state.get("user_id")

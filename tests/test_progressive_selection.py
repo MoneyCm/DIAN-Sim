@@ -23,3 +23,21 @@ def test_personalized_practice_unlocks_advanced_questions_after_mastery():
         questions, {("FUNCIONAL", "Arquitectura", "F13 · Arquitectura"): skill}, n=4
     )
     assert {item.difficulty for item in selected} == {3}
+
+
+def test_personalized_practice_uses_a_complete_goa_case_before_mastery(monkeypatch):
+    case = SimpleNamespace(id="goa-case", questions=[])
+    questions = [
+        SimpleNamespace(
+            question_id=f"goa-{index}", case_study=case, track="FUNCIONAL",
+            competency="Fiscalización", topic="F01", difficulty=1,
+        )
+        for index in range(3)
+    ]
+    case.questions = questions
+
+    monkeypatch.setattr("core.exam_format.official_question_groups", lambda _: [questions])
+
+    selected = select_questions_for_simulation(questions, {}, n=3)
+
+    assert [item.question_id for item in selected] == ["goa-0", "goa-1", "goa-2"]

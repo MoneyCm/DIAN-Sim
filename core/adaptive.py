@@ -397,8 +397,8 @@ def select_questions_for_simulation(
     n: int = 20,
 ) -> List[Question]:
     """Selector adaptativo general usado por los simulacros configurables."""
-    # En práctica personalizada, los casos completos se desbloquean cuando el
-    # usuario ya demuestra dominio intermedio. Un tema nuevo comienza en nivel 1.
+    # El formato GOA se practica desde el inicio: el dominio adapta la
+    # dificultad del contenido, no el acceso al formato real de caso.
     from core.exam_format import official_question_groups
     from core.learning.engine import difficulty_for_mastery
 
@@ -419,10 +419,10 @@ def select_questions_for_simulation(
                     float(getattr(skills_map.get((item.track, item.competency, item.topic)), "mastery_score", 0.0) or 0.0)
                     for item in group
                 )
-                if group_mastery >= 60.0:
-                    case_groups.append(group)
+                case_groups.append((group_mastery, group))
     random.shuffle(case_groups)
-    for group in case_groups:
+    case_groups.sort(key=lambda item: item[0])
+    for _, group in case_groups:
         if len(selected) + len(group) > n:
             continue
         selected.extend(group)

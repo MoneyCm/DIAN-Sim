@@ -6,7 +6,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 from db.session import SessionLocal
-from db.models import Question, Attempt, Skill
+from db.models import Question, Attempt, Skill, UserOPEC
 import datetime
 from core.adaptive import calculate_mastery_update, update_priority
 from core.attempt_service import record_attempt
@@ -15,6 +15,7 @@ from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
+from core.opec_question_context import manual_function_context
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
 )
@@ -264,6 +265,17 @@ def current_daily_payload(question_ids, position):
 
 render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
 
+practice_format_notice = st.session_state.get("practice_format_notice")
+if practice_format_notice == "GOA":
+    st.success(
+        "Práctica OPEC en formato GOA: se priorizan casos situacionales completos y funciones explícitas del manual."
+    )
+elif practice_format_notice == "SITUATIONAL_FALLBACK":
+    st.warning(
+        "No había suficientes casos GOA vinculados a la selección. Esta sesión es situacional de respaldo "
+        "y no debe interpretarse como un simulacro representativo del formato objetivo."
+    )
+
 q_ids = st.session_state["exam_questions"]
 current_idx = st.session_state["current_idx"]
 total_q = len(q_ids)
@@ -444,6 +456,20 @@ if time_left <= 0:
 # in one markdown call and closing it in another; the opening tag rendered as
 # an empty styled card and produced a large blank space above the question.
 st.caption(f"Eje: {question.track} | Macro: {question.macro_dominio or 'General'}")
+active_opec = db.query(UserOPEC).filter_by(
+    user_id=st.session_state.get("user_id"), is_active=True
+).first()
+manual_context = manual_function_context(
+    question,
+    getattr(active_opec, "opec_number", ""),
+    getattr(active_opec, "functions", []),
+)
+if manual_context:
+    st.info(
+        f"🎯 Manual OPEC · Función F{manual_context['number']}: {manual_context['text']}"
+    )
+if question_format_status(question) == OFFICIAL_LABEL:
+    st.caption("Formato GOA · Caso situacional con tres preguntas relacionadas")
 st.markdown(f"### {question.topic}")
 
 case = getattr(question, "case_study", None)
