@@ -279,7 +279,7 @@ with st.container():
         else:
             st.warning("No has configurado una OPEC todavía.")
             if st.button("Configurar mi OPEC ahora"):
-                st.switch_page("pages/7_Configuracion_OPEC.py")
+                st.switch_page("pages/15_Centro_OPEC.py")
 
 # LOGIC HANDLER
 final_query_filters = {}
