@@ -1,4 +1,8 @@
-"""Helpers for the official DIAN 2667 written-test formats."""
+"""Helpers for reviewed situational-practice case blocks.
+
+The label below describes the app's internal quality gate.  It is not a
+statement that the CNSC has published or endorsed an identical exam format.
+"""
 
 from dataclasses import dataclass
 
@@ -7,7 +11,7 @@ SITUATIONAL_TYPE = "SITUATIONAL"
 FUNCTIONAL_QUESTIONS_PER_CASE = 3
 FUNCTIONAL_OPTION_KEYS = ("A", "B", "C")
 
-OFFICIAL_LABEL = "Oficial GOA"
+OFFICIAL_LABEL = "Caso situacional revisado"
 PRACTICE_LABEL = "Practica"
 REVIEW_LABEL = "Requiere revision"
 TRUSTED_REVIEW_LABELS = {"human_source_grounded", "source_grounded"}
@@ -83,7 +87,7 @@ def _eligible_verified_question(question) -> bool:
 
 
 def official_question_groups(case) -> list[list]:
-    """Split verified questions from one shared case into complete GOA triplets."""
+    """Split verified questions from one shared scenario into complete triplets."""
     eligible = [q for q in (getattr(case, "questions", None) or []) if _eligible_verified_question(q)]
     eligible.sort(key=lambda q: (str(getattr(q, "created_at", "") or ""), str(getattr(q, "question_id", ""))))
     usable = len(eligible) - (len(eligible) % FUNCTIONAL_QUESTIONS_PER_CASE)

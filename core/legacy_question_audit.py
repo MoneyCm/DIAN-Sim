@@ -28,7 +28,7 @@ def legacy_audit_decision(topic: str) -> tuple[str, str]:
 
 
 def is_safe_for_active_study(question) -> bool:
-    """Allow only grounded GOA questions or legacy items explicitly retained."""
+    """Allow only grounded situational questions or legacy items explicitly retained."""
     if not bool(getattr(question, "is_verified", False)):
         return False
     report = getattr(question, "quality_report", None)

@@ -295,7 +295,7 @@ def load_exam_cases():
         random.shuffle(blocks)
         return select_balanced_blocks(blocks, blueprint.target_cases, smart_topics)
     except Exception as exc:
-        print(f"Error loading official GOA blocks: {exc}")
+        print(f"Error loading reviewed situational blocks: {exc}")
         return []
     finally:
         db.close()
@@ -304,7 +304,7 @@ def start_exam():
     with st.spinner("Preparando entorno de examen..."):
         cases = load_exam_cases()
         if not cases:
-            st.error("No hay suficientes 'Casos Protagónicos' generados aún. Por favor, genera casos primero.")
+            st.error("No hay suficientes casos situacionales revisados para este entrenamiento. Por favor, genera o revisa casos primero.")
             return
         
         st.session_state.exam_cases = cases
@@ -361,9 +361,9 @@ if not st.session_state.exam_active:
     # Modo Simulacro
     st.markdown("""
     ### 🎯 Sobre este Simulacro
-    Este modo simula las condiciones oficiales del examen para el concurso y cargo activos:
+    Este modo permite entrenar en condiciones controladas para el concurso y cargo activos:
     
-    *   **Formato:** Casos Protagónicos (1 Texto → Múltiples Preguntas)
+    *   **Formato de práctica:** Caso situacional (1 texto → varias preguntas relacionadas)
     *   **Tiempo:** Estricto (2 minutos promedio por pregunta)
     *   **Navegación:** No puedes volver a casos anteriores
     *   **Ayudas:** Deshabilitadas durante el examen
@@ -376,7 +376,7 @@ if not st.session_state.exam_active:
     st.title(f"⏱️ {exam_blueprint.title}")
     target_cases = exam_blueprint.target_cases
     inventory_cols = st.columns(3)
-    inventory_cols[0].metric("Casos oficiales", official_cases)
+    inventory_cols[0].metric("Casos revisados", official_cases)
     inventory_cols[1].metric("Meta de casos", target_cases)
     inventory_cols[2].metric("Casos para revisar", review_cases)
     st.progress(min(official_cases / target_cases, 1.0))
@@ -387,7 +387,7 @@ if not st.session_state.exam_active:
     )
     if official_cases < 2:
         st.warning(
-            "El banco oficial aun no tiene suficientes casos para un simulacro completo. "
+            "El banco de casos revisados aún no tiene suficientes casos para un simulacro completo. "
             "El material anterior se conserva en Practica/Requiere revision."
         )
     is_uapa_exam = getattr(active_competition, "code", None) == UAPA_COMPETITION_CODE

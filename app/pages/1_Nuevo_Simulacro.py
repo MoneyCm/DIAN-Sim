@@ -279,7 +279,7 @@ with st.container():
                 selected_function_labels = st.multiselect(
                     "Funciones del manual a priorizar",
                     list(function_options),
-                    help="La práctica recomendada usa casos GOA vinculados explícitamente a estas funciones.",
+                    help="La práctica recomendada usa casos situacionales revisados y vinculados explícitamente a estas funciones.",
                     key="opec_function_labels",
                 )
                 if selected_function_labels:
@@ -288,7 +288,7 @@ with st.container():
                     ]
                 else:
                     st.session_state["opec_function_filter"] = []
-                st.caption("El modo recomendado prioriza casos GOA y muestra la función del manual en cada pregunta.")
+                st.caption("El modo recomendado prioriza casos situacionales revisados y muestra la función del manual en cada pregunta.")
                 if AuthManager.is_admin():
                     if st.button("🤖 Crear candidatos para la OPEC", use_container_width=True):
                         st.switch_page("pages/4_Generador_IA.py")
@@ -390,16 +390,16 @@ if run_sim:
             
         selected_candidates = final_candidates
         if "selected_manual_functions" in locals():
-            goa_candidates = [
+            situational_case_candidates = [
                 question for question in selected_candidates
                 if question_format_status(question) == OFFICIAL_LABEL
                 and matches_manual_function_filter(
                     question, opec.opec_number, selected_manual_functions
                 )
             ]
-            if len(goa_candidates) >= 3:
-                selected_candidates = goa_candidates
-                st.session_state["practice_format_notice"] = "GOA"
+            if len(situational_case_candidates) >= 3:
+                selected_candidates = situational_case_candidates
+                st.session_state["practice_format_notice"] = "SITUATIONAL_CASES"
             else:
                 st.session_state["practice_format_notice"] = "SITUATIONAL_FALLBACK"
         

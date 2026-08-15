@@ -183,11 +183,12 @@ class LLMGenerator:
         except Exception as e:
             print(f"DEBUG: Error loading Res 65 context: {e}")
 
-        # GOA logic v46 Mikey
+        # Situational-practice logic. This is an internal quality standard, not
+        # a claim about an unpublished or external CNSC item template.
         goa_instr = ""
         if self.goa_mode:
             goa_instr = """
-        REQUISITOS METODOLÓGICOS (Protocolo GOA 2667 - Estándar CNSC):
+        REQUISITOS DE PRÁCTICA SITUACIONAL (estándar interno de calidad):
         1. ESTRUCTURA DE JUICIO SITUACIONAL: 
            - CASO (Contexto): Un párrafo de 80-120 palabras que describa una situación laboral REALISTA en la DIAN. Incluye variables técnicas y distractores contextuales (ruido).
            - ENUNCIADO (Stem): Una pregunta que cierre el caso (ej: "Ante este escenario, la acción correcta del gestor es..."). debe estar integrado al final del caso.
@@ -693,7 +694,7 @@ class LLMGenerator:
     def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2, source_context: str = "") -> dict:
         """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
         
-        # GOA DIAN 2667: un caso funcional comparte exactamente tres enunciados.
+        # Internal practice composition: a functional case shares three items.
         num_questions = 3
 
         prompt = f"""

@@ -595,7 +595,7 @@ elif action == "Consultar banco":
             "Aptas para estudiar", safe_items,
             help="Preguntas con fuente revisada o una decisión conservadora de auditoría.",
         )
-        bank_cols[2].metric("Casos GOA", official_items)
+        bank_cols[2].metric("Casos situacionales", official_items)
         bank_cols[3].metric("Requieren revisión", review_items)
         key_counts = Counter(item.correct_key for item in bank_items if item.correct_key)
         dominant_key, dominant_count = key_counts.most_common(1)[0] if key_counts else (None, 0)

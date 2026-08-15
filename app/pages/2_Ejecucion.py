@@ -266,14 +266,14 @@ def current_daily_payload(question_ids, position):
 render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
 
 practice_format_notice = st.session_state.get("practice_format_notice")
-if practice_format_notice == "GOA":
+if practice_format_notice in {"GOA", "SITUATIONAL_CASES"}:
     st.success(
-        "Práctica OPEC en formato GOA: se priorizan casos situacionales completos y funciones explícitas del manual."
+        "Práctica OPEC con casos situacionales revisados: se priorizan casos completos y funciones explícitas del manual."
     )
 elif practice_format_notice == "SITUATIONAL_FALLBACK":
     st.warning(
-        "No había suficientes casos GOA vinculados a la selección. Esta sesión es situacional de respaldo "
-        "y no debe interpretarse como un simulacro representativo del formato objetivo."
+        "No había suficientes casos situacionales revisados vinculados a la selección. Esta sesión es situacional de respaldo "
+        "y no debe interpretarse como una reproducción del examen oficial."
     )
 
 q_ids = st.session_state["exam_questions"]
@@ -469,7 +469,7 @@ if manual_context:
         f"🎯 Manual OPEC · Función F{manual_context['number']}: {manual_context['text']}"
     )
 if question_format_status(question) == OFFICIAL_LABEL:
-    st.caption("Formato GOA · Caso situacional con tres preguntas relacionadas")
+    st.caption("Caso situacional revisado · Tres preguntas relacionadas")
 st.markdown(f"### {question.topic}")
 
 case = getattr(question, "case_study", None)

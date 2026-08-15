@@ -484,20 +484,20 @@ if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR
         finally:
             seed_db.close()
 
-    st.caption("Casos GOA revisados para OPEC 241130: 10 situaciones, 3 preguntas por situaci?n.")
-    if st.button("Sincronizar casos GOA de OPEC 241130", use_container_width=True):
+    st.caption("Casos situacionales revisados para OPEC 241130: 10 situaciones, 3 preguntas por situación.")
+    if st.button("Sincronizar casos situacionales de OPEC 241130", use_container_width=True):
         from scripts.data.seed_curated_opec241130 import seed as seed_curated_opec241130
 
         seed_db = SessionLocal()
         try:
             cases, questions = seed_curated_opec241130(apply=True, db=seed_db)
             st.success(
-                f"Casos GOA sincronizados: {cases} casos y {questions} preguntas nuevas."
+                f"Casos situacionales sincronizados: {cases} casos y {questions} preguntas nuevas."
             )
             st.rerun()
         except Exception as exc:
             seed_db.rollback()
-            st.error(f"No se pudieron sincronizar los casos GOA: {exc}")
+            st.error(f"No se pudieron sincronizar los casos situacionales: {exc}")
         finally:
             seed_db.close()
 if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-ABIERTO":

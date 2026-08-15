@@ -271,7 +271,7 @@ with col1:
             st.session_state.pop("ai_reinforcement_topic", None)
             
         cs_num = 3
-        st.caption("Formato oficial GOA: cada caso funcional contiene exactamente 3 enunciados.")
+        st.caption("Formato de práctica recomendado: cada caso funcional contiene tres preguntas relacionadas. No sustituye el formato oficial que publique la CNSC.")
         cs_diff = st.slider("Dificultad del Caso", 1, 3, 2)
         
         generate_cs_btn = st.button("✨ Generar Caso Protagónico", type="primary", use_container_width=True)
