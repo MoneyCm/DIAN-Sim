@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os, sys, uuid, datetime, io, time, importlib
 from collections import Counter
+from sqlalchemy import inspect as sqlalchemy_inspect
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -9,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from db.session import SessionLocal
-from db.models import Question
+from db.models import OpecProfile, Question, QuestionOpecScope, UserOPEC
 from core.dedupe import compute_hash, find_duplicates
 from core.import_utils import validate_import_df
 from core.generators import llm as llm_module
@@ -17,19 +18,33 @@ if getattr(llm_module, "LLM_AUDIT_RUNTIME_VERSION", None) != "safe-fallback-v2":
     llm_module = importlib.reload(llm_module)
 LLMGenerator = llm_module.LLMGenerator
 from core.config import get_api_key
-from ui_utils import load_css, render_header, render_custom_sidebar
+from ui_utils import load_css, log_ui_exception, render_header
 
 from core.auth import AuthManager
+from core.bank_partition import (
+    BANK_PARTITIONS,
+    MAX_PARTITION_BATCH,
+    BankPartitionError,
+    list_partition_items,
+    move_question_partitions,
+    partition_counts,
+    partition_schema_available,
+    resolve_active_bank_context,
+)
 from core.competitions import get_active_competition_id
 from core.exam_format import (
     OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL, question_format_status,
 )
 from core.legacy_question_audit import is_safe_for_active_study
+from core.question_opec_scope import stamp_question_opec
 from core.question_review import (
-    QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
+    COGNITIVE_LEVELS, QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, candidate_validation_error, is_reinforcement_candidate,
-    matches_quality_filter, record_ai_audit, reject_candidate,
+    matches_quality_filter, record_ai_audit, record_editorial_verification,
+    reject_candidate,
 )
+from core.learning.engine import editorial_question_difficulty
+from core.opec_question_context import function_number_for_question
 
 try:
     from core.question_review import is_pending_review_candidate
@@ -85,6 +100,8 @@ try:
     if getattr(source_evidence_module, "SOURCE_EVIDENCE_VERSION", None) != "official-links-v3":
         source_evidence_module = importlib.reload(source_evidence_module)
     assess_source_evidence = source_evidence_module.assess_source_evidence
+    has_precise_source_verification = source_evidence_module.has_precise_source_verification
+    precise_source_verification_error = source_evidence_module.precise_source_verification_error
 except Exception:
     def assess_source_evidence(question):
         source = str(getattr(question, "source_refs", "") or "").strip()
@@ -95,10 +112,79 @@ except Exception:
             "reason": "La comprobación de fuente se está actualizando.",
         }
 
+    def has_precise_source_verification(question):
+        return False
+
+    def precise_source_verification_error(question):
+        return "La comprobación normativa individual no está disponible."
+
 QUALITY_LOCAL_REVIEW = "Diagnóstico local: revisar 🔬"
 
 AI_AUDIT_RESULT_VERSION = "v2"
 GEMINI_AUDIT_REQUEST_DELAY_SECONDS = 6
+
+
+def retain_allowed_questions(questions, allowed_question_ids):
+    """Keep bulk actions inside the OPEC inventory shown to the user."""
+    allowed = {str(value) for value in allowed_question_ids}
+    return [
+        question for question in questions
+        if str(getattr(question, "question_id", "")) in allowed
+    ]
+
+
+def retain_training_partition(db, questions, active_opec):
+    """Exclude measurement, anchor and reserved items from study-facing views."""
+    if active_opec is None:
+        return []
+    try:
+        inspector = sqlalchemy_inspect(db.connection())
+        required = {OpecProfile.__tablename__, QuestionOpecScope.__tablename__}
+        if not required.issubset(set(inspector.get_table_names())):
+            return list(questions)
+    except (AttributeError, TypeError):
+        return list(questions)
+
+    profile = db.query(OpecProfile).filter_by(
+        competition_id=active_opec.competition_id,
+        opec_number=str(active_opec.opec_number),
+    ).first()
+    if profile is None:
+        return list(questions)
+    training_ids = {
+        str(row[0])
+        for row in db.query(QuestionOpecScope.question_id).filter(
+            QuestionOpecScope.opec_profile_id == profile.id,
+            QuestionOpecScope.bank_partition == "training",
+        ).all()
+    }
+    return retain_allowed_questions(questions, training_ids)
+
+
+def assign_question_to_opec(db, question, active_opec):
+    """Record legacy metadata and canonical scope when that schema exists."""
+    if active_opec is None:
+        raise ValueError("Activa una OPEC antes de crear o importar preguntas.")
+    stamp_question_opec(question, active_opec.opec_number)
+    try:
+        inspector = sqlalchemy_inspect(db.connection())
+        required = {OpecProfile.__tablename__, QuestionOpecScope.__tablename__}
+        if not required.issubset(set(inspector.get_table_names())):
+            return
+    except (AttributeError, TypeError):
+        return
+
+    profile = db.query(OpecProfile).filter_by(
+        competition_id=active_opec.competition_id,
+        opec_number=str(active_opec.opec_number),
+    ).first()
+    if profile is not None:
+        db.add(QuestionOpecScope(
+            question_id=question.question_id,
+            opec_profile_id=profile.id,
+            scope_kind="primary",
+            bank_partition="training",
+        ))
 
 
 def queue_item(question):
@@ -124,39 +210,39 @@ def queue_summary(questions):
     }
 
 
-def queue_validation_error(question):
-    options = getattr(question, "options_json", None)
-    if not str(getattr(question, "source_refs", "") or "").strip():
-        return "Falta una fuente verificable."
-    if not str(getattr(question, "stem", "") or "").strip():
-        return "Falta el enunciado."
-    if not isinstance(options, dict) or set(options) != {"A", "B", "C"}:
-        return "La candidata debe tener exactamente tres opciones: A, B y C."
-    if getattr(question, "correct_key", None) not in options:
-        return "La clave no corresponde a una opción disponible."
-    if not str(getattr(question, "rationale", "") or "").strip():
-        return "Falta la justificación de la respuesta."
+def queue_validation_error(question, peers=()):
+    error = candidate_validation_error(question)
+    if error:
+        return error
+    other_stems = [
+        str(getattr(peer, "stem", "") or "")
+        for peer in peers or ()
+        if str(getattr(peer, "question_id", ""))
+        != str(getattr(question, "question_id", ""))
+    ]
+    if find_duplicates(str(getattr(question, "stem", "") or ""), other_stems, threshold=92):
+        return "Existe una pregunta demasiado similar; revisa el posible duplicado antes de aprobar."
     return None
 
 
 def save_queue_decision(question, reviewer, approved, reason=""):
-    report = dict(getattr(question, "quality_report", None) or {})
-    report.update(
-        status="APPROVED" if approved else "REJECTED",
-        review="human_source_grounded" if approved else "human_rejected",
-        origin=report.get("origin", "manual_question_review"),
-        reviewed_by=reviewer,
-        reviewed_at=datetime.date.today().isoformat(),
-        rejection_reason="" if approved else reason.strip(),
-    )
-    question.quality_report = report
-    question.is_verified = bool(approved)
+    if approved:
+        approve_candidate(question, reviewer)
+    else:
+        reject_candidate(question, reviewer, reason)
 
 
 def quality_state(question):
     """Classify bank readiness without letting an AI opinion certify content."""
-    if bool(getattr(question, "is_verified", False)):
-        return "LISTA PARA ESTUDIAR", "Tiene una decisión de calidad registrada.", None
+    if (
+        bool(getattr(question, "is_verified", False))
+        and has_precise_source_verification(question)
+    ):
+        return (
+            "LISTA PARA ESTUDIAR",
+            "Tiene revisión y evidencia normativa individual completas.",
+            None,
+        )
 
     rejection_reason = automatic_rejection_reason(question)
     if rejection_reason:
@@ -168,9 +254,11 @@ def quality_state(question):
         return "SIN EVIDENCIA OFICIAL", source["reason"], source
     if structural["status"] != "PASS":
         return "CORREGIR ESTRUCTURA", "El diagnóstico automático encontró campos por corregir.", source
+    precise_error = precise_source_verification_error(question)
     return (
         "EN CONTRASTE NORMATIVO",
-        "Tiene fuente oficial enlazada y estructura válida; falta comprobar la afirmación frente al texto vigente.",
+        precise_error
+        or "Falta registrar la decisión editorial individual antes de habilitarla.",
         source,
     )
 
@@ -199,12 +287,18 @@ def reset_selection():
 def reset_pagination():
     st.session_state["page_num"] = 1
 
-stats_s, rank = render_custom_sidebar()
 
 is_admin_user = AuthManager.is_admin()
 available_actions = ["Consultar banco"]
 if is_admin_user:
-    available_actions.extend(["Centro de calidad", "Importar archivo", "Crear manualmente"])
+    available_actions.extend(
+        [
+            "Centro de calidad",
+            "Particiones del banco",
+            "Importar archivo",
+            "Crear manualmente",
+        ]
+    )
 if st.session_state.get("Vista") == "Revisión guiada":
     st.session_state["Vista"] = "Centro de calidad"
 action = st.selectbox("Vista", available_actions, label_visibility="collapsed", key="Vista")
@@ -215,24 +309,210 @@ db = SessionLocal()
 if not is_admin_user:
     st.info("Modo consulta: solo los administradores pueden crear, auditar o eliminar preguntas.")
 
-# OPEC Focus Toggle Mikey v6.4
 u_id = st.session_state.get("user_id")
 from services.question_service import QuestionService
 
-# Detect if user has active OPEC to set default
-from db.models import UserOPEC
-has_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first() is not None
+# El concurso no identifica por sí solo un cargo. Toda esta página usa un
+# inventario único, previamente aislado por la OPEC activa.
+active_opec = (
+    db.query(UserOPEC)
+    .filter_by(user_id=u_id, is_active=True)
+    .order_by(UserOPEC.updated_at.desc(), UserOPEC.id.desc())
+    .first()
+)
+competition_id = (
+    active_opec.competition_id
+    if active_opec is not None
+    else get_active_competition_id(db, u_id)
+)
+active_opec_number = (
+    str(active_opec.opec_number).strip()
+    if active_opec is not None and active_opec.opec_number
+    else ""
+)
+bank_context_key = f"{competition_id or 'none'}:{active_opec_number or 'none'}"
+if st.session_state.get("bank_opec_context") != bank_context_key:
+    reset_selection()
+    reset_pagination()
+    st.session_state.pop("bank_local_audit_summary", None)
+    st.session_state.pop("bank_local_audit_reports", None)
+    st.session_state["bank_opec_context"] = bank_context_key
 
-opec_focus = st.toggle("🎯 Enfoque por mi OPEC (Alta Precisión)", 
-                       value=has_opec, 
-                       help="Muestra solo preguntas que coinciden con las funciones y naturaleza de tu cargo configurado.")
+if active_opec is None:
+    active_bank_items = []
+    st.warning("Activa una OPEC en Mis OPEC para consultar o administrar su banco.")
+else:
+    active_bank_items = retain_training_partition(
+        db,
+        QuestionService.get_questions_for_user(
+            db,
+            u_id,
+            include_review=True,
+            competition_id=competition_id,
+            user_opec=active_opec,
+        ),
+        active_opec,
+    )
+    st.caption(f"🎯 Banco aislado para la OPEC {active_opec_number}")
+active_bank_ids = {str(item.question_id) for item in active_bank_items}
+state_scope_key = bank_context_key.replace(":", "_")
 
-if action == "Centro de calidad":
-    competition_id = get_active_competition_id(db, u_id)
-    quality_query = db.query(Question)
-    if competition_id is not None:
-        quality_query = quality_query.filter(Question.competition_id == competition_id)
-    quality_questions = quality_query.all()
+if action == "Particiones del banco":
+    st.subheader("Particiones del banco")
+    st.caption(
+        "Separa práctica, medición, anclaje y reserva mediante movimientos "
+        "editoriales explícitos y trazables."
+    )
+    if not is_admin_user:
+        st.error("Esta vista está restringida a administradores.")
+    elif active_opec is None:
+        st.warning("Activa una OPEC antes de administrar sus particiones.")
+    elif not partition_schema_available(db):
+        st.warning(
+            "La base todavía no tiene completo el esquema canónico de particiones."
+        )
+    else:
+        try:
+            partition_context = resolve_active_bank_context(
+                db,
+                user_id=u_id,
+                competition_id=competition_id,
+            )
+            counts = partition_counts(
+                db,
+                opec_profile_id=partition_context.opec_profile_id,
+            )
+        except BankPartitionError as exc:
+            st.error(str(exc))
+        else:
+            partition_labels = {
+                "training": "Entrenamiento",
+                "measurement": "Medición",
+                "anchor": "Anclaje",
+                "reserved": "Reservado",
+            }
+            count_cols = st.columns(4)
+            for column, partition in zip(count_cols, BANK_PARTITIONS):
+                column.metric(partition_labels[partition], counts[partition])
+            st.info(
+                "Contenido y claves reservadas permanecen ocultos. Los aspirantes "
+                "solo reciben material de entrenamiento apto para estudio."
+            )
+
+            source_partition = st.selectbox(
+                "Partición de origen",
+                BANK_PARTITIONS,
+                format_func=lambda value: partition_labels[value],
+                key=f"partition_source_{state_scope_key}",
+            )
+            target_options = [
+                partition
+                for partition in BANK_PARTITIONS
+                if partition != source_partition
+            ]
+            target_partition = st.selectbox(
+                "Partición de destino",
+                target_options,
+                format_func=lambda value: partition_labels[value],
+                key=f"partition_target_{state_scope_key}_{source_partition}",
+            )
+            inventory = list_partition_items(
+                db,
+                opec_profile_id=partition_context.opec_profile_id,
+                partition=source_partition,
+                limit=25,
+            )
+            eligible_items = [item for item in inventory if item.eligible]
+            blocked_count = len(inventory) - len(eligible_items)
+            if source_partition == "reserved":
+                st.caption(
+                    "Los elementos reservados se identifican de forma opaca; esta "
+                    "vista no consulta ni muestra enunciados, opciones o claves."
+                )
+            if blocked_count:
+                st.warning(
+                    f"{blocked_count} elemento(s) no cumplen todavía la barrera de "
+                    "aptitud, revisión aprobada y cita precisa."
+                )
+
+            item_labels = {
+                item.question_id: item.display_label for item in eligible_items
+            }
+            partition_nonce_key = (
+                f"partition_nonce_{state_scope_key}_{source_partition}"
+            )
+            partition_nonce = int(st.session_state.get(partition_nonce_key, 0))
+            selection_key = (
+                f"partition_selection_{state_scope_key}_{source_partition}_"
+                f"{partition_nonce}"
+            )
+            selected_partition_ids = st.multiselect(
+                f"Selecciona hasta {MAX_PARTITION_BATCH} elementos",
+                options=list(item_labels),
+                format_func=lambda question_id: item_labels[question_id],
+                key=selection_key,
+            )
+            batch_too_large = len(selected_partition_ids) > MAX_PARTITION_BATCH
+            if batch_too_large:
+                st.error(
+                    f"Reduce el lote a máximo {MAX_PARTITION_BATCH} elementos."
+                )
+            movement_reason = st.text_area(
+                "Motivo editorial del movimiento",
+                placeholder="Explica por qué este lote cambia de función dentro del banco.",
+                key=(
+                    f"partition_reason_{state_scope_key}_{source_partition}_"
+                    f"{partition_nonce}"
+                ),
+            )
+            confirmed_move = st.checkbox(
+                "Confirmo el movimiento editorial y su registro en una nueva revisión.",
+                key=(
+                    f"partition_confirm_{state_scope_key}_{source_partition}_"
+                    f"{partition_nonce}"
+                ),
+            )
+            can_move = (
+                bool(selected_partition_ids)
+                and not batch_too_large
+                and len(movement_reason.strip()) >= 8
+                and confirmed_move
+            )
+            if st.button(
+                "Aplicar movimiento",
+                type="primary",
+                disabled=not can_move,
+                use_container_width=True,
+            ):
+                try:
+                    moves = move_question_partitions(
+                        db,
+                        context=partition_context,
+                        question_ids=selected_partition_ids,
+                        from_partition=source_partition,
+                        to_partition=target_partition,
+                        actor=st.session_state.get("username", "admin"),
+                        reason=movement_reason,
+                    )
+                    db.commit()
+                except BankPartitionError as exc:
+                    db.rollback()
+                    st.error(str(exc))
+                except Exception:
+                    db.rollback()
+                    st.error(
+                        "No se pudo aplicar el movimiento. Ningún elemento del lote "
+                        "fue modificado."
+                    )
+                else:
+                    st.session_state[partition_nonce_key] = partition_nonce + 1
+                    st.success(
+                        f"Movimiento registrado para {len(moves)} elemento(s)."
+                    )
+                    st.rerun()
+
+elif action == "Centro de calidad":
+    quality_questions = list(active_bank_items)
     quality_rows = []
     for question in quality_questions:
         state, detail, source = quality_state(question)
@@ -300,12 +580,9 @@ if action == "Centro de calidad":
         )
 
 elif False:  # Legacy guided review kept temporarily for backwards-compatible deployments.
-    competition_id = get_active_competition_id(db, u_id)
-    queue_query = db.query(Question)
-    if competition_id is not None:
-        queue_query = queue_query.filter(Question.competition_id == competition_id)
-    queue = queue_summary(queue_query.all())
-    ai_queue_state_key = f"ai_review_queue_{competition_id}"
+    queue_questions = list(active_bank_items)
+    queue = queue_summary(queue_questions)
+    ai_queue_state_key = f"ai_review_queue_{state_scope_key}"
     ai_queue_state = st.session_state.get(ai_queue_state_key)
 
     if ai_queue_state and ai_queue_state.get("remaining"):
@@ -330,6 +607,7 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
                     ai_candidate = db.query(Question).filter(Question.question_id == question_id).first()
                     if (
                         ai_candidate is not None
+                        and str(ai_candidate.question_id) in active_bank_ids
                         and queue_item(ai_candidate)
                         and not bool(ai_candidate.is_verified)
                         and needs_ai_audit(ai_candidate)
@@ -358,10 +636,16 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
                         if provider.lower() == "gemini":
                             time.sleep(GEMINI_AUDIT_REQUEST_DELAY_SECONDS)
                 except Exception as audit_error:
-                    print(f"[AUDIT_QUEUE] {audit_error}", file=sys.stderr)
+                    print(
+                        f"[AUDIT_QUEUE] {type(audit_error).__name__}",
+                        file=sys.stderr,
+                    )
                     db.rollback()
                     ai_queue_state["errors"] = ai_queue_state.get("errors", 0) + 1
-                    ai_queue_state["last_error"] = str(audit_error)
+                    ai_queue_state["last_error"] = (
+                        "La candidata continúa pendiente por un error técnico "
+                        f"({type(audit_error).__name__})."
+                    )
                 finally:
                     ai_queue_state["remaining"] = ai_queue_state["remaining"][1:]
                     ai_queue_state["completed"] += 1
@@ -376,7 +660,7 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
                 st.rerun()
             else:
                 st.session_state.pop(ai_queue_state_key, None)
-                st.session_state[f"ai_review_result_{competition_id}"] = {
+                st.session_state[f"ai_review_result_{state_scope_key}"] = {
                     "version": AI_AUDIT_RESULT_VERSION,
                     "total": ai_queue_state["total"],
                     "successful": ai_queue_state.get("successful", 0),
@@ -396,7 +680,7 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
         text=f"{queue['approved'] + queue['rejected']} de {queue['total']} candidatas decididas",
     )
     evidence_candidates = [
-        question for question in queue_query.all()
+        question for question in queue_questions
         if queue_item(question)
         and not bool(question.is_verified)
         and (not isinstance(getattr(question, "quality_report", None), dict)
@@ -417,9 +701,10 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
         "La fuente se comprueba antes de la IA: una ancla normativa requiere contraste "
         "con el texto oficial vigente; no habilita una pregunta por sí sola."
     )
-    ai_last_result = st.session_state.get(f"ai_review_result_{competition_id}")
+    ai_result_key = f"ai_review_result_{state_scope_key}"
+    ai_last_result = st.session_state.get(ai_result_key)
     if ai_last_result and ai_last_result.get("version") != AI_AUDIT_RESULT_VERSION:
-        st.session_state.pop(f"ai_review_result_{competition_id}", None)
+        st.session_state.pop(ai_result_key, None)
         ai_last_result = None
     if ai_last_result:
         if ai_last_result["errors"]:
@@ -431,7 +716,7 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
             st.success(f"Auditoría IA completada: {ai_last_result['successful']} candidatas analizadas.")
     auto_rejections = [
         (question, automatic_rejection_reason(question))
-        for question in queue_query.all()
+        for question in queue_questions
         if queue_item(question)
         and not bool(question.is_verified)
         and (not isinstance(getattr(question, "quality_report", None), dict)
@@ -446,14 +731,14 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
         )
         auto_confirm = st.checkbox(
             "Descartar automáticamente estas candidatas. No se aprobará ninguna de forma automática.",
-            key=f"auto_reject_confirm_{competition_id}",
+            key=f"auto_reject_confirm_{state_scope_key}",
         )
         if st.button(
             "Descartar candidatas no confiables automáticamente",
             type="primary",
             use_container_width=True,
             disabled=not auto_confirm,
-            key=f"auto_reject_start_{competition_id}",
+            key=f"auto_reject_start_{state_scope_key}",
         ):
             reviewer = st.session_state.get("username", "admin")
             try:
@@ -473,22 +758,22 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
     elif queue["pending"]:
         ai_provider = st.selectbox(
             "Proveedor para auditoría IA", ["Gemini", "OpenAI", "Mistral"],
-            key=f"ai_queue_provider_{competition_id}",
+            key=f"ai_queue_provider_{state_scope_key}",
         )
         ai_confirm = st.checkbox(
             "Auditar todas las pendientes con IA. Esta acción consume la clave configurada y no habilita preguntas.",
-            key=f"ai_queue_confirm_{competition_id}",
+            key=f"ai_queue_confirm_{state_scope_key}",
         )
         if st.button(
             "Auditar toda la cola con IA", type="secondary", use_container_width=True,
-            disabled=not ai_confirm, key=f"ai_queue_start_{competition_id}",
+            disabled=not ai_confirm, key=f"ai_queue_start_{state_scope_key}",
         ):
             if not get_api_key(ai_provider):
                 st.error("Configura una clave de IA antes de iniciar la auditoría.")
             else:
                 pending_questions = [
                     question
-                    for question in queue_query.all()
+                    for question in queue_questions
                     if queue_item(question)
                     and not bool(question.is_verified)
                     and (not isinstance(getattr(question, "quality_report", None), dict)
@@ -549,12 +834,138 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
         else:
             st.success("Diagnóstico local sin fallas estructurales. Verifica también la fuente de fondo.")
 
-        validation_error = queue_validation_error(candidate)
+        candidate_report = dict(candidate.quality_report or {})
+        source_verification = dict(candidate_report.get("source_verification") or {})
+        editorial_metadata = dict(candidate_report.get("editorial_metadata") or {})
+        evidence_url = source_verification.get("url") or source_evidence.get("official_url") or ""
+        try:
+            stored_verified_date = datetime.date.fromisoformat(
+                str(source_verification.get("verified_on") or "")
+            )
+        except ValueError:
+            stored_verified_date = datetime.date.today()
+        inferred_function = function_number_for_question(
+            candidate,
+            active_opec.opec_number,
+        ) or 1
+        max_function = max(1, len(active_opec.functions or ()), int(inferred_function))
+        current_function = int(editorial_metadata.get("function_number") or inferred_function)
+        cognitive_labels = {
+            "recognition": "Reconocimiento",
+            "application": "Aplicación",
+            "analysis": "Análisis",
+            "judgment": "Juicio",
+            "transfer": "Transferencia",
+        }
+        cognitive_options = [
+            value
+            for value in ("recognition", "application", "analysis", "judgment", "transfer")
+            if value in COGNITIVE_LEVELS
+        ]
+        with st.expander("Fuente y ficha editorial obligatorias", expanded=True):
+            with st.form(f"editorial_verification_{candidate.question_id}"):
+                source_status = st.selectbox(
+                    "Estado de la fuente",
+                    ["official_current", "official_verified"],
+                    index=(
+                        1
+                        if source_verification.get("status") == "official_verified"
+                        else 0
+                    ),
+                    format_func=lambda value: {
+                        "official_current": "Oficial vigente",
+                        "official_verified": "Oficial verificada",
+                    }[value],
+                )
+                source_url = st.text_input("URL oficial exacta", value=evidence_url)
+                source_locator = st.text_input(
+                    "Artículo, numeral o página",
+                    value=str(source_verification.get("locator") or ""),
+                )
+                supporting_excerpt = st.text_area(
+                    "Fragmento breve que sustenta la clave",
+                    value=str(source_verification.get("supporting_excerpt") or ""),
+                )
+                verified_on = st.date_input(
+                    "Fecha de contraste",
+                    value=stored_verified_date,
+                )
+                subtopic = st.text_input(
+                    "Subtema",
+                    value=str(editorial_metadata.get("subtopic") or candidate.topic or ""),
+                )
+                cognitive_level = st.selectbox(
+                    "Nivel cognitivo",
+                    cognitive_options,
+                    index=(
+                        cognitive_options.index(editorial_metadata["cognitive_level"])
+                        if editorial_metadata.get("cognitive_level") in cognitive_options
+                        else cognitive_options.index("application")
+                    ),
+                    format_func=lambda value: cognitive_labels[value],
+                )
+                function_number = st.number_input(
+                    "Función de la OPEC",
+                    min_value=1,
+                    max_value=max_function,
+                    value=min(max(current_function, 1), max_function),
+                    step=1,
+                )
+                editorial_difficulty = st.select_slider(
+                    "Dificultad editorial interna",
+                    options=list(range(1, 11)),
+                    value=editorial_question_difficulty(candidate),
+                )
+                distractor_explanations = dict(
+                    editorial_metadata.get("distractor_explanations") or {}
+                )
+                is_likert = (
+                    str(candidate.question_type or "").upper() == "LIKERT"
+                    or str(candidate.track or "").upper() in {"COMPORTAMENTAL", "INTEGRIDAD"}
+                )
+                if not is_likert:
+                    st.markdown("**Por qué cada distractor no es la mejor respuesta**")
+                    for option_key in candidate.options_json or {}:
+                        if option_key == candidate.correct_key:
+                            continue
+                        distractor_explanations[option_key] = st.text_area(
+                            f"Distractor {option_key}",
+                            value=str(distractor_explanations.get(option_key) or ""),
+                        )
+                save_editorial = st.form_submit_button(
+                    "Guardar contraste normativo y ficha editorial",
+                    type="primary",
+                    use_container_width=True,
+                )
+            if save_editorial:
+                try:
+                    record_editorial_verification(
+                        candidate,
+                        source_status=source_status,
+                        source_url=source_url,
+                        source_locator=source_locator,
+                        supporting_excerpt=supporting_excerpt,
+                        verified_on=verified_on.isoformat(),
+                        verified_by=st.session_state.get("username", "admin"),
+                        subtopic=subtopic,
+                        cognitive_level=cognitive_level,
+                        function_number=int(function_number),
+                        editorial_difficulty=editorial_difficulty,
+                        distractor_explanations=distractor_explanations,
+                    )
+                    db.commit()
+                    st.success("Contraste guardado. La candidata ya puede pasar la validación final.")
+                    st.rerun()
+                except ValueError as exc:
+                    db.rollback()
+                    st.error(str(exc))
+
+        validation_error = queue_validation_error(candidate, active_bank_items)
         if validation_error:
             st.error(validation_error)
         else:
             confirmation = st.checkbox(
-                "Confirmo que verifiqué fuente, vigencia, enunciado, clave y justificación.",
+                "Confirmo fuente, vigencia, clave, nivel cognitivo y análisis de distractores.",
                 key=f"queue_confirm_{candidate.question_id}",
             )
             rejection_reason = st.text_input(
@@ -579,11 +990,7 @@ elif False:  # Legacy guided review kept temporarily for backwards-compatible de
                 st.rerun()
 
 elif action == "Consultar banco":
-    competition_id = get_active_competition_id(db, u_id)
-    pending_query = db.query(Question)
-    if competition_id is not None:
-        pending_query = pending_query.filter(Question.competition_id == competition_id)
-    bank_items = pending_query.all()
+    bank_items = list(active_bank_items)
     pending_reinforcements = sum(is_reinforcement_candidate(item) for item in bank_items)
     safe_items = sum(is_safe_for_active_study(item) for item in bank_items)
     official_items = sum(question_format_status(item) == OFFICIAL_LABEL for item in bank_items)
@@ -593,7 +1000,7 @@ elif action == "Consultar banco":
         bank_cols[0].metric("Banco total", len(bank_items))
         bank_cols[1].metric(
             "Aptas para estudiar", safe_items,
-            help="Preguntas con fuente revisada o una decisión conservadora de auditoría.",
+            help="Preguntas con fuente oficial, localizador, fragmento, vigencia y revisión individual completas.",
         )
         bank_cols[2].metric("Casos situacionales", official_items)
         bank_cols[3].metric("Requieren revisión", review_items)
@@ -622,17 +1029,20 @@ elif action == "Consultar banco":
         st.session_state["bank_local_audit_summary"] = {
             **{key: value for key, value in summary.items() if key != "reports"},
             "competition_id": competition_id,
+            "opec_number": active_opec_number,
+            "context_key": bank_context_key,
             "persisted": is_admin_user,
         }
         st.session_state["bank_local_audit_reports"] = summary["reports"]
         st.rerun()
     local_summary = st.session_state.get("bank_local_audit_summary")
-    if local_summary and local_summary.get("competition_id") == competition_id:
+    if local_summary and local_summary.get("context_key") == bank_context_key:
         storage_note = "Reporte guardado." if local_summary.get("persisted") else "Consulta de solo lectura."
         local_audit_cols[1].info(
             f"Diagnóstico local: {local_summary['passed']} sin fallas estructurales · "
             f"{local_summary['review']} requieren revisión · clave dominante "
             f"{local_summary['dominant_key'] or '—'} ({local_summary['dominant_key_pct']:.0f}%). "
+            f"Posibles duplicados: {local_summary.get('near_duplicate_count', 0)}. "
             f"{storage_note} Este control no certifica la exactitud jurídica."
         )
     if is_admin_user and pending_reinforcements:
@@ -646,9 +1056,17 @@ elif action == "Consultar banco":
     with col_filters[0]:
         search = st.text_input("🔍 Buscar en enunciado o justificación...")
     with col_filters[1]:
-        track_f = st.selectbox("Eje", ["Todos", "FUNCIONAL", "COMPORTAMENTAL", "INTEGRIDAD"])
+        track_f = st.selectbox(
+            "Área del banco",
+            ["Todos", "FUNCIONAL", "COMPORTAMENTAL", "INTEGRIDAD"],
+            help="Clasificación interna de práctica; no equivale a ejes oficiales del examen.",
+        )
     with col_filters[2]:
-        diff_f = st.multiselect("Dificultad", [1, 2, 3], format_func=lambda x: {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}[x])
+        diff_f = st.multiselect(
+            "Dificultad editorial",
+            list(range(1, 11)),
+            format_func=lambda value: f"Nivel {value}",
+        )
     with col_filters[3]:
         # Quality Filter Mikey v36
         quality_f = st.selectbox(
@@ -680,11 +1098,19 @@ elif action == "Consultar banco":
                                 st.warning("⏳ Esperando actualización del servidor. Reintenta en 30s.")
                             else:
                                 prog_audit = st.progress(0, text="Iniciando Auditoría Masiva...")
-                                selection = list(st.session_state["bulk_selection"])
+                                selection = [
+                                    question_id
+                                    for question_id in st.session_state["bulk_selection"]
+                                    if str(question_id) in active_bank_ids
+                                ]
                                 for i, qid in enumerate(selection):
                                     prog_audit.progress((i + 1) / len(selection), text=f"Auditando {i+1} de {len(selection)}...")
                                     q_aud = db.query(Question).get(qid)
-                                    if q_aud and not q_aud.is_verified:
+                                    if (
+                                        q_aud
+                                        and str(q_aud.question_id) in active_bank_ids
+                                        and not q_aud.is_verified
+                                    ):
                                         report = gen.audit_question({
                                             "topic": q_aud.topic, "stem": q_aud.stem, 
                                             "options_json": q_aud.options_json, 
@@ -704,7 +1130,8 @@ elif action == "Consultar banco":
                             st.error("Falta API Key")
                     except Exception as e:
                         db.rollback()
-                        st.error(f"Error en auditoría masiva: {e}")
+                        log_ui_exception("question_bank.bulk_audit", e)
+                        st.error("No fue posible completar la auditoría masiva.")
 
             with col_del_real:
                 if st.button(
@@ -715,19 +1142,24 @@ elif action == "Consultar banco":
                     try:
                         for qid in st.session_state["bulk_selection"]:
                             q_to_del = db.query(Question).get(qid)
-                            if q_to_del: db.delete(q_to_del)
+                            if q_to_del and str(q_to_del.question_id) in active_bank_ids:
+                                db.delete(q_to_del)
                         db.commit()
                         reset_selection()
                         st.success("Preguntas eliminadas.")
                         st.rerun()
                     except Exception as e:
                         db.rollback()
-                        st.error(f"Error: {e}")
+                        log_ui_exception("question_bank.bulk_delete", e)
+                        st.error("No fue posible eliminar la selección.")
             
             st.divider()
             
             # Export Logic
-            selected_qs = db.query(Question).filter(Question.question_id.in_(list(st.session_state["bulk_selection"]))).all()
+            selected_qs = db.query(Question).filter(
+                Question.question_id.in_(list(st.session_state["bulk_selection"]))
+            ).all()
+            selected_qs = retain_allowed_questions(selected_qs, active_bank_ids)
             
             if selected_qs:
                 st.markdown("### 📥 Exportar Seleccionadas")
@@ -741,7 +1173,7 @@ elif action == "Consultar banco":
                         'track': q.track,
                         'competency': q.competency,
                         'topic': q.topic,
-                        'difficulty': q.difficulty,
+                        'difficulty': editorial_question_difficulty(q),
                         'stem': q.stem,
                         'options_A': opts.get('A', ''),
                         'options_B': opts.get('B', ''),
@@ -784,77 +1216,48 @@ elif action == "Consultar banco":
                         use_container_width=True
                     )
 
-    # QUERY
-    if opec_focus:
-        # Usamos el servicio de alta precisión
-        questions_all = QuestionService.get_questions_for_user(
-            db, u_id, include_review=is_admin_user
-        )
-        # Aplicamos filtros de UI sobre el set filtrado por OPEC (Filtrado en memoria Python)
-        filtered = []
-        for q in questions_all:
-            if search and not (search.lower() in (q.stem + (q.rationale or "")).lower()):
-                continue
-            if track_f != "Todos" and q.track != track_f:
-                continue
-            if diff_f and q.difficulty not in diff_f:
-                continue
-            local_reports = st.session_state.get("bank_local_audit_reports", {})
-            if quality_f == QUALITY_LOCAL_REVIEW:
-                if local_reports.get(str(q.question_id), {}).get("status") != "REVIEW":
-                    continue
-            elif not matches_quality_filter(q, quality_f):
-                continue
-            if format_f != "Todos" and question_format_status(q) != format_f:
-                continue
-            filtered.append(q)
-        
-        total_count = len(filtered)
-        PAGE_SIZE = 20
-        st.session_state["page_num"] = min(
-            st.session_state["page_num"], max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
-        )
-        offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
-        questions = filtered[offset:offset+PAGE_SIZE]
-        if is_admin_user:
-            visible_safe = sum(is_safe_for_active_study(item) for item in filtered)
-            st.info(
-                f"🎯 **Concurso activo:** {total_count} registros coinciden con los filtros; "
-                f"{visible_safe} están habilitados para estudio."
-            )
-        else:
-            st.info(f"🎯 **Enfoque OPEC:** {total_count} preguntas aptas para tu preparación.")
-    else:
-        # Búsqueda global estándar (SQL)
-        query = db.query(Question).filter(Question.competition_id == competition_id)
-        if search:
-            query = query.filter(Question.stem.ilike(f"%{search}%") | Question.rationale.ilike(f"%{search}%"))
-        if track_f != "Todos":
-            query = query.filter(Question.track == track_f)
-        if diff_f:
-            query = query.filter(Question.difficulty.in_(diff_f))
-        
-        filtered = query.all()
-        if not is_admin_user:
-            filtered = [q for q in filtered if is_safe_for_active_study(q)]
-        local_reports = st.session_state.get("bank_local_audit_reports", {})
+    # Todos los filtros parten del mismo inventario OPEC. No existe una ruta
+    # alternativa que vuelva a consultar el concurso completo.
+    filtered = []
+    local_reports = st.session_state.get("bank_local_audit_reports", {})
+    for q in bank_items:
+        searchable = f"{q.stem or ''} {q.rationale or ''}".lower()
+        if search and search.lower() not in searchable:
+            continue
+        if track_f != "Todos" and q.track != track_f:
+            continue
+        if diff_f and editorial_question_difficulty(q) not in diff_f:
+            continue
+        if not is_admin_user and not is_safe_for_active_study(q):
+            continue
         if quality_f == QUALITY_LOCAL_REVIEW:
-            filtered = [
-                q for q in filtered
-                if local_reports.get(str(q.question_id), {}).get("status") == "REVIEW"
-            ]
-        else:
-            filtered = [q for q in filtered if matches_quality_filter(q, quality_f)]
-        if format_f != "Todos":
-            filtered = [q for q in filtered if question_format_status(q) == format_f]
-        total_count = len(filtered)
-        PAGE_SIZE = 20
-        st.session_state["page_num"] = min(
-            st.session_state["page_num"], max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+            if local_reports.get(str(q.question_id), {}).get("status") != "REVIEW":
+                continue
+        elif not matches_quality_filter(q, quality_f):
+            continue
+        if format_f != "Todos" and question_format_status(q) != format_f:
+            continue
+        filtered.append(q)
+
+    total_count = len(filtered)
+    PAGE_SIZE = 20
+    st.session_state["page_num"] = min(
+        st.session_state["page_num"], max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    )
+    offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
+    questions = filtered[offset:offset + PAGE_SIZE]
+    if is_admin_user:
+        visible_safe = sum(is_safe_for_active_study(item) for item in filtered)
+        st.info(
+            f"🎯 **OPEC {active_opec_number or '—'}:** "
+            f"{total_count} registros coinciden con los filtros; "
+            f"{visible_safe} están habilitados para estudio."
         )
-        offset = (st.session_state["page_num"] - 1) * PAGE_SIZE
-        questions = filtered[offset:offset+PAGE_SIZE]
-        st.info(f"📚 Mostrando **{len(questions)}** de **{total_count}** preguntas totales.")
+    else:
+        st.info(
+            f"🎯 **OPEC {active_opec_number or '—'}:** "
+            f"{total_count} preguntas aptas para tu preparación."
+        )
     
     if not questions:
         st.warning("No hay preguntas que coincidan con la búsqueda.")
@@ -875,7 +1278,10 @@ elif action == "Consultar banco":
         st.markdown("<br>", unsafe_allow_html=True)
         
         for q in questions:
-            diff_tags = {1: "🟢", 2: "🟡", 3: "🔴"}
+            diff_tags = {
+                value: "🟢" if value <= 3 else "🟡" if value <= 7 else "🔴"
+                for value in range(1, 11)
+            }
             is_selected = q.question_id in st.session_state["bulk_selection"]
             
             if is_admin_user:
@@ -891,8 +1297,12 @@ elif action == "Consultar banco":
             with col_exp:
                 status_icon = "✅" if getattr(q, 'is_verified', False) else "⏳"
                 format_status = question_format_status(q)
-                format_icon = "TIPO EXAMEN" if format_status == OFFICIAL_LABEL else "PRÁCTICA" if format_status == PRACTICE_LABEL else "REVISAR"
-                display_title = f"{status_icon} {format_icon} {diff_tags.get(q.difficulty, '⚪')} [{q.track or 'SIN EJE'}] {q.stem[:80]}..."
+                format_icon = "PJS REVISADA" if format_status == OFFICIAL_LABEL else "PRÁCTICA" if format_status == PRACTICE_LABEL else "REVISAR"
+                display_title = (
+                    f"{status_icon} {format_icon} "
+                    f"{diff_tags.get(editorial_question_difficulty(q), '⚪')} "
+                    f"[{q.track or 'SIN ÁREA'}] {q.stem[:80]}..."
+                )
                 with st.expander(display_title):
                     transient_local_report = st.session_state.get(
                         "bank_local_audit_reports", {}
@@ -912,7 +1322,10 @@ elif action == "Consultar banco":
                         for i, (key, val) in enumerate(ops.items()):
                             cols_ops[i % 2].markdown(f"**{key})** {val}")
                     
-                    st.markdown(f"**Respuesta Correcta:** :green[{q.correct_key}]")
+                    if q.correct_key:
+                        st.markdown(f"**Respuesta correcta:** :green[{q.correct_key}]")
+                    else:
+                        st.markdown("**Escala de autorreporte:** sin respuesta correcta")
                     if q.rationale:
                         st.caption(f"Justificación: {q.rationale}")
                     if q.source_refs:
@@ -989,7 +1402,8 @@ elif action == "Consultar banco":
                                     else:
                                         st.error("Falta API Key")
                                 except Exception as e:
-                                    st.error(f"Error: {e}")
+                                    log_ui_exception("question_bank.single_audit", e)
+                                    st.error("No fue posible completar la auditoría técnica.")
 
                     with col_act2:
                         if st.button(
@@ -1040,6 +1454,9 @@ elif action == "Consultar banco":
             st.rerun()
 
 elif action == "Importar archivo":
+    if active_opec is None:
+        st.error("Activa una OPEC antes de importar preguntas.")
+        st.stop()
     st.info("Sube un archivo `.xlsx` o `.csv`. Columnas requeridas: `track, competency, topic, stem, options_A, options_B, options_C, options_D, correct_key, rationale` (opcional)")
     
     # --- TEMPLATE DOWNLOAD ---
@@ -1101,6 +1518,7 @@ elif action == "Importar archivo":
                     count_dupe = 0
                     
                     existing_hashes = [q.hash_norm for q in db.query(Question.hash_norm).all()]
+                    existing_stems = [value for (value,) in db.query(Question.stem).all()]
                     
                     progress = st.progress(0)
                     for index, row in df.iterrows():
@@ -1111,55 +1529,98 @@ elif action == "Importar archivo":
                         if h in existing_hashes:
                             count_dupe += 1
                             continue
+                        if find_duplicates(stem, existing_stems, threshold=92):
+                            count_dupe += 1
+                            continue
+                        track_value = str(row['track']).upper()
+                        is_likert = track_value in {"COMPORTAMENTAL", "INTEGRIDAD"}
                             
                         ops = {
                             "A": str(row['options_A']),
                             "B": str(row['options_B']),
                             "C": str(row['options_C']),
-                            "D": str(row['options_D'])
                         }
+                        if is_likert:
+                            ops["D"] = str(row['options_D'])
                         
                         # Safe difficulty conversion
                         raw_diff = row.get('difficulty', 2)
                         try:
-                            difficulty = int(float(raw_diff)) if not pd.isna(raw_diff) else 2
+                            editorial_difficulty = int(float(raw_diff)) if not pd.isna(raw_diff) else 5
                         except (ValueError, TypeError):
-                            difficulty = 2
+                            editorial_difficulty = 5
+                        editorial_difficulty = min(max(editorial_difficulty, 1), 10)
+                        legacy_difficulty = (
+                            1 if editorial_difficulty <= 3
+                            else 2 if editorial_difficulty <= 7
+                            else 3
+                        )
                             
                         q = Question(
-                            competition_id=get_active_competition_id(db, u_id),
+                            competition_id=competition_id,
                             question_id=str(uuid.uuid4()),
-                            track=str(row['track']).upper(),
+                            track=track_value,
                             competency=str(row.get('competency', 'General')),
                             topic=str(row.get('topic', 'General')),
-                            difficulty=difficulty,
+                            difficulty=legacy_difficulty,
+                            question_type="LIKERT" if is_likert else "SITUATIONAL",
                             stem=stem,
                             options_json=ops,
-                            correct_key=str(row['correct_key']).strip().upper(),
+                            correct_key=(
+                                None
+                                if is_likert
+                                else str(row['correct_key']).strip().upper()
+                            ),
                             rationale=str(row.get('rationale', '')),
-                            hash_norm=h
+                            source_refs=str(row.get('source_refs', '') or ''),
+                            hash_norm=h,
+                            is_verified=False,
+                            quality_report={
+                                "origin": "manual_question_review",
+                                "status": "PENDING_HUMAN_REVIEW",
+                                "editorial_difficulty_1_10": editorial_difficulty,
+                            },
                         )
                         db.add(q)
+                        assign_question_to_opec(db, q, active_opec)
                         count_ok += 1
                         existing_hashes.append(h) # Update local cache for batch
+                        existing_stems.append(stem)
                     
                     db.commit()
                     st.balloons()
                     st.success(f"¡Importación Finalizada! Nuevas: {count_ok} | Duplicadas omitidas: {count_dupe}")
 
         except Exception as e:
-            st.error(f"Error procesando el archivo: {e}")
+            log_ui_exception("question_bank.import", e)
+            st.error("No fue posible procesar el archivo. Revisa su formato e inténtalo de nuevo.")
 
 elif action == "Crear manualmente":
+    if active_opec is None:
+        st.error("Activa una OPEC antes de crear preguntas.")
+        st.stop()
     with st.form("manual_create"):
         st.subheader("Nueva Pregunta")
         col1, col2 = st.columns(2)
         with col1:
-            track = st.selectbox("Track / Eje", ["FUNCIONAL", "COMPORTAMENTAL", "INTEGRIDAD"])
+            track = st.selectbox(
+                "Área del banco",
+                ["FUNCIONAL", "COMPORTAMENTAL", "INTEGRIDAD"],
+                help="Clasificación interna para organizar el banco.",
+            )
             topic = st.text_input("Tema")
+            competency = st.text_input("Competencia")
         with col2:
             stem = st.text_area("Enunciado de la Pregunta")
-            difficulty = st.select_slider("Dificultad", options=[1, 2, 3], format_func=lambda x: {1: "Básico", 2: "Intermedio", 3: "Avanzado"}[x], value=2)
+            difficulty = st.select_slider(
+                "Dificultad editorial interna",
+                options=list(range(1, 11)),
+                value=5,
+            )
+            source_refs = st.text_input(
+                "Fuente declarada",
+                help="La pregunta seguirá como candidata hasta contrastar URL, localizador y vigencia.",
+            )
             
         st.markdown("---")
         st.markdown("**Opciones de Respuesta**")
@@ -1169,11 +1630,21 @@ elif action == "Crear manualmente":
             op_b = st.text_input("Opción B")
         with c2:
             op_c = st.text_input("Opción C")
-            op_d = st.text_input("Opción D")
+            op_d = (
+                st.text_input("Opción D")
+                if track in {"COMPORTAMENTAL", "INTEGRIDAD"}
+                else ""
+            )
             
         col_correct, col_rationale = st.columns([1, 2])
         with col_correct:
-            correct = st.selectbox("Respuesta Correcta", ["A", "B", "C", "D"])
+            correct = (
+                None
+                if track in {"COMPORTAMENTAL", "INTEGRIDAD"}
+                else st.selectbox("Respuesta correcta propuesta", ["A", "B", "C"])
+            )
+            if correct is None:
+                st.caption("El autorreporte Likert no tiene clave correcta.")
         with col_rationale:
             rationale = st.text_area("Justificación / Explicación")
         
@@ -1181,22 +1652,41 @@ elif action == "Crear manualmente":
             h = compute_hash(stem)
             if db.query(Question).filter_by(hash_norm=h).first():
                 st.error("¡Pregunta idéntica ya existe!")
+            elif find_duplicates(
+                stem,
+                [value for (value,) in db.query(Question.stem).all()],
+                threshold=92,
+            ):
+                st.error("Existe una pregunta demasiado similar. Reescríbela antes de guardarla.")
             else:
+                is_likert = track in {"COMPORTAMENTAL", "INTEGRIDAD"}
+                options = {"A": op_a, "B": op_b, "C": op_c}
+                if is_likert:
+                    options["D"] = op_d
                 q = Question(
-                    competition_id=get_active_competition_id(db, u_id),
+                    competition_id=competition_id,
                     question_id=str(uuid.uuid4()),
                     track=track,
-                    competency="Manual",
+                    competency=competency or "Pendiente de clasificación",
                     topic=topic,
                     stem=stem,
                     difficulty=difficulty,
-                    options_json={"A": op_a, "B": op_b, "C": op_c, "D": op_d},
+                    question_type="LIKERT" if is_likert else "SITUATIONAL",
+                    options_json=options,
                     correct_key=correct,
                     rationale=rationale,
-                    hash_norm=h
+                    source_refs=source_refs,
+                    hash_norm=h,
+                    is_verified=False,
+                    quality_report={
+                        "origin": "manual_question_review",
+                        "status": "PENDING_HUMAN_REVIEW",
+                        "editorial_difficulty_1_10": difficulty,
+                    },
                 )
                 db.add(q)
+                assign_question_to_opec(db, q, active_opec)
                 db.commit()
-                st.success("Pregunta guardada exitosamente.")
+                st.success("Candidata guardada. Aún requiere contraste normativo y revisión editorial.")
 
 db.close()

@@ -7,6 +7,7 @@ from core.learning.engine import (
     calculate_mastery,
     calculate_topic_priority,
     difficulty_for_mastery,
+    editorial_question_difficulty,
     schedule_next_review,
     select_next_question,
     topic_id_for,
@@ -30,8 +31,10 @@ def test_mastery_rejects_unknown_values():
 def test_incorrect_high_confidence_is_reviewed_soon():
     incorrect = schedule_next_review("incorrect", "high", 30, now=NOW)
     correct = schedule_next_review("correct", "high", 80, now=NOW)
-    assert incorrect < NOW + timedelta(days=2)
-    assert correct > NOW + timedelta(days=7)
+    uncertain_error = schedule_next_review("incorrect", "low", 30, now=NOW)
+    assert incorrect < uncertain_error
+    assert incorrect < NOW + timedelta(days=1)
+    assert correct >= NOW + timedelta(days=4)
 
 
 def test_priority_formula_favors_weak_overdue_error_prone_topic():
@@ -71,10 +74,20 @@ def test_select_next_question_uses_priority_and_exclusions():
 
 def test_difficulty_unlocks_only_after_enough_evidence_and_mastery():
     assert difficulty_for_mastery(90, attempts=0) == 1
-    assert difficulty_for_mastery(39, attempts=8) == 1
-    assert difficulty_for_mastery(40, attempts=3) == 2
-    assert difficulty_for_mastery(74, attempts=20) == 2
-    assert difficulty_for_mastery(75, attempts=5) == 3
+    assert difficulty_for_mastery(39, attempts=8) == 3
+    assert difficulty_for_mastery(40, attempts=3) == 1
+    assert difficulty_for_mastery(74, attempts=20) == 6
+    assert difficulty_for_mastery(75, attempts=5) == 1
+    assert difficulty_for_mastery(95, attempts=40) == 10
+
+
+def test_question_difficulty_maps_legacy_without_guessing_canonical_values():
+    assert editorial_question_difficulty(SimpleNamespace(difficulty=1)) == 2
+    assert editorial_question_difficulty(SimpleNamespace(difficulty=2)) == 5
+    assert editorial_question_difficulty(SimpleNamespace(difficulty=3)) == 8
+    assert editorial_question_difficulty(
+        SimpleNamespace(difficulty=1, editorial_difficulty=9)
+    ) == 9
 
 
 def test_adaptive_selector_prefers_difficulty_matching_topic_mastery():
@@ -88,5 +101,5 @@ def test_adaptive_selector_prefers_difficulty_matching_topic_mastery():
         questions, priorities, topic_mastery_scores={topic_id: 10}, topic_attempt_counts={topic_id: 2}
     ).question_id == "basic"
     assert select_next_question(
-        questions, priorities, topic_mastery_scores={topic_id: 85}, topic_attempt_counts={topic_id: 8}
+        questions, priorities, topic_mastery_scores={topic_id: 85}, topic_attempt_counts={topic_id: 32}
     ).question_id == "advanced"

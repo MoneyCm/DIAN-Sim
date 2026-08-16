@@ -6,19 +6,49 @@ from core.question_review import (
     QUALITY_ALL, QUALITY_PENDING, QUALITY_REINFORCEMENTS, QUALITY_VERIFIED,
     approve_candidate, automatic_rejection_reason, candidate_validation_error, is_reinforcement_candidate,
     has_ai_audit, is_pending_review_candidate, matches_quality_filter, record_ai_audit, reject_candidate,
-    review_queue_summary,
+    record_editorial_verification, review_queue_summary,
 )
 
 
 def candidate(**overrides):
     values = {
         "is_verified": False,
-        "quality_report": {"status": "PENDING_REVIEW", "review": "reinforcement_candidate"},
+        "quality_report": {
+            "status": "PENDING_REVIEW",
+            "review": "reinforcement_candidate",
+            "source_verification": {
+                "status": "official_current",
+                "url": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+                "locator": "Artículo 1",
+                "supporting_excerpt": "Fragmento contrastado que sustenta de manera directa la respuesta A.",
+                "verified_on": "2026-08-15",
+                "verified_by": "editorial-test",
+            },
+            "editorial_difficulty_1_10": 5,
+            "editorial_metadata": {
+                "contract_version": "pjs-editorial-v2",
+                "subtopic": "Facultades de fiscalización",
+                "cognitive_level": "application",
+                "function_number": 1,
+                "distractor_explanations": {
+                    "B": "Omite el procedimiento exigible para la actuación.",
+                    "C": "Traslada indebidamente una competencia que debe conservarse.",
+                },
+            },
+        },
         "source_refs": "Estatuto Tributario, artículo 1",
-        "stem": "Situación y pregunta",
+        "stem": (
+            "En una actuación de fiscalización aparecen datos contradictorios. "
+            "¿Cuál es la decisión inicial jurídicamente sustentada?"
+        ),
         "options_json": {"A": "Uno", "B": "Dos", "C": "Tres"},
         "correct_key": "A",
         "rationale": "La norma respalda la opción A.",
+        "track": "FUNCIONAL",
+        "question_type": "SITUATIONAL",
+        "competency": "Fiscalización",
+        "topic": "Función 1",
+        "difficulty": 2,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -48,8 +78,15 @@ def test_incomplete_candidate_cannot_be_approved(field, value):
 
 
 def test_progressive_opec_question_can_be_individually_approved():
+    base_report = candidate().quality_report
     question = candidate(
-        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+        quality_report={
+            "origin": "progressive_opec_local",
+            "guide_status": "pending",
+            "source_verification": base_report["source_verification"],
+            "editorial_difficulty_1_10": base_report["editorial_difficulty_1_10"],
+            "editorial_metadata": base_report["editorial_metadata"],
+        }
     )
 
     assert is_pending_review_candidate(question)
@@ -65,8 +102,13 @@ def test_progressive_opec_question_can_be_individually_approved():
 
 
 def test_review_queue_counts_explicit_and_legacy_source_candidates():
+    verification = candidate().quality_report["source_verification"]
     pending = candidate(
-        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+        quality_report={
+            "origin": "progressive_opec_local",
+            "guide_status": "pending",
+            "source_verification": verification,
+        }
     )
     approved = candidate(
         is_verified=True,
@@ -115,8 +157,15 @@ def test_ai_audit_never_verifies_or_loses_candidate_state():
 
 
 def test_ai_audit_preserves_progressive_opec_queue_membership():
+    base_report = candidate().quality_report
     question = candidate(
-        quality_report={"origin": "progressive_opec_local", "guide_status": "pending"}
+        quality_report={
+            "origin": "progressive_opec_local",
+            "guide_status": "pending",
+            "source_verification": base_report["source_verification"],
+            "editorial_difficulty_1_10": base_report["editorial_difficulty_1_10"],
+            "editorial_metadata": base_report["editorial_metadata"],
+        }
     )
 
     record_ai_audit(question, {"status": "IMPROVABLE", "score": 6})
@@ -124,6 +173,96 @@ def test_ai_audit_preserves_progressive_opec_queue_membership():
     assert question.is_verified is False
     assert question.quality_report["origin"] == "progressive_opec_local"
     assert question.quality_report["ai_audit"]["status"] == "IMPROVABLE"
+
+
+def test_invented_or_unverified_source_can_never_be_approved():
+    invented = candidate(
+        source_refs="Fuente inventada por proveedor",
+        quality_report={"status": "PENDING_REVIEW", "review": "reinforcement_candidate"},
+    )
+    official_link_without_editorial_proof = candidate(
+        source_refs="https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm, artículo 1",
+        quality_report={"status": "PENDING_REVIEW", "review": "reinforcement_candidate"},
+    )
+
+    assert candidate_validation_error(invented)
+    assert candidate_validation_error(official_link_without_editorial_proof)
+    with pytest.raises(ValueError):
+        approve_candidate(invented, "admin")
+    with pytest.raises(ValueError):
+        approve_candidate(official_link_without_editorial_proof, "admin")
+
+
+def test_editorial_verification_records_source_difficulty_and_distractors():
+    question = candidate(quality_report={"status": "PENDING_REVIEW"})
+
+    record_editorial_verification(
+        question,
+        source_status="official_current",
+        source_url="https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+        source_locator="Artículo 684",
+        supporting_excerpt="La administración dispone de facultades de fiscalización para verificar obligaciones.",
+        verified_on="2026-08-15",
+        verified_by="admin",
+        subtopic="Facultades de fiscalización",
+        cognitive_level="application",
+        function_number=1,
+        editorial_difficulty=6,
+        distractor_explanations={
+            "B": "Omite la actuación procedente y la trazabilidad requerida.",
+            "C": "Delega una competencia que corresponde a la dependencia responsable.",
+        },
+    )
+
+    assert candidate_validation_error(question) is None
+    assert question.quality_report["editorial_difficulty_1_10"] == 6
+    assert question.quality_report["editorial_metadata"]["function_number"] == 1
+
+
+def test_approval_blocks_missing_distractor_explanation():
+    question = candidate()
+    question.quality_report["editorial_metadata"]["distractor_explanations"].pop("C")
+
+    assert candidate_validation_error(question) == "Falta explicar el distractor C."
+    with pytest.raises(ValueError, match="distractor C"):
+        approve_candidate(question, "admin")
+
+
+def test_likert_candidate_uses_four_options_and_has_no_correct_key():
+    question = candidate(
+        track="COMPORTAMENTAL",
+        question_type="LIKERT",
+        options_json={
+            "A": "Totalmente en desacuerdo",
+            "B": "En desacuerdo",
+            "C": "De acuerdo",
+            "D": "Totalmente de acuerdo",
+        },
+        correct_key=None,
+        rationale="Afirmación asociada a la competencia comportamental indicada.",
+    )
+
+    assert candidate_validation_error(question) is None
+    approve_candidate(question, "admin")
+    assert question.is_verified is True
+    assert question.correct_key is None
+
+
+def test_likert_candidate_rejects_key_or_three_option_scale():
+    with_key = candidate(
+        track="INTEGRIDAD",
+        question_type="LIKERT",
+        options_json={"A": "1", "B": "2", "C": "3", "D": "4"},
+        correct_key="A",
+    )
+    three_options = candidate(
+        track="COMPORTAMENTAL",
+        question_type="LIKERT",
+        correct_key=None,
+    )
+
+    assert candidate_validation_error(with_key)
+    assert candidate_validation_error(three_options)
 
 
 def test_automatic_rejection_only_retires_untraceable_or_explicitly_rejected_content():

@@ -107,7 +107,7 @@ def test_router_uses_free_gemini_with_structured_output(monkeypatch):
         profile=ModelProfile.BALANCED,
     )
     assert result.result.value == "partial"
-    assert models.calls[0]["model"] == "gemini-3.6-flash"
+    assert models.calls[0]["model"] == "gemini-2.5-flash"
     assert (
         models.calls[0]["config"].response_json_schema
         == EvaluationResult.model_json_schema()
@@ -124,12 +124,13 @@ def test_router_auto_detects_existing_gemini_key(monkeypatch):
     router = ModelRouter(client=SimpleNamespace(models=FakeGeminiModels(evaluation())))
     assert router.provider == "gemini"
     assert router.available is True
-    assert router.model_for(ModelProfile.FAST) == "gemini-3.6-flash"
+    assert router.model_for(ModelProfile.FAST) == "gemini-2.5-flash"
 
 
 def test_tutor_falls_back_when_ai_is_unavailable():
     deterministic = evaluation(result="incorrect", score=0, error_type="distractor")
-    result = TutorService(ModelRouter(provider="none")).explain(
+    tutor = TutorService(ModelRouter(provider="none"))
+    result = tutor.explain(
         stem="Pregunta",
         answer="B",
         deterministic=deterministic,
@@ -137,6 +138,7 @@ def test_tutor_falls_back_when_ai_is_unavailable():
         confidence="high",
     )
     assert result == deterministic
+    assert tutor.last_origin == "local_deterministic"
 
 
 def test_router_logs_observability_without_prompt_content():

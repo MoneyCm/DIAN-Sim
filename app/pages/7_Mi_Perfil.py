@@ -12,7 +12,7 @@ if PROJECT_ROOT not in sys.path:
 
 from db.session import SessionLocal
 from db.models import User, UserStats, QuestionPerformance, Question, UserOPEC, Achievement
-from ui_utils import load_css, render_header, metric_card
+from ui_utils import load_css, log_ui_exception, metric_card, render_header
 from core.auth import AuthManager
 from core.rank_system import get_rank_info
 from core.competitions import get_active_competition_id
@@ -96,7 +96,7 @@ try:
             Question.macro_dominio != "",
         ).group_by(Question.macro_dominio).all()
     except Exception as e:
-        print(f"Analítica de perfil no disponible: {e}")
+        log_ui_exception("profile.analytics", e)
         raw_perf = []
 
     perf_rows = []
@@ -187,13 +187,15 @@ try:
                     else:
                         st.error("No se encontró API Key para generar el informe.")
                 except Exception as e:
-                    st.error(f"Error generando informe: {e}")
+                    log_ui_exception("profile.report.generate", e)
+                    st.error("No fue posible generar el informe.")
     elif not active_opec:
         st.warning("Selecciona una OPEC activa en la página de Cargos para recibir tu informe de idoneidad.")
     else:
         st.info("Necesitas realizar al menos un simulacro para que la IA analice tu perfil.")
 
 except Exception as e:
-    st.error(f"Error al cargar perfil tras conexión DB: {e}")
+    log_ui_exception("profile.load", e)
+    st.error("No fue posible cargar el perfil. Intenta nuevamente.")
 finally:
     db.close()

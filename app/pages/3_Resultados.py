@@ -11,15 +11,38 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 # For now, I will assume the instruction was to ensure the existing block is present.
 
 from db.session import SessionLocal
-from db.models import Attempt, Question
-from ui_utils import load_css, render_header, metric_card, render_custom_sidebar, render_favorite_button
+from db.models import Attempt, Question, UserOPEC
+from ui_utils import (
+    load_css,
+    log_ui_exception,
+    metric_card,
+    render_favorite_button,
+    render_header,
+)
 from core.pdf_utils import generate_exam_pdf, generate_certificate_pdf
-from core.legacy_question_audit import is_safe_for_active_study
 from core.competitions import get_active_competition_id
+from core.gamification import (
+    PRACTICE_FUNCTIONAL_TARGET,
+    PRACTICE_SCORING_DISCLOSURE,
+    calculate_practice_index,
+)
 from services.stats_service import StatsService
+from services.question_service import QuestionService
 
 from core.auth import AuthManager
 from core.session_results import load_last_result, load_result_history
+
+
+def _training_questions(db, user_id, competition_id, active_opec):
+    if active_opec is None:
+        return []
+    return QuestionService.get_questions_for_user(
+        db,
+        user_id,
+        competition_id=competition_id,
+        user_opec=active_opec,
+        bank_partitions=("training",),
+    )
 
 # pass # Removed st.set_page_config
 
@@ -28,24 +51,29 @@ if not AuthManager.check_auth():
     st.stop()
 
 load_css()
-render_custom_sidebar()
 result_preview = st.session_state.get("last_results", {})
-if not result_preview:
-    _result_db = SessionLocal()
-    try:
-        result_preview = load_last_result(_result_db, st.session_state.get("user_id")) or {}
+_result_db = SessionLocal()
+try:
+    _user_id = st.session_state.get("user_id")
+    _active_opec = _result_db.query(UserOPEC).filter_by(
+        user_id=_user_id, is_active=True
+    ).first()
+    _competition_id = get_active_competition_id(_result_db, _user_id)
+    _opec_number = str(_active_opec.opec_number) if _active_opec else None
+    if result_preview and (
+        result_preview.get("competition_id") != _competition_id
+        or str(result_preview.get("opec_number") or "") != str(_opec_number or "")
+    ):
+        st.session_state.pop("last_results", None)
+        result_preview = {}
+    if not result_preview:
+        result_preview = load_last_result(
+            _result_db, _user_id, _competition_id, _opec_number
+        ) or {}
         if result_preview:
             st.session_state["last_results"] = result_preview
-    finally:
-        _result_db.close()
-if not result_preview:
-    _result_db = SessionLocal()
-    try:
-        result_preview = load_last_result(_result_db, st.session_state.get("user_id")) or {}
-        if result_preview:
-            st.session_state["last_results"] = result_preview
-    finally:
-        _result_db.close()
+finally:
+    _result_db.close()
 is_daily_session = result_preview.get("session_kind") == "daily"
 has_recent_result = bool(result_preview)
 render_header(
@@ -70,6 +98,16 @@ if not result_preview:
             Attempt.user_id == user_id,
             Question.competition_id == active_competition_id,
         ).order_by(Attempt.created_at.desc()).all()
+        active_opec = history_db.query(UserOPEC).filter_by(
+            user_id=user_id, is_active=True
+        ).first()
+        eligible_ids = {
+            question.question_id
+            for question in _training_questions(
+                history_db, user_id, active_competition_id, active_opec
+            )
+        }
+        attempts = [attempt for attempt in attempts if attempt.question_id in eligible_ids]
 
         if not attempts:
             st.info(
@@ -125,21 +163,13 @@ if not result_preview:
 data = st.session_state["last_results"]
 is_daily_session = data.get("session_kind") == "daily"
 breakdown = data.get("breakdown", {})
-is_passed = data.get("is_passed", True)
+practice_index, calculated_functional_goal = calculate_practice_index(breakdown)
+is_passed = data.get("is_passed", calculated_functional_goal)
 
-# --- v2.6 WEIGHTED CALCULATION ---
-# Funcional (60%), Comportamental (20%), Integridad (20%)
+# Índice interno de entrenamiento. No representa la ponderación oficial de la OPEC.
 f_c, f_t = breakdown.get("FUNCIONAL", (0, 0))
 f_pct = (f_c / f_t * 100) if f_t > 0 else 0
-f_weighted = (f_c / f_t * 60) if f_t > 0 else 0
-
-c_c, c_t = breakdown.get("COMPORTAMENTAL", (0, 0))
-c_weighted = (c_c / c_t * 20) if c_t > 0 else 0
-
-i_c, i_t = breakdown.get("INTEGRIDAD", (0, 0))
-i_weighted = (i_c / i_t * 20) if i_t > 0 else 0
-
-total_weighted = f_weighted + c_weighted + i_weighted
+total_weighted = practice_index
 
 # --- v2.5 CELEBRATION LOGIC ---
 if data.get("new_achievements"):
@@ -163,9 +193,16 @@ if is_daily_session:
         f"({daily_precision:.0f}%). Los errores ya quedaron programados para repaso."
     )
 elif not is_passed:
-    st.error("🚨 RESULTADO: NO SUPERADO (Módulo Funcional por debajo del 70%). Según el protocolo de la CNSC, esta prueba es eliminatoria.")
+    st.error(
+        "Meta de práctica pendiente: el desempeño funcional quedó por debajo "
+        f"del {PRACTICE_FUNCTIONAL_TARGET:.0f}%. Esta etiqueta es de entrenamiento "
+        "y no constituye un resultado oficial de la CNSC."
+    )
 else:
-    st.success("🎉 RESULTADO: SUPERADO. Has cumplido con el umbral mínimo del módulo funcional.")
+    st.success(
+        "Meta de práctica alcanzada en el componente funcional. "
+        "Este resultado sirve para orientar el estudio y no equivale a una calificación oficial."
+    )
 
 # Metric Cards
 col1, col2, col3, col4 = st.columns(4)
@@ -173,7 +210,7 @@ with col1:
     if is_daily_session:
         metric_card("Precisión de hoy", f"{daily_precision:.0f}%", f"{correct}/{total} correctas")
     else:
-        metric_card("Puntaje Ponderado", f"{total_weighted:.1f}/100", f"Funcional: {f_pct:.0f}%")
+        metric_card("Índice de práctica", f"{total_weighted:.1f}/100", f"Funcional: {f_pct:.0f}%")
 with col2:
     metric_card("Puntos Ganados", f"+{data.get('points_earned', 0)}", "¡Buen trabajo!")
 with col3:
@@ -183,7 +220,10 @@ with col4:
         duration_minutes = max(1, round(int(data.get("duration_seconds", 0)) / 60))
         metric_card("Tiempo activo", f"{duration_minutes} min", "Plan completado")
     else:
-        metric_card("Módulo Funcional", "ELIMINATORIO", "Aprobado" if is_passed else "Reprobado")
+        metric_card("Meta funcional", f"{PRACTICE_FUNCTIONAL_TARGET:.0f}%", "Cumplida" if is_passed else "Por reforzar")
+
+if not is_daily_session:
+    st.caption(PRACTICE_SCORING_DISCLOSURE)
 
 
 st.divider()
@@ -215,11 +255,22 @@ st.subheader("🎯 Prioridades de refuerzo")
 user_id = st.session_state.get("user_id")
 if user_id:
     scope_db = SessionLocal()
-    active_competition_id = get_active_competition_id(scope_db, user_id)
-    scope_db.close()
+    try:
+        active_competition_id = get_active_competition_id(scope_db, user_id)
+        active_opec = scope_db.query(UserOPEC).filter_by(
+            user_id=user_id, is_active=True
+        ).first()
+        scoped_questions = _training_questions(
+            scope_db, user_id, active_competition_id, active_opec
+        )
+        scoped_question_ids = {item.question_id for item in scoped_questions}
+        scoped_topics = {item.topic for item in scoped_questions if item.topic}
+    finally:
+        scope_db.close()
     weak_skills = StatsService.get_weakest_topics(
-        user_id, limit=3, competition_id=active_competition_id
+        user_id, limit=20, competition_id=active_competition_id
     )
+    weak_skills = [item for item in weak_skills if item.topic in scoped_topics][:3]
     
     if weak_skills:
         c_radar, c_recommend = st.columns([1, 1])
@@ -238,12 +289,18 @@ if user_id:
             try:
                 # Find a reference from the bank for this topic
                 db_ref = SessionLocal()
-                topic_refs = db_ref.query(Question).filter(
-                    Question.competition_id == active_competition_id,
-                    Question.topic == top_weak.topic,
-                    Question.source_refs != None,
-                ).all()
-                ref_q = next((item for item in topic_refs if is_safe_for_active_study(item)), None)
+                active_opec = db_ref.query(UserOPEC).filter_by(
+                    user_id=user_id, is_active=True
+                ).first()
+                ref_q = next(
+                    (
+                        item for item in _training_questions(
+                            db_ref, user_id, active_competition_id, active_opec
+                        )
+                        if item.topic == top_weak.topic and item.source_refs
+                    ),
+                    None,
+                )
                 if ref_q and ref_q.source_refs:
                     st.markdown(f"> **📖 Lectura prioritaria:**  \n*{ref_q.source_refs}*")
                 else:
@@ -272,8 +329,22 @@ q_ids = data["q_ids"]
 answers = st.session_state.get("answers", {})
 
 details = []
+active_opec = db.query(UserOPEC).filter_by(
+    user_id=st.session_state.get("user_id"), is_active=True
+).first()
+eligible_detail_ids = {
+    item.question_id
+    for item in _training_questions(
+        db,
+        st.session_state.get("user_id"),
+        data.get("competition_id"),
+        active_opec,
+    )
+}
 for qid in q_ids:
     q = db.query(Question).get(qid)
+    if q is None or q.question_id not in eligible_detail_ids:
+        continue
     details.append({
         "stem": q.stem,
         "user_ans": answers.get(qid, "N/A"),
@@ -297,11 +368,12 @@ if st.session_state.get("show_resultados_detalle", False):
             pdf_bytes = generate_exam_pdf(data, details)
             st.download_button("💾 Reporte PDF", data=pdf_bytes, file_name=f"Resultado_DIAN_{datetime.datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as e:
-            st.error(f"Error PDF: {e}")
+            log_ui_exception("results.pdf.generate", e)
+            st.error("No fue posible generar el reporte PDF.")
     with col_b3:
         if is_daily_session:
             st.button("📚 Aprendizaje guardado", disabled=True, use_container_width=True)
-        elif total_weighted >= 70:
+        elif total_weighted >= PRACTICE_FUNCTIONAL_TARGET:
             user_name = st.session_state.get("username", "Aspirante")
             from db.models import UserOPEC
             db_o = SessionLocal()
@@ -320,15 +392,20 @@ if st.session_state.get("show_resultados_detalle", False):
                 help="Documento personal de seguimiento; no es un certificado oficial de la DIAN ni de la CNSC.",
             )
         else:
-            st.button("🎯 Meta: 70%", disabled=True, use_container_width=True, help="Supera el 70% ponderado para generar una constancia personal de práctica.")
+            st.button(
+                f"🎯 Meta interna: {PRACTICE_FUNCTIONAL_TARGET:.0f}%",
+                disabled=True,
+                use_container_width=True,
+                help="Alcanza la meta del índice interno para generar una constancia personal de práctica; no es una certificación oficial.",
+            )
 else:
     st.caption("Detalle desactivado para foco de estudio. Pulsa el botón para repasar pregunta por pregunta.")
 
 st.divider()
 
 if not is_passed and not is_daily_session:
-    st.warning("🚨 El reporte PDF se generó, pero recuerda que no superaste el módulo eliminatorio Funcional.")
-    st.info("💡 Te recomendamos generar un nuevo simulacro enfocado específicamente en tus debilidades del Eje Funcional.")
+    st.warning("El reporte PDF se generó, pero la meta interna del componente funcional quedó pendiente.")
+    st.info("Te recomendamos una nueva práctica enfocada en las debilidades funcionales detectadas.")
 elif st.session_state.get("show_resultados_detalle", False):
     st.subheader("📝 Detalle de respuestas")
 

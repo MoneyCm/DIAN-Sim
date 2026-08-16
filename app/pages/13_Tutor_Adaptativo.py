@@ -16,7 +16,9 @@ from core.auth import AuthManager
 from core.competitions import get_active_competition
 from core.learning.session_service import LearningSessionService
 from core.learning.tutor import TutorService
-from db.models import LearningAttempt, Question
+from core.socratic_tutor import local_socratic_hint
+from core.source_evidence import has_precise_source_verification
+from db.models import Question
 from db.session import SessionLocal
 from ui_utils import load_css, render_header
 
@@ -76,6 +78,34 @@ else:
         else:
             st.error("Incorrecta")
         st.write(feedback["feedback"])
+        socratic_hint = feedback.get("socratic_hint")
+        if socratic_hint:
+            st.info(socratic_hint)
+        rule = feedback.get("rule")
+        if rule:
+            st.markdown(f"**Regla registrada:** {rule}")
+        st.caption(
+            "Excepción normativa: no se inventa. Si la ficha editorial no registra una "
+            "excepción sustentada, contrástala en la fuente antes de asumirla."
+        )
+        if feedback.get("source_url"):
+            st.markdown(
+                f"**Fuente verificada:** [{feedback['source_locator']}]"
+                f"({feedback['source_url']})"
+            )
+        else:
+            st.caption(
+                "Fuente declarada pendiente de evidencia editorial precisa; la explicación "
+                "se muestra como orientación de práctica."
+            )
+        st.caption(
+            "Origen de la explicación: "
+            + (
+                "IA opcional apoyada en la justificación registrada."
+                if feedback.get("origin") == "ai_guidance_grounded_in_registered_rationale"
+                else "motor local determinista; no requiere clave de IA."
+            )
+        )
         st.caption(
             f"Dominio del tema: {feedback['mastery']:.1f}% · "
             f"Próximo repaso: {feedback['next_review']}"
@@ -100,12 +130,20 @@ else:
                 ["low", "medium", "high"],
                 format_func={"low": "Baja", "medium": "Media", "high": "Alta"}.get,
                 horizontal=True,
-                index=1,
+                index=None,
+            )
+            reasoning = st.text_area(
+                "Explica brevemente por qué elegiste esa opción",
+                help="Tu razonamiento permite detectar el concepto exacto detrás de un error.",
             )
             submitted = st.form_submit_button("Responder", type="primary", use_container_width=True)
         if submitted:
             if answer is None:
                 st.warning("Selecciona una opción.")
+            elif confidence is None:
+                st.warning("Indica qué tan seguro estás antes de responder.")
+            elif len(reasoning.strip()) < 10:
+                st.warning("Explica tu razonamiento en al menos una frase breve.")
             else:
                 elapsed = int(time.monotonic() - st.session_state.get(
                     "adaptive_question_started", time.monotonic()
@@ -117,8 +155,10 @@ else:
                     answer=answer,
                     confidence=confidence,
                     response_time_seconds=max(elapsed, 0),
+                    user_reasoning=reasoning,
                 )
-                evaluation = TutorService(ModelRouter(db_factory=SessionLocal)).explain(
+                tutor = TutorService(ModelRouter(db_factory=SessionLocal))
+                evaluation = tutor.explain(
                     stem=question.stem,
                     answer=question.options[answer],
                     deterministic=outcome.evaluation,
@@ -126,11 +166,37 @@ else:
                     confidence=confidence,
                     user_id=user_id,
                 )
+                source_verification = (
+                    (question_row.quality_report or {}).get("source_verification")
+                    if question_row and isinstance(question_row.quality_report, dict)
+                    else {}
+                ) or {}
+                precise_source = bool(
+                    question_row and has_precise_source_verification(question_row)
+                )
                 st.session_state["adaptive_feedback"] = {
                     "result": evaluation.result.value,
                     "feedback": evaluation.feedback,
                     "mastery": outcome.mastery_score,
                     "next_review": outcome.next_review_at.strftime("%d/%m/%Y %H:%M"),
+                    "origin": tutor.last_origin,
+                    "rule": question_row.rationale or outcome.evaluation.feedback,
+                    "socratic_hint": local_socratic_hint(
+                        topic=question.topic,
+                        selected_text=question.options[answer],
+                        source=(
+                            f"{source_verification.get('locator')} · "
+                            f"{source_verification.get('url')}"
+                            if precise_source
+                            else ""
+                        ),
+                    ),
+                    "source_url": (
+                        source_verification.get("url") if precise_source else None
+                    ),
+                    "source_locator": (
+                        source_verification.get("locator") if precise_source else None
+                    ),
                 }
                 st.rerun()
     else:
@@ -168,16 +234,11 @@ with st.expander("Ver progreso", expanded=current is None):
         with topic_tab:
             st.dataframe(table, hide_index=True, use_container_width=True)
         with evolution_tab:
-            recent_query = db.query(LearningAttempt).join(Question).filter(
-                LearningAttempt.user_id == user_id
-            )
-            if competition_id is not None:
-                recent_query = recent_query.filter(Question.competition_id == competition_id)
-            recent = recent_query.order_by(LearningAttempt.created_at.desc()).limit(30).all()
+            recent = service.recent_evolution(user_id, competition_id, limit=30)
             if recent:
                 evolution = pd.DataFrame([
-                    {"Fecha": row.created_at, "Puntaje": row.score * 100}
-                    for row in reversed(recent)
+                    {"Fecha": row["created_at"], "Puntaje": row["score"]}
+                    for row in recent
                 ])
                 st.line_chart(evolution, x="Fecha", y="Puntaje")
             else:

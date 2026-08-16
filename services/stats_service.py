@@ -62,7 +62,7 @@ class StatsService:
             db.commit()
             return True
         except Exception as e:
-            print(f"Error recording attempt: {e}")
+            print(f"Error recording attempt: {type(e).__name__}")
             db.rollback()
             return False
         finally:
@@ -108,14 +108,20 @@ class StatsService:
                 # v5.6 Retry on any OperationalError (Postgres timeout, SQLite lock, etc)
                 if attempt < retries - 1:
                     wait = 2 * (attempt + 1) # Linear backoff 2, 4, 6...
-                    print(f"DB Busy/Error (Attempt {attempt+1}/{retries}): {e}")
+                    print(
+                        f"DB Busy/Error (Attempt {attempt+1}/{retries}): "
+                        f"{type(e).__name__}"
+                    )
                     time.sleep(wait) 
                     continue
                 else:
-                    print(f"DB Error getting smart mix after {retries} retries: {e}")
+                    print(
+                        f"DB Error getting smart mix after {retries} retries: "
+                        f"{type(e).__name__}"
+                    )
                     return [] # Fail gracefully
             except Exception as e:
-                print(f"Error getting smart mix: {e}")
+                print(f"Error getting smart mix: {type(e).__name__}")
                 return []
             finally:
                 if db: db.close()

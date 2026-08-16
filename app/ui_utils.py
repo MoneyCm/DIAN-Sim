@@ -1,6 +1,18 @@
 import streamlit as st
 import os
 import html
+import sys
+
+
+def log_ui_exception(context: str, exc: BaseException) -> None:
+    """Registra un fallo de UI sin exponer mensajes, consultas ni secretos."""
+    safe_context = "".join(
+        char for char in str(context) if char.isalnum() or char in " ._:-"
+    ).strip()[:100]
+    print(
+        f"[ui-error] {safe_context or 'unknown-context'}: {type(exc).__name__}",
+        file=sys.stderr,
+    )
 
 def escape_html(value) -> str:
     """Escapa contenido no confiable antes de insertarlo en HTML."""
@@ -66,8 +78,9 @@ def render_header(title: str = None, subtitle: str = None):
                 )
             else:
                 st.markdown("<h1 style='color: var(--dian-red); font-size: 2.2rem; margin:0;'>DIAN Sim</h1>", unsafe_allow_html=True)
-        except Exception as e:
-            st.markdown(f"🇨🇴 **DIAN Sim** ({e})")
+        except Exception as exc:
+            log_ui_exception("header.logo", exc)
+            st.markdown("🇨🇴 **DIAN Sim**")
             
     with col_text:
         if title:
@@ -208,10 +221,11 @@ def render_custom_sidebar():
 
         st.sidebar.caption("Tu avance")
         
-    except Exception as e:
+    except Exception as exc:
         # No capturar RerunException mikey v7.7
-        if "RerunException" not in str(type(e)):
-            st.sidebar.error(f"⚠️ Sidebar Error: {e}")
+        if "RerunException" not in str(type(exc)):
+            log_ui_exception("sidebar.progress", exc)
+            st.sidebar.error("⚠️ No fue posible cargar tu avance en este momento.")
     return stats_s, rank
 def get_db_info():
     """Retorna información del estado de la base de datos. Mikey"""
@@ -223,8 +237,9 @@ def get_db_info():
         db.close()
         db_type = "Cloud (Supabase)" if "postgres" in DATABASE_URL.lower() else "Local (SQLite)"
         return count, db_type
-    except Exception as e:
-        return 0, f"Error: {e}"
+    except Exception as exc:
+        log_ui_exception("database.summary", exc)
+        return 0, "No disponible"
 
 def render_favorite_button(question_id: str, user_id: int):
     """Renderiza un botón para marcar/desmarcar favoritas. Mikey"""
@@ -253,8 +268,9 @@ def render_favorite_button(question_id: str, user_id: int):
             db.commit()
             st.rerun()
             
-    except Exception as e:
-        st.error(f"Error al guardar favorito: {e}")
+    except Exception as exc:
+        log_ui_exception("favorite.save", exc)
+        st.error("No fue posible guardar el favorito. Intenta nuevamente.")
     finally:
         db.close()
 
@@ -269,7 +285,7 @@ def render_paywall_card(feature_name: str = "esta función"):
         </p>
         <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; display: inline-block; text-align: left; margin-bottom: 25px; border-left: 4px solid #FFD700;">
             <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">✨ <b>IA Ilimitada:</b> Genera miles de preguntas de cualquier ley.</div>
-            <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">🎯 <b>Simulacros Reales:</b> Entrena con el tiempo y presión real (100 Qs).</div>
+            <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">🎯 <b>Práctica PJS cronometrada:</b> Entrena con parámetros editables; la cantidad y la duración oficiales siguen pendientes.</div>
             <div style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">🧠 <b>Banco de Errores:</b> La app aprende de tus fallos para que no los repitas.</div>
             <div style="color: #e2e8f0; font-size: 1rem;">📊 <b>Rendimiento Pro:</b> Analiza tus debilidades por cada tema técnico.</div>
         </div>

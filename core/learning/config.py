@@ -1,4 +1,4 @@
-"""Pesos explícitos y centralizados del motor adaptativo."""
+"""Pesos internos y editables del motor adaptativo; no son ponderaciones CNSC."""
 
 from dataclasses import dataclass
 

@@ -38,7 +38,15 @@ try:
         st.stop()
 
     competition = db.get(Competition, active_opec.competition_id)
-    readiness = inspect_competition(db, active_opec.competition_id) if competition else None
+    readiness = (
+        inspect_competition(
+            db,
+            active_opec.competition_id,
+            opec_number=active_opec.opec_number,
+        )
+        if competition
+        else None
+    )
 
     with st.container(border=True):
         st.caption("CARGO ACTIVO PARA ESTUDIAR")
@@ -47,7 +55,7 @@ try:
         if readiness:
             col_questions, col_cases, col_pending = st.columns(3)
             col_questions.metric("Habilitadas", readiness.enabled_question_count)
-            col_cases.metric("Casos tipo examen", readiness.official_case_count)
+            col_cases.metric("Casos PJS revisados", readiness.reviewed_practice_case_count)
             col_pending.metric("Pendientes", readiness.pending_review_count)
         st.page_link("pages/14_Mis_OPEC.py", label="Cambiar OPEC activa", icon="🎯")
 

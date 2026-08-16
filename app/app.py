@@ -16,7 +16,13 @@ for import_path in (APP_DIR, PROJECT_ROOT):
 # from db.session import SessionLocal
 # from db.models import User, UserOPEC...
 try:
-    from ui_utils import load_css, render_header, metric_card, render_custom_sidebar
+    from ui_utils import (
+        load_css,
+        log_ui_exception,
+        metric_card,
+        render_custom_sidebar,
+        render_header,
+    )
 except ImportError:
     from app.ui_utils import load_css, render_header, metric_card, render_custom_sidebar
 from core import auth as auth_module
@@ -30,16 +36,21 @@ from core.access_control import is_admin
 from core.rank_system import get_rank_info
 
 st.set_page_config(
-    page_title="DIAN Sim - Simulador Oficial",
+    page_title="DIAN Sim · Preparación para concursos",
     page_icon="🇨🇴",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 
 @st.cache_resource(show_spinner=False)
 def prepare_runtime_catalog() -> None:
-    """Do deployment maintenance once per server process, not once per visit."""
+    """Run only lightweight catalog maintenance once per server process.
+
+    Large question-bank seeds are deployment/admin operations. Running them on
+    a mobile user's first request made cold starts slower and mixed data
+    maintenance with authentication.
+    """
     try:
         from core.curated_opec_bootstrap import run_if_enabled as bootstrap_curated_opec
 
@@ -47,13 +58,15 @@ def prepare_runtime_catalog() -> None:
         if bootstrap_result:
             print(f"[OPEC] Banco curado sincronizado: {bootstrap_result}")
     except Exception as bootstrap_error:
-        print(f"[OPEC] Error al sincronizar banco curado: {bootstrap_error}")
+        print(
+            f"[OPEC] Error al sincronizar banco curado: {type(bootstrap_error).__name__}",
+            file=sys.stderr,
+        )
 
     try:
         from db.session import SessionLocal
         from core.competitions import ensure_builtin_competitions
         from core.competition_catalog import sync_catalog_competitions
-        from core.curated_opec_bootstrap import ensure_opec242699_bank
 
         catalog_db = SessionLocal()
         try:
@@ -61,14 +74,20 @@ def prepare_runtime_catalog() -> None:
             sync_catalog_competitions(catalog_db)
         finally:
             catalog_db.close()
-        prepared_bank = ensure_opec242699_bank()
-        if prepared_bank:
-            print(f"[OPEC] Banco inicial 242699 sincronizado: {prepared_bank}")
+        if os.getenv("AUTO_SEED_OPEC_BANKS", "").strip().lower() in {
+            "1", "true", "yes"
+        }:
+            from core.curated_opec_bootstrap import ensure_opec242699_bank
+
+            prepared_bank = ensure_opec242699_bank()
+            if prepared_bank:
+                print(f"[OPEC] Banco inicial 242699 sincronizado: {prepared_bank}")
     except Exception as catalog_error:
-        print(f"[CATALOGO] Error al sincronizar concursos: {catalog_error}")
+        print(
+            f"[CATALOGO] Error al sincronizar concursos: {type(catalog_error).__name__}",
+            file=sys.stderr,
+        )
 
-
-prepare_runtime_catalog()
 
 # --- FASE 3: LOGIN SYSTEM ---
 # --- ANTI-BUG CLOUD: Limpiar modelos obsoletos de la sesión ---
@@ -126,16 +145,18 @@ def login_view():
                         st.rerun() # Refresh app to switch st.navigation mode
                     else:
                         st.error("Usuario o contraseña incorrectos")
-                except Exception as e:
-                    import traceback
+                except Exception as exc:
                     st.error(f"❌ Error de Sistema: Consulta los Logs para más detalle.")
-                    print(f"🔥 FULL ERROR TRACEBACK:\n{traceback.format_exc()}")
+                    log_ui_exception("login.password", exc)
                     # Intentar re-configurar mapeos si falló algo
                     try:
                         from sqlalchemy.orm import configure_mappers
                         configure_mappers()
                     except Exception as ce:
-                        print(f"🔥 Mapper Configuration Error: {ce}")
+                        print(
+                            f"🔥 Mapper Configuration Error: {type(ce).__name__}",
+                            file=sys.stderr,
+                        )
 
         st.markdown("---")
         # Integración NATIVA Google OAuth mikey v3.0 (Streamlit 1.42+)
@@ -161,9 +182,10 @@ def login_view():
                 with st.expander("ℹ️ ¿Cómo activar el login con Google?"):
                     st.info("Para activar esta función, debes configurar los 'Secrets' en Streamlit Cloud.")
                     st.code("[auth]\nredirect_uri = \"...\"\ncookie_secret = \"...\"\n\n[auth.google]\nclient_id = \"...\"\nclient_secret = \"...\"", language="toml")
-        except Exception as e:
+        except Exception as exc:
             # Evitamos colapsar la app entera si falla esta sección visual
-            st.error(f"Aviso Login Nativo: {e}")
+            log_ui_exception("login.google", exc)
+            st.error("El acceso con Google no está disponible en este momento.")
 
     with col_l2:
         st.subheader("📝 Registrarse")
@@ -220,6 +242,7 @@ p_config = st.Page("pages/15_Centro_OPEC.py", title="Configuración OPEC", icon=
 p_opec_tools = st.Page("pages/7_Configuracion_OPEC.py", title="Herramientas OPEC", icon="🧰")
 p_study_plan = st.Page("pages/11_Plan_Estudio.py", title="Mi plan de hoy", icon="🗓️")
 p_study_map = st.Page("pages/12_Mapa_Estudio.py", title="Mapa de estudio", icon="🗺️")
+p_study_library = st.Page("pages/16_Biblioteca_Estudio.py", title="Qué debo estudiar", icon="📖")
 p_adaptive_tutor = st.Page("pages/13_Tutor_Adaptativo.py", title="Tutor adaptativo", icon="🧭")
 p_logout = st.Page("pages/99_Logout.py", title="Cerrar Sesión", icon="🚪")
 
@@ -228,7 +251,7 @@ p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Practicar ahora", ico
 # La ejecución se abre desde una práctica iniciada; no necesita ocupar un
 # puesto permanente en el menú principal.
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
-p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro tipo examen", icon="⏱️")
+p_sim_real = st.Page("pages/Simulacro_Real.py", title="Práctica PJS cronometrada", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Mi progreso", icon="📈")
 
@@ -254,9 +277,12 @@ learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])
 # registered in navigation. These stay registered for contextual actions,
 # while CSS keeps them out of the learner sidebar.
 secondary_learner_pages = [
-    p_ejecucion, p_study_plan, p_adaptive_tutor, p_sim_real, p_repaso, p_study_map, p_etica,
+    p_ejecucion, p_study_plan, p_adaptive_tutor, p_sim_real, p_repaso,
+    p_study_map, p_study_library, p_etica,
 ]
-registered_learner_pages = learner_pages + secondary_learner_pages
+learner_configuration_pages = [p_config, p_opec_tools]
+registered_learner_pages = learner_pages + secondary_learner_pages + learner_configuration_pages
+admin_study_pages = learner_pages + secondary_learner_pages
 
 # Determinar Navegación Activa (Condicional)
 if not AuthManager.check_auth():
@@ -265,6 +291,7 @@ if not AuthManager.check_auth():
     pg = st.navigation([p_main_login])
 else:
     # Modo logueado: Montar la app entera y sus funciones
+    prepare_runtime_catalog()
     # Inject Global CSS and render visual wrappers before page execution
     load_css()
     # Restaurar la info de Gamificación en la barra lateral del usuario v9.1
@@ -275,7 +302,7 @@ else:
         
     if is_admin():
         pages = {
-            "Estudiar": registered_learner_pages,
+            "Estudiar": admin_study_pages,
             "Herramientas de administración": [
                 p_config, p_opec_tools, p_banco, p_admin, p_ia,
             ],
@@ -285,7 +312,12 @@ else:
         # plus account actions. Secondary study tools live in Inicio.
         pages = registered_learner_pages
     if st.session_state.get("opec_onboarding"):
-        pg = st.navigation({"Primeros pasos": [p_config]})
+        # Centro OPEC links to these destinations. Streamlit requires every
+        # page-link target to be registered even when CSS keeps it secondary.
+        onboarding_pages = [p_config, p_opec_tools]
+        if p_mis_opec is not None:
+            onboarding_pages.append(p_mis_opec)
+        pg = st.navigation({"Primeros pasos": onboarding_pages})
     else:
         pg = st.navigation(pages)
 

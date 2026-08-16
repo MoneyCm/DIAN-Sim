@@ -5,9 +5,49 @@ import uuid
 
 from core.rank_system import get_rank_info
 
+PRACTICE_TRACK_WEIGHTS = {
+    "FUNCIONAL": 60,
+    "COMPORTAMENTAL": 20,
+    "INTEGRIDAD": 20,
+}
+PRACTICE_FUNCTIONAL_TARGET = 70.0
+PRACTICE_SCORING_STATUS = "provisional_editable_not_official_exam_weighting"
+PRACTICE_SCORING_DISCLOSURE = (
+    "Índice interno de entrenamiento con pesos editables 60/20/20. "
+    "No equivale a la calificación oficial del concurso ni asigna una "
+    "ponderación a la OPEC 236769 sin confirmar primero su modalidad en SIMO."
+)
+
+
+def calculate_practice_index(eje_breakdown: dict | None) -> tuple[float, bool]:
+    """Return the internal training index and functional practice-goal state.
+
+    This deliberately does not model an official competition score. DIAN 2676
+    publishes different weights by modality and employment characteristics,
+    while the modality of an individual OPEC must come from SIMO evidence.
+    """
+    breakdown = eje_breakdown or {}
+    total_weighted = 0.0
+    for track, weight in PRACTICE_TRACK_WEIGHTS.items():
+        correct, total = breakdown.get(track, (0, 0))
+        if total > 0:
+            total_weighted += correct / total * weight
+
+    functional_correct, functional_total = breakdown.get("FUNCIONAL", (0, 0))
+    meets_functional_goal = (
+        functional_correct / functional_total * 100 >= PRACTICE_FUNCTIONAL_TARGET
+        if functional_total > 0
+        else True
+    )
+    return total_weighted, meets_functional_goal
+
+
 def update_user_stats(db: Session, last_session_date: datetime.date, correct_count: int, total_questions: int, eje_breakdown: dict = None, user_id: int = None):
     """
-    Actualiza puntos y rachas del usuario aplicando pesos GOA.
+    Actualiza puntos y rachas con un índice interno de práctica.
+
+    Los pesos de gamificación son provisionales y editables; no son los pesos
+    oficiales de una OPEC ni se atribuyen a una GOA aún no publicada.
     """
     if not user_id: return None
     
@@ -36,33 +76,15 @@ def update_user_stats(db: Session, last_session_date: datetime.date, correct_cou
     if stats.current_streak > stats.max_streak:
         stats.max_streak = stats.current_streak
 
-    # Ponderación GOA 2667
-    # Si no hay desglose, asumimos proporcionalidad simple
+    # Índice interno de práctica. Si no hay desglose, usamos precisión simple.
     if not eje_breakdown:
-        # Fallback para sesiones mixtas sin tags precisos
+        # Fallback para sesiones mixtas sin etiquetas precisas.
         score_percentage = (correct_count / total_questions) * 100 if total_questions > 0 else 0
-        is_passed = score_percentage >= 70
+        is_passed = score_percentage >= PRACTICE_FUNCTIONAL_TARGET
         session_points = correct_count * 10 
     else:
-        # Cálculo Realista por Pesos
-        # eje_breakdown = {"FUNCIONAL": (correct, total), ...}
-        total_weighted = 0.0
-        
-        # Funcional (60%)
-        f_c, f_t = eje_breakdown.get("FUNCIONAL", (0, 0))
-        f_score = (f_c / f_t * 60) if f_t > 0 else 0
-        is_passed = (f_c / f_t * 100 >= 70) if f_t > 0 else True # Eliminatorio
-        
-        # Comportamental (20%)
-        c_c, c_t = eje_breakdown.get("COMPORTAMENTAL", (0, 0))
-        c_score = (c_c / c_t * 20) if c_t > 0 else 0
-        
-        # Integridad (20%)
-        i_c, i_t = eje_breakdown.get("INTEGRIDAD", (0, 0))
-        i_score = (i_c / i_t * 20) if i_t > 0 else 0
-        
-        total_weighted = f_score + c_score + i_score
-        session_points = int(total_weighted * 2) # Factor de puntos ajustable
+        total_weighted, is_passed = calculate_practice_index(eje_breakdown)
+        session_points = int(total_weighted * 2)  # Factor interno ajustable.
 
     if stats.current_streak > 1:
         session_points += (stats.current_streak * 5)

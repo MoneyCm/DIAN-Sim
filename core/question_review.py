@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
+from core.source_evidence import precise_source_verification_error
+from core.question_quality import audit_question_structure
+
 
 REINFORCEMENT_REVIEW = "reinforcement_candidate"
 PROGRESSIVE_OPEC_REVIEW = "progressive_opec_local"
@@ -13,6 +16,109 @@ QUALITY_ALL = "Todas"
 QUALITY_VERIFIED = "Solo verificadas ✅"
 QUALITY_PENDING = "Pendientes generales ⏳"
 QUALITY_REINFORCEMENTS = "Refuerzos por revisar 🧪"
+EDITORIAL_CONTRACT_VERSION = "pjs-editorial-v2"
+COGNITIVE_LEVELS = frozenset({
+    "recognition",
+    "application",
+    "analysis",
+    "judgment",
+    "transfer",
+})
+
+
+def editorial_metadata_error(question) -> Optional[str]:
+    report = getattr(question, "quality_report", None)
+    metadata = report.get("editorial_metadata") if isinstance(report, dict) else None
+    if not isinstance(metadata, dict):
+        return "Falta la ficha editorial individual de la pregunta."
+    if not str(metadata.get("subtopic", "")).strip():
+        return "Falta registrar el subtema."
+    if str(metadata.get("cognitive_level", "")).strip() not in COGNITIVE_LEVELS:
+        return "Falta un nivel cognitivo válido."
+    try:
+        function_number = int(metadata.get("function_number"))
+    except (TypeError, ValueError):
+        return "Falta vincular la función de la OPEC."
+    if function_number < 1:
+        return "La función vinculada no es válida."
+    try:
+        difficulty = int(report.get("editorial_difficulty_1_10"))
+    except (TypeError, ValueError):
+        return "Falta la dificultad editorial de 1 a 10."
+    if not 1 <= difficulty <= 10:
+        return "La dificultad editorial debe estar entre 1 y 10."
+
+    question_type = str(getattr(question, "question_type", "") or "").upper()
+    track = str(getattr(question, "track", "") or "").upper()
+    if question_type == "LIKERT" or track in {"COMPORTAMENTAL", "INTEGRIDAD"}:
+        return None
+    options = getattr(question, "options_json", None) or {}
+    correct = getattr(question, "correct_key", None)
+    explanations = metadata.get("distractor_explanations")
+    if not isinstance(explanations, dict):
+        return "Falta explicar por qué los distractores no son la mejor respuesta."
+    for key in options:
+        if key == correct:
+            continue
+        if len(str(explanations.get(key, "")).strip()) < 10:
+            return f"Falta explicar el distractor {key}."
+    return None
+
+
+def record_editorial_verification(
+    question,
+    *,
+    source_status: str,
+    source_url: str,
+    source_locator: str,
+    supporting_excerpt: str,
+    verified_on: str,
+    verified_by: str,
+    subtopic: str,
+    cognitive_level: str,
+    function_number: int,
+    editorial_difficulty: int,
+    distractor_explanations: dict | None = None,
+) -> None:
+    """Persist the human normative/editorial evidence needed before approval."""
+
+    try:
+        date.fromisoformat(str(verified_on))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("La fecha de verificación debe usar formato AAAA-MM-DD.") from exc
+    if cognitive_level not in COGNITIVE_LEVELS:
+        raise ValueError("El nivel cognitivo no es válido.")
+    if not 1 <= int(editorial_difficulty) <= 10:
+        raise ValueError("La dificultad editorial debe estar entre 1 y 10.")
+    if int(function_number) < 1:
+        raise ValueError("La función de la OPEC no es válida.")
+
+    original_report = getattr(question, "quality_report", None)
+    report = dict(original_report or {})
+    report["source_verification"] = {
+        "status": str(source_status or "").strip(),
+        "url": str(source_url or "").strip(),
+        "locator": str(source_locator or "").strip(),
+        "supporting_excerpt": str(supporting_excerpt or "").strip(),
+        "verified_on": str(verified_on),
+        "verified_by": str(verified_by or "").strip(),
+    }
+    report["editorial_metadata"] = {
+        "contract_version": EDITORIAL_CONTRACT_VERSION,
+        "subtopic": str(subtopic or "").strip(),
+        "cognitive_level": cognitive_level,
+        "function_number": int(function_number),
+        "distractor_explanations": {
+            str(key): str(value or "").strip()
+            for key, value in (distractor_explanations or {}).items()
+        },
+    }
+    report["editorial_difficulty_1_10"] = int(editorial_difficulty)
+    question.quality_report = report
+    error = precise_source_verification_error(question) or editorial_metadata_error(question)
+    if error:
+        question.quality_report = original_report
+        raise ValueError(error)
 
 
 def is_reinforcement_candidate(question) -> bool:
@@ -78,12 +184,35 @@ def candidate_validation_error(question) -> Optional[str]:
     if not str(getattr(question, "stem", "") or "").strip():
         return "Falta el enunciado."
     options = getattr(question, "options_json", None)
-    if not isinstance(options, dict) or tuple(options.keys()) != ("A", "B", "C"):
-        return "Debe tener exactamente tres opciones: A, B y C."
-    if getattr(question, "correct_key", None) not in options:
-        return "La respuesta correcta no corresponde a una opción válida."
+    question_type = str(getattr(question, "question_type", "") or "").upper()
+    track = str(getattr(question, "track", "") or "").upper()
+    is_likert = question_type == "LIKERT" or track in {"COMPORTAMENTAL", "INTEGRIDAD"}
+    if is_likert:
+        if not isinstance(options, dict) or len(options) != 4:
+            return "La afirmación Likert debe tener exactamente cuatro opciones de respuesta."
+        if getattr(question, "correct_key", None) not in (None, ""):
+            return "Una afirmación de autorreporte Likert no debe tener respuesta correcta."
+    else:
+        if not isinstance(options, dict) or tuple(options.keys()) != ("A", "B", "C"):
+            return "Debe tener exactamente tres opciones: A, B y C."
+        if getattr(question, "correct_key", None) not in options:
+            return "La respuesta correcta no corresponde a una opción válida."
     if not str(getattr(question, "rationale", "") or "").strip():
         return "Falta la justificación de la respuesta."
+    source_error = precise_source_verification_error(question)
+    if source_error:
+        return source_error
+    structural = audit_question_structure(question)
+    structural_errors = [
+        finding["message"]
+        for finding in structural["findings"]
+        if finding["severity"] == "error"
+    ]
+    if structural_errors:
+        return structural_errors[0]
+    metadata_error = editorial_metadata_error(question)
+    if metadata_error:
+        return metadata_error
     return None
 
 

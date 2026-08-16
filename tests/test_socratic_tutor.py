@@ -6,6 +6,7 @@ def test_local_hint_is_useful_without_revealing_correct_answer():
     assert "Arquitectura empresarial" in hint
     assert "Comprar de inmediato" in hint
     assert "respuesta correcta" not in hint.lower()
+    assert "fuente exacta debe verificarse" in hint.lower()
 
 
 def test_prompt_uses_active_context_and_forbids_answer_disclosure():

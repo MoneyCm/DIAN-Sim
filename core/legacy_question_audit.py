@@ -1,5 +1,8 @@
 """Conservative human audit decisions for the legacy OPEC 236769 bank."""
 
+from core.source_evidence import has_precise_source_verification
+from core.question_quality import audit_question_structure
+
 KEEP_PRACTICE = "KEEP_PRACTICE"
 REWRITE = "REWRITE"
 RETIRE = "RETIRE"
@@ -28,11 +31,20 @@ def legacy_audit_decision(topic: str) -> tuple[str, str]:
 
 
 def is_safe_for_active_study(question) -> bool:
-    """Allow only grounded situational questions or legacy items explicitly retained."""
+    """Allow only individually sourced, current and reviewed questions.
+
+    Historical review labels are preserved for auditability, but they no
+    longer activate content by themselves.  Every active item must carry the
+    exact official locator, supporting excerpt, verification date and reviewer.
+    """
     if not bool(getattr(question, "is_verified", False)):
         return False
     report = getattr(question, "quality_report", None)
     if not isinstance(report, dict):
+        return False
+    if not has_precise_source_verification(question):
+        return False
+    if audit_question_structure(question)["status"] != "PASS":
         return False
     if report.get("review") in {"human_source_grounded", "source_grounded"}:
         return True

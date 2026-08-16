@@ -1,18 +1,84 @@
 import json
-from sqlalchemy import or_, and_, func
+from sqlalchemy import inspect
 from sqlalchemy.orm import selectinload
 
-from db.models import CaseStudy, Question, UserOPEC
+from db.models import (
+    CaseStudy,
+    OpecProfile,
+    Question,
+    QuestionOpecScope,
+    UserOPEC,
+)
 from core.competitions import get_active_competition_id
 from core.legacy_question_audit import is_safe_for_active_study
+from core.question_opec_scope import question_matches_opec
+
+
+SUPPORTED_BANK_PARTITIONS = frozenset({"training", "measurement", "anchor", "reserved"})
+
+
+def _normalise_bank_partitions(bank_partitions):
+    values = tuple(dict.fromkeys(str(value).strip() for value in bank_partitions))
+    if not values or any(value not in SUPPORTED_BANK_PARTITIONS for value in values):
+        raise ValueError("Partición de banco no válida.")
+    return values
+
+
+def _explicit_opec_question_ids(
+    db,
+    competition_id,
+    opec_number,
+    *,
+    bank_partitions=("training",),
+):
+    """Return persisted scope IDs, or None while the additive schema is absent.
+
+    An existing canonical profile with zero question scopes deliberately
+    returns an empty set: its bank is not silently filled from text matching.
+    """
+    bank_partitions = _normalise_bank_partitions(bank_partitions)
+    # Inspect through the Session-owned connection.  Inspecting the Engine can
+    # open/close the same DBAPI connection used by SQLite ``:memory:`` and roll
+    # back an in-flight learning session.
+    inspector = inspect(db.connection())
+    required = {"opec_profiles", "question_opec_scopes"}
+    if not all(inspector.has_table(table) for table in required):
+        return None
+    profile = db.query(OpecProfile).filter_by(
+        competition_id=competition_id,
+        opec_number=str(opec_number),
+    ).first()
+    if profile is None:
+        return None
+    return {
+        row[0]
+        for row in db.query(QuestionOpecScope.question_id).filter(
+            QuestionOpecScope.opec_profile_id == profile.id,
+            QuestionOpecScope.bank_partition.in_(bank_partitions),
+        ).all()
+    }
 
 class QuestionService:
     @staticmethod
-    def get_questions_for_user(db, user_id, include_review=False, *, competition_id=None, user_opec=None):
+    def get_questions_for_user(
+        db,
+        user_id,
+        include_review=False,
+        *,
+        competition_id=None,
+        user_opec=None,
+        bank_partitions=("training",),
+    ):
         """
         Calcula las preguntas pertinentes para el usuario basándose en su OPEC activa.
         Utiliza un motor de keywords dinámico v48.1 Mikey.
         """
+        requested_partitions = _normalise_bank_partitions(bank_partitions)
+        # Reserved content is an editorial holdout. It is administered only
+        # through the opaque, role-gated partition service and is never a
+        # question-delivery partition for an aspirant session.
+        if "reserved" in requested_partitions:
+            return []
         if user_opec is None:
             user_opec = db.query(UserOPEC).filter_by(user_id=user_id, is_active=True).first()
         
@@ -31,14 +97,36 @@ class QuestionService:
         if not include_review:
             all_candidates = [q for q in all_candidates if is_safe_for_active_study(q)]
         
-        # Si no hay perfil, devolvemos todo (para Administradores o usuarios nuevos)
+        # Sin una OPEC activa no existe un alcance seguro. Devolver todo el
+        # concurso podría filtrar material de medición, anclaje o reserva.
         if not user_opec:
-            return all_candidates
+            return []
 
-        # Una competencia activa ya es el filtro más preciso. No excluir casos
-        # curados solo porque su tema no repite literalmente el número OPEC.
+        # Un concurso puede contener muchas OPEC. Competition_id evita mezclar
+        # concursos; este segundo filtro evita mezclar cargos dentro del mismo
+        # proceso. El material sin una OPEC demostrable queda fuera hasta que se
+        # clasifique de forma explícita.
         if competition_id is not None:
-            return all_candidates
+            explicit_ids = _explicit_opec_question_ids(
+                db,
+                competition_id,
+                user_opec.opec_number,
+                bank_partitions=requested_partitions,
+            )
+            if explicit_ids is not None:
+                return [
+                    question for question in all_candidates
+                    if question.question_id in explicit_ids
+                ]
+            # Legacy metadata has no trustworthy concept of measurement,
+            # anchor or reserved partitions.  Only training may use the
+            # conservative text/identifier fallback while Phase 1 is applied.
+            if requested_partitions != ("training",):
+                return []
+            return [
+                question for question in all_candidates
+                if question_matches_opec(question, user_opec.opec_number)
+            ]
 
         # 1. Extracción de Keywords de la OPEC
         functions = user_opec.functions if isinstance(user_opec.functions, list) else []
@@ -100,7 +188,7 @@ class QuestionService:
                     opts = q.options_json if isinstance(q.options_json, dict) else json.loads(q.options_json)
                     if len(opts) != 3:
                         continue
-                except:
+                except (TypeError, ValueError):
                     continue
 
             final_questions.append(q)

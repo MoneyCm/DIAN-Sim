@@ -8,9 +8,11 @@ from core.prompts.tutor.v1 import PROMPT_VERSION, build_feedback_prompt
 class TutorService:
     def __init__(self, router: ModelRouter):
         self.router = router
+        self.last_origin = "local_deterministic"
 
     def explain(self, *, stem: str, answer: str, deterministic: EvaluationResult,
                 rationale: str, confidence: str, user_id: int | None = None) -> EvaluationResult:
+        self.last_origin = "local_deterministic"
         if not self.router.available:
             return deterministic
         try:
@@ -29,6 +31,7 @@ class TutorService:
                 return deterministic
             enriched.score = deterministic.score
             enriched.needs_review = deterministic.needs_review
+            self.last_origin = "ai_guidance_grounded_in_registered_rationale"
             return enriched
         except AIUnavailable:
             return deterministic

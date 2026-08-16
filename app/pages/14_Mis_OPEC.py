@@ -17,7 +17,7 @@ from core.opec_lookup import attach_reusable_opec_to_user, find_reusable_opec
 from core.user_opec_management import OPECNotFoundForUser, activate_opec
 from db.models import Competition, UserOPEC
 from db.session import SessionLocal
-from ui_utils import load_css, render_header
+from ui_utils import load_css, log_ui_exception, render_header
 
 
 if not AuthManager.check_auth():
@@ -32,7 +32,7 @@ render_header(
 
 
 def readiness_label(readiness) -> tuple[str, str]:
-    if readiness.enabled_question_count >= 100 and readiness.official_case_count >= 10 and not readiness.pending_review_count:
+    if readiness.enabled_question_count >= 100 and readiness.reviewed_practice_case_count >= 10 and not readiness.pending_review_count:
         return "🟢 Lista para estudiar", "Banco y casos disponibles"
     if readiness.enabled_question_count:
         return "🟡 Base disponible", (
@@ -58,7 +58,15 @@ try:
     else:
         for opec in user_opecs:
             competition = db.get(Competition, opec.competition_id)
-            readiness = inspect_competition(db, opec.competition_id) if opec.competition_id else None
+            readiness = (
+                inspect_competition(
+                    db,
+                    opec.competition_id,
+                    opec_number=opec.opec_number,
+                )
+                if opec.competition_id
+                else None
+            )
             status, detail = readiness_label(readiness) if readiness else (
                 "⚪ Concurso pendiente", "La OPEC todavía no tiene concurso asociado."
             )
@@ -103,7 +111,7 @@ try:
         result = find_reusable_opec(db, number)
         if result is None:
             st.warning("Aún no hay una ficha preparada para esta OPEC. Puedes registrarla desde Configuración OPEC.")
-            st.page_link("pages/7_Configuracion_OPEC.py", label="Ir a Configuración OPEC")
+            st.page_link("pages/15_Centro_OPEC.py", label="Ir a Configuración OPEC")
         else:
             st.session_state["my_opec_search_result"] = result
 
@@ -124,9 +132,10 @@ try:
                 st.rerun()
             except Exception as exc:
                 db.rollback()
-                st.error(f"No se pudo vincular la OPEC: {exc}")
+                log_ui_exception("my_opec.attach", exc)
+                st.error("No se pudo vincular la OPEC. Intenta nuevamente.")
 
     st.caption("Para registrar una ficha nueva desde SIMO o ajustar sus datos, usa Configuración OPEC.")
-    st.page_link("pages/7_Configuracion_OPEC.py", label="Abrir Configuración OPEC")
+    st.page_link("pages/15_Centro_OPEC.py", label="Abrir Configuración OPEC")
 finally:
     db.close()

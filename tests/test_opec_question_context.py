@@ -16,7 +16,7 @@ def question(**values):
 def test_known_opec_case_maps_to_its_explicit_manual_function():
     item = question(case_id="goa-236769-denuncias-precritica-01")
 
-    assert function_number_for_question(item, "236769") == 2
+    assert function_number_for_question(item, "236769") == 1
 
 
 def test_source_function_marker_maps_and_displays_the_manual_text():

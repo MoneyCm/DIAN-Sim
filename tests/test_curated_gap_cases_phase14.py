@@ -2,9 +2,9 @@ from core.curated_gap_cases_phase14 import CURATED_GAP_CASES_PHASE14
 from core.exam_format import is_official_functional_payload
 
 
-def test_phase14_contains_three_complete_f4_f9_cases():
-    assert len(CURATED_GAP_CASES_PHASE14) == 3
-    assert sum(len(case["questions"]) for case in CURATED_GAP_CASES_PHASE14) == 9
+def test_phase14_contains_four_complete_f4_f9_cases():
+    assert len(CURATED_GAP_CASES_PHASE14) == 4
+    assert sum(len(case["questions"]) for case in CURATED_GAP_CASES_PHASE14) == 12
     for case in CURATED_GAP_CASES_PHASE14:
         payload = {
             "text": case["text"],

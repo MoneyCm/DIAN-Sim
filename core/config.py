@@ -43,7 +43,7 @@ def get_api_key(provider: str) -> str:
                 return decrypt_value(stored_value[len(ENCRYPTED_PREFIX):])
             return stored_value
     except Exception as e:
-        print(f"DB Config error: {e}")
+        print(f"DB Config error: {type(e).__name__}")
     finally:
         db.close()
         
@@ -75,7 +75,7 @@ def save_api_key_persistent(provider: str, value: str) -> bool:
         print(f"✅ API Key for {provider} saved to central DB.")
         success = True
     except Exception as e:
-        print(f"❌ Error saving API Key to DB: {e}")
+        print(f"❌ Error saving API Key to DB: {type(e).__name__}")
         db.rollback()
     finally:
         db.close()
@@ -89,7 +89,10 @@ def save_api_key_persistent(provider: str, value: str) -> bool:
         os.environ[key_name] = clean_val
         print(f"✅ API Key for {provider} saved to local .env.")
     except Exception as e:
-        print(f"⚠️ Notice: Could not save to local .env (Cloud env?): {e}")
+        print(
+            "⚠️ Notice: Could not save to local .env "
+            f"(Cloud env?): {type(e).__name__}"
+        )
         
     return success
 

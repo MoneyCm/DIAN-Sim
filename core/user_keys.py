@@ -26,7 +26,7 @@ def save_user_key(user_id: int, provider: str, raw_key: str) -> bool:
         db.commit()
         return True
     except Exception as e:
-        print(f"Error guardando llave usuario {user_id}: {e}")
+        print(f"Error guardando llave usuario {user_id}: {type(e).__name__}")
         db.rollback()
         return False
     finally:
@@ -46,7 +46,7 @@ def get_user_key(user_id: int, provider: str) -> str:
             return decrypt_value(entry.encrypted_key)
         return None
     except Exception as e:
-        print(f"Error recuperando llave usuario {user_id}: {e}")
+        print(f"Error recuperando llave usuario {user_id}: {type(e).__name__}")
         return None
     finally:
         db.close()

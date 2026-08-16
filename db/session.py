@@ -8,9 +8,28 @@ from dotenv import load_dotenv
 # --- v19.0 LOGIC - MIKEY ---
 load_dotenv()
 
+# Tests must never inherit a developer or production DATABASE_URL from .env.
+# This guard is evaluated before Streamlit secrets so collection cannot contact
+# an external database accidentally.
+TESTING = os.getenv("DIAN_SIM_TESTING", "").lower() in ("1", "true", "yes")
+
 db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dian_sim.db"))
 
-try:
+class MissingDatabaseURLError(RuntimeError):
+    """Raised when a managed environment has no configured remote database."""
+
+
+def _truthy(value):
+    return str(value or "").strip().lower() in ("1", "true", "yes")
+
+
+def _requires_remote_database():
+    return _truthy(os.getenv("REQUIRE_DATABASE_URL")) or os.getenv(
+        "DIAN_SIM_ENV", "development"
+    ).strip().lower() in ("production", "prod", "cloud")
+
+
+def _streamlit_database_url():
     import streamlit as st
     # v19.4 - DetecciÃ³n Profunda de DATABASE_URL
     secrets_url = st.secrets.get("DATABASE_URL")
@@ -29,23 +48,45 @@ try:
                     break
             except: continue
 
-    env_url = os.getenv("DATABASE_URL")
+    return secrets_url
+
+
+def _resolve_database_url(*, testing=TESTING):
+    if testing:
+        print("[DB] Pruebas: usando SQLite aislado en memoria.", file=sys.stderr)
+        return "sqlite:///:memory:"
+
+    env_url = os.getenv("DATABASE_URL", "").strip()
+    try:
+        secrets_url = _streamlit_database_url()
+    except Exception as exc:
+        print(
+            f"âŒ [DB] Error accediendo a secrets: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+        if _requires_remote_database() and not env_url:
+            raise MissingDatabaseURLError(
+                "DATABASE_URL es obligatoria en producción; configura Streamlit "
+                "Secrets o variables de entorno."
+            ) from exc
+        secrets_url = None
 
     if secrets_url:
-        raw_url = secrets_url
         print("ðŸ”— [DB] Usando DATABASE_URL de Streamlit Secrets.", file=sys.stderr)
+        return secrets_url
     elif env_url:
-        raw_url = env_url
         print("ðŸ”— [DB] Usando DATABASE_URL de Environment Variables.", file=sys.stderr)
-    else:
-        require_remote = os.getenv("REQUIRE_DATABASE_URL", "false").lower() in ("1", "true", "yes") or os.getenv("DIAN_SIM_ENV", "development").lower() in ("production", "prod", "cloud")
-        if require_remote:
-            raise RuntimeError("DATABASE_URL es obligatoria en producción; configura Streamlit Secrets o variables de entorno.")
-        raw_url = f"sqlite:///{db_path}"
-        print("[DB] Desarrollo local: usando SQLite.", file=sys.stderr)
-except Exception as e:
-    print(f"âŒ [DB] Error accediendo a secrets: {e}", file=sys.stderr)
-    raw_url = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
+        return env_url
+    if _requires_remote_database():
+        raise MissingDatabaseURLError(
+            "DATABASE_URL es obligatoria en producción; configura Streamlit "
+            "Secrets o variables de entorno."
+        )
+    print("[DB] Desarrollo local: usando SQLite.", file=sys.stderr)
+    return f"sqlite:///{db_path}"
+
+
+raw_url = _resolve_database_url()
 
 if raw_url.startswith("postgres://") or raw_url.startswith("postgresql://"):
     raw_url = raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -129,9 +170,17 @@ def sync_db_schema():
                                 else:
                                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
                             except Exception as col_err:
-                                print(f"âŒ [DB_SYNC] Error en columna {col_name}: {col_err}", file=sys.stderr)
+                                print(
+                                    f"âŒ [DB_SYNC] Error en columna {col_name}: "
+                                    f"{type(col_err).__name__}",
+                                    file=sys.stderr,
+                                )
                 except Exception as table_err:
-                    print(f"âŒ [DB_SYNC] Error en tabla {table}: {table_err}", file=sys.stderr)
+                    print(
+                        f"âŒ [DB_SYNC] Error en tabla {table}: "
+                        f"{type(table_err).__name__}",
+                        file=sys.stderr,
+                    )
         with engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO competitions (code, name, entity, description, is_active, created_at)
@@ -149,14 +198,17 @@ def sync_db_schema():
                 ), {"competition_id": default_competition_id})
         print("âœ… [DB_SYNC] Proceso finalizado. Mikey.", file=sys.stderr)
     except Exception as e:
-        print(f"ðŸ”¥ [DB_SYNC] Error crÃ­tico: {e}", file=sys.stderr)
+        print(
+            f"ðŸ”¥ [DB_SYNC] Error crÃ­tico: {type(e).__name__}",
+            file=sys.stderr,
+        )
 
     # Emergency Fix for Missing Columns (Brute Force - SQLite Native)
     try:
         import sqlite3
-        if "sqlite" in DATABASE_URL:
+        if DATABASE_URL == f"sqlite:///{db_path}":
             # Local connection to bypass engine entirely
-            print(f"ðŸ”§ [DB_SYNC] Native SQLite Fix on: {db_path}", file=sys.stderr)
+            print("ðŸ”§ [DB_SYNC] Native SQLite Fix.", file=sys.stderr)
             conn_native = sqlite3.connect(db_path, timeout=30)
             cur = conn_native.cursor()
 
@@ -188,7 +240,10 @@ def sync_db_schema():
                 conn.commit()
 
     except Exception as e:
-        print(f"âš ï¸ [DB_SYNC] Native fix error: {e}", file=sys.stderr)
+        print(
+            f"âš ï¸ [DB_SYNC] Native fix error: {type(e).__name__}",
+            file=sys.stderr,
+        )
 
 # La sincronización del esquema es una tarea de despliegue/mantenimiento, no
 # de cada carga de Streamlit. En Neon implicaba inspecciones y ALTER/UPDATE

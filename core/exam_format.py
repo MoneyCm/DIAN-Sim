@@ -6,9 +6,12 @@ statement that the CNSC has published or endorsed an identical exam format.
 
 from dataclasses import dataclass
 
+from core.source_evidence import has_precise_source_verification
+
 FUNCTIONAL_TRACK = "FUNCIONAL"
 SITUATIONAL_TYPE = "SITUATIONAL"
 FUNCTIONAL_QUESTIONS_PER_CASE = 3
+PJS_MAX_QUESTIONS_PER_CASE = 3
 FUNCTIONAL_OPTION_KEYS = ("A", "B", "C")
 
 OFFICIAL_LABEL = "Caso situacional revisado"
@@ -86,6 +89,58 @@ def _eligible_verified_question(question) -> bool:
     )
 
 
+def _eligible_trusted_pjs_question(question) -> bool:
+    """Return whether an item is safe for a measurement-style PJS block.
+
+    The historical ``is_verified`` flag and a review label are not enough:
+    measurement content also needs an exact official locator, supporting
+    excerpt, currency check, date and reviewer in ``source_verification``.
+    """
+    return _eligible_verified_question(question) and has_precise_source_verification(
+        question
+    )
+
+
+def trusted_pjs_question_groups(
+    case,
+    *,
+    eligible_question_ids: set[str] | None = None,
+) -> list[list]:
+    """Build official-methodology PJS groups of one to three trusted items.
+
+    CNSC LP-004-2026 permits *up to* three prompts per shared situation.  The
+    older editorial factory still creates triplets, but a valid final group is
+    not discarded merely because it contains one or two items.
+    """
+    eligible = []
+    for question in getattr(case, "questions", None) or []:
+        question_id = str(getattr(question, "question_id", "") or "")
+        if eligible_question_ids is not None and question_id not in eligible_question_ids:
+            continue
+        if _eligible_trusted_pjs_question(question):
+            eligible.append(question)
+    eligible.sort(
+        key=lambda question: (
+            str(getattr(question, "created_at", "") or ""),
+            str(getattr(question, "question_id", "")),
+        )
+    )
+    return [
+        eligible[index:index + PJS_MAX_QUESTIONS_PER_CASE]
+        for index in range(0, len(eligible), PJS_MAX_QUESTIONS_PER_CASE)
+    ]
+
+
+def is_trusted_pjs_case(case) -> bool:
+    """Validate a previously built measurement block without mutating it."""
+    questions = list(getattr(case, "questions", None) or [])
+    return (
+        bool(str(getattr(case, "text", "") or "").strip())
+        and 1 <= len(questions) <= PJS_MAX_QUESTIONS_PER_CASE
+        and all(_eligible_trusted_pjs_question(question) for question in questions)
+    )
+
+
 def official_question_groups(case) -> list[list]:
     """Split verified questions from one shared scenario into complete triplets."""
     eligible = [q for q in (getattr(case, "questions", None) or []) if _eligible_verified_question(q)]
@@ -106,6 +161,8 @@ class OfficialCaseBlock:
     difficulty: int
     questions: list
     competition_id: object = None
+    opec_number: str | None = None
+    bank_partition: str | None = None
 
 
 def build_official_case_blocks(cases) -> list[OfficialCaseBlock]:
@@ -124,6 +181,38 @@ def build_official_case_blocks(cases) -> list[OfficialCaseBlock]:
                     difficulty=getattr(case, "difficulty", 2),
                     questions=questions,
                     competition_id=getattr(case, "competition_id", None),
+                )
+            )
+    return blocks
+
+
+def build_trusted_pjs_case_blocks(
+    cases,
+    *,
+    eligible_question_ids: set[str] | None = None,
+    opec_number: object = None,
+    bank_partition: str = "measurement",
+) -> list[OfficialCaseBlock]:
+    """Build non-destructive PJS blocks for the isolated measurement bank."""
+    blocks = []
+    for case in cases:
+        groups = trusted_pjs_question_groups(
+            case,
+            eligible_question_ids=eligible_question_ids,
+        )
+        for index, questions in enumerate(groups, start=1):
+            suffix = f" - Bloque {index}" if len(groups) > 1 else ""
+            blocks.append(
+                OfficialCaseBlock(
+                    id=f"{getattr(case, 'id', 'case')}-pjs-{index}",
+                    title=f"{getattr(case, 'title', None) or 'Caso funcional'}{suffix}",
+                    text=getattr(case, "text", ""),
+                    topic=getattr(case, "topic", ""),
+                    difficulty=getattr(case, "difficulty", 2),
+                    questions=questions,
+                    competition_id=getattr(case, "competition_id", None),
+                    opec_number=str(opec_number or "").strip() or None,
+                    bank_partition=bank_partition,
                 )
             )
     return blocks

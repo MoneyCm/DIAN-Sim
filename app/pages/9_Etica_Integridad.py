@@ -10,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
 
 from db.session import SessionLocal
 from db.models import Question
-from ui_utils import load_css, render_header, render_custom_sidebar
+from ui_utils import load_css, log_ui_exception, render_header
 from core.auth import AuthManager
 import uuid
 from core.dedupe import compute_hash
@@ -38,8 +38,9 @@ with st.container(border=True):
     st.subheader("📋 Sobre esta práctica")
     st.write(
         "Este módulo entrena decisiones relacionadas con **Ética e Integridad**. "
-        "Su formato y ponderación deben confirmarse en la guía oficial del proceso vigente; "
-        "los resultados son formativos y no predicen por sí solos el puntaje del examen."
+        "La especificación disponible usa autorreporte Likert de cuatro opciones, sin clave correcta; "
+        "los detalles definitivos deben contrastarse cuando la CNSC publique la GOA. "
+        "Los resultados son formativos y no predicen por sí solos el puntaje del examen."
     )
     st.markdown(
         "**Valores institucionales:** Honestidad · Respeto · Compromiso · "
@@ -53,7 +54,6 @@ with st.container(border=True):
 st.divider()
 
 # Sidebar info
-stats_s, rank = render_custom_sidebar()
 
 # Mode selection
 mode = st.radio("Modo de práctica", ["📖 Aprender Código de Ética", "✍️ Práctica de Integridad"], horizontal=True)
@@ -150,7 +150,8 @@ else:
                         st.error("❌ No se pudieron generar afirmaciones con IA. Usando banco estático.")
                         use_ai = False
                 except Exception as e:
-                    st.error(f"❌ Error al generar con IA: {e}")
+                    log_ui_exception("ethics.ai.generate", e)
+                    st.error("❌ No fue posible generar afirmaciones con IA.")
                     st.info("📚 Usando banco de afirmaciones estático.")
                     use_ai = False
         
@@ -234,7 +235,7 @@ else:
                         answer_text = answers[i]
                         respuesta_valor = int(answer_text.split(" - ")[0])
 
-                        # La GOA no define clave correcta para esta escala.
+                        # La especificación PJS/Likert disponible no define clave correcta para esta escala.
                         # Crear registro
                         attempt = EthicsAttempt(
                             user_id=user_id,
@@ -252,7 +253,8 @@ else:
                 st.session_state["ethics_saved"] = True
                 
             except Exception as e:
-                st.error(f"Error al guardar respuestas: {e}")
+                log_ui_exception("ethics.answers.save", e)
+                st.error("No fue posible guardar las respuestas.")
         
         st.success("✅ Práctica completada")
         st.markdown("### Resumen de la práctica")

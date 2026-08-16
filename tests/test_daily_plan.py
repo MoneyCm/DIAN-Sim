@@ -155,7 +155,7 @@ def test_hybrid_daily_plan_includes_complete_official_cases():
 
     assert len(plan) == 8
     assert all(question.question_id in selected_ids for question in official_questions)
-    assert sum("caso tipo examen" in item.reasons for item in plan) == 6
+    assert sum("caso PJS de práctica" in item.reasons for item in plan) == 6
 
 
 def test_hybrid_daily_plan_reserves_slots_for_unmeasured_topics():

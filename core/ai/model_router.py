@@ -10,6 +10,13 @@ from typing import Optional, Type
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from core.ai.usage_policy import (
+    AIUsageLimitError,
+    AIUsagePolicy,
+    DEFAULT_AI_USAGE_POLICY,
+    assert_ai_usage_allowed,
+)
+
 
 load_dotenv()
 
@@ -38,7 +45,14 @@ class ModelProfile(str, Enum):
 
 
 class ModelRouter:
-    def __init__(self, *, client=None, provider: Optional[str] = None, db_factory=None):
+    def __init__(
+        self,
+        *,
+        client=None,
+        provider: Optional[str] = None,
+        db_factory=None,
+        usage_policy: AIUsagePolicy = DEFAULT_AI_USAGE_POLICY,
+    ):
         configured_provider = provider or _setting("AI_PROVIDER") or _setting("LLM_PROVIDER")
         if not configured_provider:
             if _setting("GEMINI_API_KEY"):
@@ -48,9 +62,9 @@ class ModelRouter:
         self.provider = (configured_provider or "none").lower()
         default_models = {
             "gemini": {
-                ModelProfile.FAST: "gemini-3.6-flash",
-                ModelProfile.BALANCED: "gemini-3.6-flash",
-                ModelProfile.REASONING: "gemini-3.6-flash",
+                ModelProfile.FAST: "gemini-2.5-flash",
+                ModelProfile.BALANCED: "gemini-2.5-flash",
+                ModelProfile.REASONING: "gemini-2.5-flash",
             },
             "openai": {
                 ModelProfile.FAST: "gpt-5.6-luna",
@@ -63,6 +77,7 @@ class ModelRouter:
             for profile in ModelProfile
         }
         self.db_factory = db_factory
+        self.usage_policy = usage_policy
         self.client = client
         if self.client is None and self.provider == "openai" and _setting("OPENAI_API_KEY"):
             from openai import OpenAI
@@ -83,15 +98,39 @@ class ModelRouter:
     def _log(self, **values) -> None:
         if self.db_factory is None:
             return
+        db = None
         try:
             from db.models import AICallLog
 
             db = self.db_factory()
             db.add(AICallLog(**values))
             db.commit()
-            db.close()
         except Exception:
-            pass
+            if db is not None:
+                db.rollback()
+        finally:
+            if db is not None:
+                db.close()
+
+    def _check_budget(self, *, user_id: Optional[int], prompt: str) -> None:
+        if self.db_factory is None:
+            assert_ai_usage_allowed(
+                None,
+                user_id=user_id,
+                prompt=prompt,
+                policy=self.usage_policy,
+            )
+            return
+        db = self.db_factory()
+        try:
+            assert_ai_usage_allowed(
+                db,
+                user_id=user_id,
+                prompt=prompt,
+                policy=self.usage_policy,
+            )
+        finally:
+            db.close()
 
     def generate_structured(
         self,
@@ -109,6 +148,7 @@ class ModelRouter:
         input_tokens = output_tokens = None
         error_code = None
         try:
+            self._check_budget(user_id=user_id, prompt=prompt)
             if not self.available:
                 raise AIUnavailable("Proveedor de IA no configurado")
             if self.provider == "openai":
@@ -117,6 +157,7 @@ class ModelRouter:
                     input=prompt,
                     text_format=schema,
                     reasoning={"effort": "low" if profile != ModelProfile.REASONING else "medium"},
+                    max_output_tokens=self.usage_policy.max_output_tokens_per_call,
                 )
                 parsed = response.output_parsed
                 usage = getattr(response, "usage", None)
@@ -131,6 +172,7 @@ class ModelRouter:
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_json_schema=schema.model_json_schema(),
+                        max_output_tokens=self.usage_policy.max_output_tokens_per_call,
                     ),
                 )
                 parsed = getattr(response, "parsed", None)
@@ -151,6 +193,8 @@ class ModelRouter:
             error_code = type(exc).__name__
             if isinstance(exc, AIUnavailable):
                 raise
+            if isinstance(exc, AIUsageLimitError):
+                raise AIUnavailable(str(exc)) from exc
             raise AIUnavailable("La IA no está disponible; se aplicará el modo determinístico") from exc
         finally:
             self._log(

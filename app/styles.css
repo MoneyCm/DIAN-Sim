@@ -63,7 +63,9 @@
 [data-testid="stSidebarNav"] a[href$="/Simulacro_Real"],
 [data-testid="stSidebarNav"] a[href$="/Repaso_Especial"],
 [data-testid="stSidebarNav"] a[href$="/Mapa_Estudio"],
-[data-testid="stSidebarNav"] a[href$="/Etica_Integridad"] {
+[data-testid="stSidebarNav"] a[href$="/Etica_Integridad"],
+[data-testid="stSidebarNav"] a[href$="/Centro_OPEC"],
+[data-testid="stSidebarNav"] a[href$="/Configuracion_OPEC"] {
     display: none !important;
 }
 
@@ -422,4 +424,49 @@ div[data-testid="column"] {
 
 [data-testid="stPageLink"]:hover p {
     color: var(--dian-red) !important;
+}
+
+/* Mobile: prioritize one action at a time and usable touch targets. */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 0.75rem 0.65rem 2rem;
+        max-width: 100%;
+    }
+
+    h1 {
+        font-size: clamp(1.65rem, 8vw, 2.15rem) !important;
+        line-height: 1.12 !important;
+    }
+
+    h2 {
+        font-size: clamp(1.35rem, 6vw, 1.75rem) !important;
+    }
+
+    .hero-welcome,
+    .dian-card,
+    .metric-card-v6 {
+        padding: 1rem !important;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.8rem;
+    }
+
+    .stButton button,
+    .stDownloadButton button,
+    [data-testid="stPageLink"] a {
+        min-width: 0 !important;
+        width: 100% !important;
+        min-height: 44px;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 1.35rem !important;
+    }
+
+    [data-testid="stDataFrame"],
+    [data-testid="stTable"] {
+        overflow-x: auto;
+    }
 }

@@ -12,6 +12,7 @@ from db.models import (
     Question,
     TopicMastery,
     User,
+    UserOPEC,
 )
 
 
@@ -27,6 +28,14 @@ def seeded_db():
     competition = Competition(code="TEST", name="Concurso test", is_active=True)
     db.add_all([user, competition])
     db.flush()
+    db.add(UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    ))
     for number, topic in enumerate(("Tema débil", "Tema fuerte"), start=1):
         db.add(Question(
             question_id=f"q{number}",
@@ -35,13 +44,28 @@ def seeded_db():
             competency="Planeación",
             topic=topic,
             difficulty=2,
-            stem=f"Pregunta {number}",
+            stem=(
+                f"Ante un hallazgo documentado en la actuación {number}, "
+                "¿cuál es la decisión inicial más adecuada?"
+            ),
             options_json={"A": "Correcta", "B": "Distractor", "C": "Distractor 2"},
             correct_key="A",
-            rationale="Explicación verificada.",
+            rationale="La actuación correcta conserva trazabilidad y aplica la regla vigente.",
             source_refs="Fuente",
             is_verified=True,
-            quality_report={"status": "APPROVED", "review": "source_grounded"},
+            quality_report={
+                "status": "APPROVED",
+                "review": "source_grounded",
+                "scope": {"opec_number": "236769"},
+                "source_verification": {
+                    "status": "official_current",
+                    "url": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+                    "locator": "Artículo 684",
+                    "supporting_excerpt": "La Administración Tributaria tiene amplias facultades de fiscalización.",
+                    "verified_on": "2026-08-15",
+                    "verified_by": "prueba editorial",
+                },
+            },
             hash_norm=f"hash-{number}",
         ))
     db.commit()
@@ -112,3 +136,22 @@ def test_starting_new_session_abandons_previous_active_session():
     )
     assert first.session_id != second.session_id
     assert db.get(LearningSession, first.session_id).status == "abandoned"
+
+
+def test_tutor_never_selects_another_opec_in_the_same_competition():
+    db, user_id, competition_id = seeded_db()
+    questions = db.query(Question).order_by(Question.question_id).all()
+    questions[0].topic = "OPEC 236769 F01 · Tema"
+    questions[0].micro_competencia = "OPEC 236769 F01 · Tema"
+    questions[1].topic = "OPEC 242699 F01 · Tema"
+    questions[1].micro_competencia = "OPEC 242699 F01 · Tema"
+    second_report = dict(questions[1].quality_report)
+    second_report["scope"] = {"opec_number": "242699"}
+    questions[1].quality_report = second_report
+    db.commit()
+
+    session = LearningSessionService(db).start_learning_session(
+        user_id=user_id, target_minutes=10, competition_id=competition_id
+    )
+
+    assert session.question.question_id == "q1"

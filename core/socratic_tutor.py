@@ -3,12 +3,16 @@
 
 def local_socratic_hint(*, topic: str, selected_text: str, source: str = "") -> str:
     focus = topic or "el caso planteado"
-    source_line = f" Después contrasta tu criterio con la fuente registrada: {source}." if source else ""
+    source_line = (
+        f" Después contrasta tu criterio con la fuente registrada: {source}."
+        if source
+        else " La fuente exacta debe verificarse antes de convertir esta orientación en una regla normativa."
+    )
     return (
-        f"Antes de cambiar tu respuesta, vuelve a {focus} y pregúntate: "
-        "¿qué problema institucional debe resolverse primero?, ¿qué alternativa conserva evidencia "
-        "y permite verificar el resultado?, ¿cuál controla mejor el riesgo sin trasladar la "
-        f"responsabilidad a un tercero? Tu elección actual plantea: «{selected_text}»."
+        f"Antes de aceptar «{selected_text}», vuelve a {focus} y pregúntate: "
+        "¿qué hecho es decisivo?, ¿qué competencia tiene la autoridad?, ¿qué paso protege "
+        "el debido proceso?, ¿por qué tu opción supera al distractor más cercano y qué dato "
+        "podría cambiar la decisión?"
         f"{source_line}"
     )
 

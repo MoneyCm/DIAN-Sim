@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -24,18 +25,42 @@ from core.learning.schemas import (
 )
 from core.spaced_repetition import schedule_review as schedule_legacy_review
 from core.legacy_question_audit import is_safe_for_active_study
+from core.learning.evidence_service import (
+    finalize_opec_session,
+    record_opec_event,
+    start_opec_session,
+)
+from services.question_service import QuestionService
 from db.models import (
     Attempt,
     LearningAttempt,
     LearningSession,
+    OpecLearningEvent,
+    OpecLearningSession,
+    OpecTopicState,
     Question,
     QuestionPerformance,
     Skill,
     TopicMastery,
+    UserOPEC,
 )
 
 
 CONFIDENCE_TO_LEGACY = {"low": "guess", "medium": "unsure", "high": "confident"}
+
+
+@dataclass(frozen=True)
+class TutorTopicProfile:
+    """UI-compatible projection of canonical, OPEC-scoped topic evidence."""
+
+    topic_id: str
+    topic_label: str
+    competency: Optional[str]
+    track: Optional[str]
+    mastery_score: float
+    attempts: int
+    last_reviewed_at: Optional[datetime]
+    next_review_at: Optional[datetime]
 
 
 def utc_now() -> datetime:
@@ -59,35 +84,161 @@ class LearningSessionService:
     def __init__(self, db):
         self.db = db
 
-    def _questions(self, competition_id: Optional[int]) -> list[Question]:
-        query = self.db.query(Question)
+    def _active_opec(
+        self, user_id: int, competition_id: Optional[int]
+    ) -> Optional[UserOPEC]:
+        """Resolve one active OPEC; ambiguity is treated as no safe context."""
+        query = self.db.query(UserOPEC).filter_by(user_id=user_id, is_active=True)
         if competition_id is not None:
-            query = query.filter(Question.competition_id == competition_id)
-        questions = query.order_by(Question.question_id).all()
-        # The adaptive tutor must never expose candidates that have not passed
-        # the same source-grounded gate used by the rest of active study.
-        return [question for question in questions if is_safe_for_active_study(question)]
+            query = query.filter(UserOPEC.competition_id == competition_id)
+        rows = query.order_by(UserOPEC.updated_at.desc(), UserOPEC.id.desc()).all()
+        return rows[0] if len(rows) == 1 else None
 
-    def _topic_priorities(self, user_id: int, competition_id: Optional[int], questions, now):
-        mastery_query = self.db.query(TopicMastery).filter(TopicMastery.user_id == user_id)
-        if competition_id is not None:
-            mastery_query = mastery_query.filter(TopicMastery.competition_id == competition_id)
-        mastery_map = {row.topic_id: row for row in mastery_query.all()}
+    def _questions(
+        self,
+        competition_id: Optional[int],
+        user_id: Optional[int] = None,
+        *,
+        user_opec: Optional[UserOPEC] = None,
+    ) -> list[Question]:
+        """Return only reviewed training questions in the exact active OPEC."""
+        if user_id is None or competition_id is None:
+            return []
+        active_opec = user_opec or self._active_opec(user_id, competition_id)
+        if (
+            active_opec is None
+            or active_opec.user_id != user_id
+            or active_opec.competition_id != competition_id
+            or not active_opec.is_active
+        ):
+            return []
+        questions = QuestionService.get_questions_for_user(
+            self.db,
+            user_id,
+            competition_id=competition_id,
+            user_opec=active_opec,
+            bank_partitions=("training",),
+        )
+        # QuestionService owns the OPEC/partition filter.  Keep the explicit
+        # study gate here as defense in depth for older in-memory deployments.
+        return sorted(
+            (question for question in questions if is_safe_for_active_study(question)),
+            key=lambda question: str(question.question_id),
+        )
 
-        recent_query = self.db.query(LearningAttempt).filter(LearningAttempt.user_id == user_id)
-        if competition_id is not None:
-            recent_query = recent_query.join(Question).filter(Question.competition_id == competition_id)
-        recent = recent_query.order_by(LearningAttempt.created_at.desc()).limit(50).all()
-        question_by_id = {str(q.question_id): q for q in questions}
+    def _canonical_session(
+        self, session: LearningSession
+    ) -> Optional[OpecLearningSession]:
+        rows = (
+            self.db.query(OpecLearningSession)
+            .filter_by(
+                user_id=session.user_id,
+                competition_id=session.competition_id,
+            )
+            .order_by(OpecLearningSession.started_at.desc())
+            .all()
+        )
+        for row in rows:
+            coverage = row.coverage if isinstance(row.coverage, dict) else {}
+            if str(coverage.get("legacy_session_id", "")) == str(session.id):
+                return row
+        return None
+
+    def _invalidate_context(
+        self,
+        session: LearningSession,
+        canonical: Optional[OpecLearningSession],
+        now: datetime,
+    ) -> None:
+        session.status = "abandoned"
+        session.current_question_id = None
+        session.finished_at = session.finished_at or now
+        session.actual_minutes = max(
+            0, int((session.finished_at - session.started_at).total_seconds() // 60)
+        )
+        if canonical is not None and canonical.status == "active":
+            canonical.status = "invalid"
+            canonical.completed_at = now
+
+    def _validated_context(
+        self,
+        session: LearningSession,
+        now: datetime,
+    ) -> tuple[Optional[OpecLearningSession], Optional[UserOPEC], list[Question]]:
+        """Validate the immutable OPEC snapshot before showing or recording."""
+        canonical = self._canonical_session(session)
+        active_opec = self._active_opec(session.user_id, session.competition_id)
+        if (
+            canonical is None
+            or active_opec is None
+            or canonical.status != "active"
+            or canonical.user_opec_id != active_opec.id
+            or canonical.competition_id != active_opec.competition_id
+            or str(canonical.opec_number) != str(active_opec.opec_number)
+        ):
+            self._invalidate_context(session, canonical, now)
+            return canonical, active_opec, []
+
+        questions = self._questions(
+            session.competition_id,
+            session.user_id,
+            user_opec=active_opec,
+        )
+        eligible_ids = {str(question.question_id) for question in questions}
+        coverage = canonical.coverage if isinstance(canonical.coverage, dict) else {}
+        snapshot_ids = {str(value) for value in coverage.get("question_ids", [])}
+        current_id = str(session.current_question_id) if session.current_question_id else None
+        if (
+            not snapshot_ids
+            or not snapshot_ids.issubset(eligible_ids)
+            or (current_id is not None and current_id not in snapshot_ids)
+        ):
+            self._invalidate_context(session, canonical, now)
+            return canonical, active_opec, []
+        return canonical, active_opec, questions
+
+    def _topic_priorities(
+        self,
+        user_id: int,
+        competition_id: Optional[int],
+        user_opec: UserOPEC,
+        questions,
+        now,
+    ):
+        mastery_rows = (
+            self.db.query(OpecTopicState)
+            .filter_by(
+                user_id=user_id,
+                competition_id=competition_id,
+                user_opec_id=user_opec.id,
+            )
+            .all()
+        )
+        mastery_map = {row.topic_id: row for row in mastery_rows}
+
+        recent = (
+            self.db.query(OpecLearningEvent)
+            .join(OpecLearningSession)
+            .filter(
+                OpecLearningEvent.user_id == user_id,
+                OpecLearningSession.competition_id == competition_id,
+                OpecLearningSession.user_opec_id == user_opec.id,
+            )
+            .order_by(OpecLearningEvent.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        eligible_topic_ids = {
+            topic_id_for(question.track, question.competency, question.topic)
+            for question in questions
+        }
         stats = defaultdict(lambda: {"total": 0, "errors": 0, "low": 0})
-        for attempt in recent:
-            question = question_by_id.get(str(attempt.question_id))
-            if question is None:
+        for event in recent:
+            if event.topic_id not in eligible_topic_ids or event.is_correct is None:
                 continue
-            topic_id = topic_id_for(question.track, question.competency, question.topic)
-            stats[topic_id]["total"] += 1
-            stats[topic_id]["errors"] += int(attempt.result != "correct")
-            stats[topic_id]["low"] += int(attempt.confidence == "low")
+            stats[event.topic_id]["total"] += 1
+            stats[event.topic_id]["errors"] += int(event.is_correct is False)
+            stats[event.topic_id]["low"] += int(event.confidence == "low")
 
         priorities = {}
         for question in questions:
@@ -100,23 +251,49 @@ class LearningSessionService:
             priorities[topic_id] = calculate_topic_priority(
                 mastery_score=float(mastery.mastery_score if mastery else 0.0),
                 next_review_at=mastery.next_review_at if mastery else None,
-                recent_error_rate=topic_stats["errors"] / total if topic_stats["total"] else 0.5,
-                low_confidence_rate=topic_stats["low"] / total if topic_stats["total"] else 0.5,
-                importance=float(mastery.importance if mastery else 1.0),
-                last_studied_at=mastery.last_reviewed_at if mastery else None,
+                recent_error_rate=(
+                    topic_stats["errors"] / total if topic_stats["total"] else 0.5
+                ),
+                low_confidence_rate=(
+                    topic_stats["low"] / total if topic_stats["total"] else 0.5
+                ),
+                importance=1.0,
+                last_studied_at=mastery.last_event_at if mastery else None,
                 now=now,
             )
         return priorities
 
     def _select(self, session: LearningSession, now: datetime):
-        questions = self._questions(session.competition_id)
-        priorities = self._topic_priorities(session.user_id, session.competition_id, questions, now)
-        mastery_query = self.db.query(TopicMastery).filter_by(user_id=session.user_id)
-        if session.competition_id is not None:
-            mastery_query = mastery_query.filter_by(competition_id=session.competition_id)
-        mastery_rows = mastery_query.all()
-        mastery_scores = {row.topic_id: float(row.mastery_score or 0.0) for row in mastery_rows}
-        mastery_attempts = {row.topic_id: int(row.attempts or 0) for row in mastery_rows}
+        active_opec = self._active_opec(session.user_id, session.competition_id)
+        if active_opec is None:
+            return None
+        questions = self._questions(
+            session.competition_id,
+            session.user_id,
+            user_opec=active_opec,
+        )
+        priorities = self._topic_priorities(
+            session.user_id,
+            session.competition_id,
+            active_opec,
+            questions,
+            now,
+        )
+        mastery_rows = (
+            self.db.query(OpecTopicState)
+            .filter_by(
+                user_id=session.user_id,
+                competition_id=session.competition_id,
+                user_opec_id=active_opec.id,
+            )
+            .all()
+        )
+        mastery_scores = {
+            row.topic_id: float(row.mastery_score or 0.0) for row in mastery_rows
+        }
+        mastery_attempts = {
+            row.topic_id: int(row.evidence_count or 0) for row in mastery_rows
+        }
         attempted_ids = {
             str(row[0])
             for row in self.db.query(LearningAttempt.question_id)
@@ -148,6 +325,12 @@ class LearningSessionService:
         if not 5 <= int(target_minutes) <= 180:
             raise ValueError("La sesión debe durar entre 5 y 180 minutos")
         now = now or utc_now()
+        active_opec = self._active_opec(user_id, competition_id)
+        eligible_questions = self._questions(
+            competition_id,
+            user_id,
+            user_opec=active_opec,
+        )
         active = self.db.query(LearningSession).filter_by(
             user_id=user_id, competition_id=competition_id, status="active"
         ).all()
@@ -155,6 +338,10 @@ class LearningSessionService:
             previous.status = "abandoned"
             previous.finished_at = now
             previous.actual_minutes = max(0, int((now - previous.started_at).total_seconds() // 60))
+            previous_canonical = self._canonical_session(previous)
+            if previous_canonical is not None and previous_canonical.status == "active":
+                previous_canonical.status = "abandoned"
+                previous_canonical.completed_at = now
 
         session = LearningSession(
             user_id=user_id,
@@ -165,7 +352,26 @@ class LearningSessionService:
         )
         self.db.add(session)
         self.db.flush()
-        selected = self._select(session, now)
+        canonical = None
+        if active_opec is not None and eligible_questions:
+            canonical = start_opec_session(
+                self.db,
+                user_id=user_id,
+                questions=eligible_questions,
+                mode="training",
+                bank_partition="training",
+                competition_id=competition_id,
+                user_opec_id=active_opec.id,
+                feedback_enabled=True,
+                now=now,
+            )
+            coverage = dict(canonical.coverage or {})
+            coverage.update({
+                "legacy_session_id": str(session.id),
+                "target_minutes": int(target_minutes),
+            })
+            canonical.coverage = coverage
+        selected = self._select(session, now) if canonical is not None else None
         session.current_question_id = selected.question_id if selected else None
         self.db.commit()
         return SessionView(
@@ -180,12 +386,21 @@ class LearningSessionService:
         session = self.db.query(LearningSession).filter_by(id=session_id, user_id=user_id).first()
         if session is None:
             return None
+        question = None
+        if session.status == "active":
+            _canonical, _active_opec, _questions = self._validated_context(
+                session, utc_now()
+            )
+            if session.status != "active":
+                self.db.commit()
+            elif session.current_question_id:
+                question = self.db.get(Question, session.current_question_id)
         return SessionView(
             session_id=session.id,
             status=session.status,
             target_minutes=session.target_minutes,
             started_at=session.started_at,
-            question=question_view(self.db.get(Question, session.current_question_id)),
+            question=question_view(question),
         )
 
     def submit_answer(
@@ -198,15 +413,24 @@ class LearningSessionService:
         response_time_seconds: Optional[int] = None,
         result_override: Optional[str] = None,
         error_type: Optional[str] = None,
+        user_reasoning: Optional[str] = None,
         now: Optional[datetime] = None,
     ) -> SubmissionResult:
         now = now or utc_now()
+        if confidence is None or not str(confidence).strip():
+            raise ValueError("Declara tu nivel de confianza antes de responder")
         confidence = ConfidenceLevel(confidence).value
+        if response_time_seconds is not None and int(response_time_seconds) < 0:
+            raise ValueError("El tiempo de respuesta no puede ser negativo")
         session = self.db.query(LearningSession).filter_by(
             id=session_id, user_id=user_id, status="active"
         ).first()
         if session is None or not session.current_question_id:
             raise ValueError("No existe una sesión activa con pregunta pendiente")
+        canonical, _active_opec, _eligible = self._validated_context(session, now)
+        if session.status != "active" or canonical is None:
+            self.db.commit()
+            raise ValueError("La OPEC activa cambió; inicia una sesión nueva")
         question = self.db.get(Question, session.current_question_id)
         if question is None:
             raise ValueError("La pregunta activa ya no existe")
@@ -223,6 +447,23 @@ class LearningSessionService:
             error_type = "overconfidence" if confidence == "high" else "distractor"
         if error_type is not None:
             error_type = ErrorType(error_type).value
+
+        canonical_event = record_opec_event(
+            self.db,
+            session_id=canonical.id,
+            user_id=user_id,
+            question_id=str(question.question_id),
+            chosen_key=answer,
+            confidence=confidence,
+            time_sec=(
+                int(response_time_seconds)
+                if response_time_seconds is not None
+                else None
+            ),
+            error_category=error_type,
+            user_reasoning=user_reasoning,
+            now=now,
+        )
 
         topic_id = topic_id_for(question.track, question.competency, question.topic)
         mastery = self.db.query(TopicMastery).filter_by(
@@ -318,6 +559,26 @@ class LearningSessionService:
         next_question = self._select(session, now)
         session.current_question_id = next_question.question_id if next_question else None
         self.db.commit()
+        canonical_mastery = (
+            self.db.query(OpecTopicState)
+            .filter_by(
+                user_id=user_id,
+                competition_id=canonical.competition_id,
+                user_opec_id=canonical.user_opec_id,
+                topic_id=canonical_event.topic_id,
+            )
+            .first()
+        )
+        reported_mastery = (
+            float(canonical_mastery.mastery_score)
+            if canonical_mastery is not None
+            else float(mastery.mastery_score)
+        )
+        reported_review = (
+            canonical_mastery.next_review_at
+            if canonical_mastery is not None
+            else mastery.next_review_at
+        )
         feedback = question.rationale or (
             "Respuesta correcta." if result == "correct" else "Revisa el criterio central de este tema."
         )
@@ -330,8 +591,8 @@ class LearningSessionService:
                 needs_review=result != "correct" or confidence == "low",
             ),
             next_question=question_view(next_question),
-            mastery_score=mastery.mastery_score,
-            next_review_at=mastery.next_review_at,
+            mastery_score=reported_mastery,
+            next_review_at=reported_review,
         )
 
     def finish_session(
@@ -339,8 +600,19 @@ class LearningSessionService:
     ) -> LearningSession:
         now = now or utc_now()
         session = self.db.query(LearningSession).filter_by(id=session_id, user_id=user_id).first()
-        if session is None:
+        if session is None or session.status != "active":
             raise ValueError("Sesión no encontrada")
+        canonical, _active_opec, _eligible = self._validated_context(session, now)
+        if session.status != "active" or canonical is None:
+            self.db.commit()
+            raise ValueError("La OPEC activa cambió; la sesión no puede finalizarse")
+        finalize_opec_session(
+            self.db,
+            session_id=canonical.id,
+            user_id=user_id,
+            now=now,
+            require_complete=False,
+        )
         session.finished_at = session.finished_at or now
         session.actual_minutes = max(0, int((session.finished_at - session.started_at).total_seconds() // 60))
         session.status = "completed"
@@ -350,10 +622,50 @@ class LearningSessionService:
 
     def learning_profile(self, user_id: int, competition_id: Optional[int], now=None) -> dict:
         now = now or utc_now()
-        query = self.db.query(TopicMastery).filter(TopicMastery.user_id == user_id)
-        if competition_id is not None:
-            query = query.filter(TopicMastery.competition_id == competition_id)
-        topics = query.order_by(TopicMastery.mastery_score.asc()).all()
+        active_opec = self._active_opec(user_id, competition_id)
+        questions = self._questions(
+            competition_id,
+            user_id,
+            user_opec=active_opec,
+        )
+        topic_metadata = {
+            topic_id_for(question.track, question.competency, question.topic): question
+            for question in questions
+        }
+        states = []
+        if active_opec is not None:
+            states = (
+                self.db.query(OpecTopicState)
+                .filter_by(
+                    user_id=user_id,
+                    competition_id=competition_id,
+                    user_opec_id=active_opec.id,
+                )
+                .order_by(OpecTopicState.mastery_score.asc())
+                .all()
+            )
+        topics = [
+            TutorTopicProfile(
+                topic_id=row.topic_id,
+                topic_label=row.topic_label,
+                competency=(
+                    topic_metadata[row.topic_id].competency
+                    if row.topic_id in topic_metadata
+                    else None
+                ),
+                track=(
+                    topic_metadata[row.topic_id].track
+                    if row.topic_id in topic_metadata
+                    else None
+                ),
+                mastery_score=float(row.mastery_score or 0.0),
+                attempts=int(row.evidence_count or 0),
+                last_reviewed_at=row.last_event_at,
+                next_review_at=row.next_review_at,
+            )
+            for row in states
+            if row.topic_id in topic_metadata
+        ]
         general = sum(row.mastery_score or 0 for row in topics) / len(topics) if topics else 0.0
         due = sum(1 for row in topics if row.next_review_at is None or row.next_review_at <= now)
         return {
@@ -365,3 +677,35 @@ class LearningSessionService:
                 f"Empieza por {topics[0].topic_label}." if topics else "Inicia una sesión diagnóstica."
             ),
         }
+
+    def recent_evolution(
+        self,
+        user_id: int,
+        competition_id: Optional[int],
+        *,
+        limit: int = 30,
+    ) -> list[dict]:
+        """Return canonical answer history for only the active OPEC."""
+        active_opec = self._active_opec(user_id, competition_id)
+        if active_opec is None:
+            return []
+        rows = (
+            self.db.query(OpecLearningEvent)
+            .join(OpecLearningSession)
+            .filter(
+                OpecLearningEvent.user_id == user_id,
+                OpecLearningSession.competition_id == competition_id,
+                OpecLearningSession.user_opec_id == active_opec.id,
+                OpecLearningEvent.is_correct.is_not(None),
+            )
+            .order_by(OpecLearningEvent.created_at.desc())
+            .limit(min(max(int(limit), 1), 100))
+            .all()
+        )
+        return [
+            {
+                "created_at": row.created_at,
+                "score": 100.0 if row.is_correct else 0.0,
+            }
+            for row in reversed(rows)
+        ]

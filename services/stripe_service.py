@@ -45,5 +45,5 @@ class StripeService:
             )
             return session.url
         except Exception as e:
-            print(f"Error creating Stripe session: {e}")
+            print(f"Error creating Stripe session: {type(e).__name__}")
             return None

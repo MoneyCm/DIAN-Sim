@@ -10,10 +10,26 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from db.session import SessionLocal
-from db.models import User, Skill, Attempt, Achievement, UserStats, UserOPEC, QuestionPerformance, Question, CaseStudy, StudyPlanConfig, Competition
-from sqlalchemy import and_, func, or_
+from db.models import (
+    Achievement,
+    Attempt,
+    CaseStudy,
+    Competition,
+    OpecLearningEvent,
+    OpecLearningSession,
+    OpecStudyPlan,
+    OpecTopicState,
+    ErrorEpisode,
+    Question,
+    QuestionPerformance,
+    Skill,
+    User,
+    UserOPEC,
+    UserStats,
+)
+from sqlalchemy import and_, func, inspect, or_
 from sqlalchemy.orm import joinedload
-from ui_utils import load_css, render_header
+from ui_utils import load_css, log_ui_exception, render_header
 import datetime, io
 from zoneinfo import ZoneInfo
 
@@ -24,6 +40,11 @@ from core.anki import generate_anki_deck
 from core.config import get_api_key
 from core.user_keys import get_user_key
 from core import adaptive as adaptive_engine
+from core.learning.evidence_service import evaluate_opec_readiness
+from core.readiness_gate import (
+    OFFICIAL_FUNCTIONAL_MINIMUM_SCORE,
+    ReadinessPolicy,
+)
 
 # Streamlit Cloud puede conservar el módulo anterior durante una recarga en
 # caliente. El fallback evita tumbar el Dashboard mientras termina el reinicio.
@@ -62,6 +83,53 @@ from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
 )
+from core.study_library import build_study_library, load_library_progress
+
+
+def _load_readiness_state(db, *, user_id, active_opec):
+    """Load internal readiness without making the page depend on Phase 2 tables."""
+    target_score = 85.0
+    notes = []
+    if user_id is None or active_opec is None:
+        return target_score, None, "Activa una OPEC para iniciar la medición interna."
+
+    try:
+        plan = db.query(OpecStudyPlan).filter_by(
+            user_id=user_id,
+            competition_id=active_opec.competition_id,
+            user_opec_id=active_opec.id,
+        ).first()
+        if plan is not None:
+            configured_target = float(plan.target_score)
+            if 0.0 <= configured_target <= 100.0:
+                target_score = configured_target
+    except Exception:
+        # A deployment may render the page before the additive Phase 2 table
+        # exists.  Roll back the failed read and keep the explicit fallback.
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        notes.append("Se usa temporalmente el objetivo interno predeterminado de 85%.")
+
+    try:
+        assessment = evaluate_opec_readiness(
+            db,
+            user_id=user_id,
+            user_opec_id=active_opec.id,
+            policy=ReadinessPolicy(target_score=target_score),
+        )
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        notes.append(
+            "Las sesiones canónicas de medición aún no están disponibles; "
+            "las puertas permanecen pendientes."
+        )
+        return target_score, None, " ".join(notes)
+    return target_score, assessment, " ".join(notes) or None
 
 # pass # Removed st.set_page_config
 
@@ -104,6 +172,64 @@ try:
         st.warning("⚠️ Aún no tienes una OPEC activa. Ve a 'Mis OPEC' para enfocar tu estudio.")
         st.caption(f"Debug: No active OPEC found for user_id={u_id}")
 
+    if active_opec:
+        readiness_target, readiness_assessment, readiness_note = _load_readiness_state(
+            db, user_id=u_id, active_opec=active_opec
+        )
+        st.markdown("### Estado prudente de preparación")
+        readiness_cols = st.columns(3)
+        readiness_cols[0].metric(
+            "Objetivo interno de precisión", f"{readiness_target:.0f}%"
+        )
+        readiness_cols[1].metric(
+            "Mediciones comparables",
+            (
+                readiness_assessment.repeated_target_label.replace(
+                    "meta interna repetida ", ""
+                )
+                if readiness_assessment is not None
+                else "0/3"
+            ),
+        )
+        readiness_cols[2].metric(
+            "Mínimo oficial funcional",
+            f"{OFFICIAL_FUNCTIONAL_MINIMUM_SCORE:.0f}/100",
+        )
+
+        if readiness_assessment is None:
+            st.info(
+                "Las puertas de medición están pendientes. Puedes seguir entrenando; "
+                "el estado aparecerá cuando existan sesiones measurement comparables."
+            )
+        elif readiness_assessment.internal_precision_goal_met:
+            st.success(
+                f"{readiness_assessment.repeated_target_label.capitalize()}. "
+                "Es evidencia interna de consistencia; la retención se comprueba por separado."
+            )
+        else:
+            st.info(
+                "Aún no se ha repetido el objetivo interno en tres mediciones comparables."
+            )
+            pending_reasons = list(readiness_assessment.reasons[:3])
+            if pending_reasons:
+                with st.expander("Ver puertas pendientes", expanded=False):
+                    st.markdown("\n".join(f"- {reason}" for reason in pending_reasons))
+
+        if readiness_assessment is not None:
+            if readiness_assessment.retention_gate.status == "pending":
+                st.caption("Retención diferida: pendiente de una medición separada.")
+            elif readiness_assessment.retention_gate.met:
+                st.caption("Retención diferida: evidencia interna registrada.")
+            else:
+                st.caption("Retención diferida: todavía no cumple la política interna.")
+        if readiness_note:
+            st.caption(readiness_note)
+        st.caption(
+            "El objetivo interno de precisión no es el corte oficial. El 70/100 corresponde "
+            "al mínimo oficial funcional de DIAN 2676; esta aplicación no calcula aprobación, "
+            "posición en lista ni probabilidad de obtener el empleo."
+        )
+
     st.subheader("¿Qué quieres hacer hoy?")
     quick_practice, quick_plan, quick_change = st.columns(3)
     with quick_practice:
@@ -119,23 +245,167 @@ try:
             st.page_link("pages/13_Tutor_Adaptativo.py", label="Tutor adaptativo", icon="🧭", use_container_width=True)
             st.page_link("pages/10_Repaso_Especial.py", label="Repasos", icon="🧠", use_container_width=True)
         with extra_two:
-            st.page_link("pages/Simulacro_Real.py", label="Simulacro tipo examen", icon="⏱️", use_container_width=True)
+            st.page_link("pages/Simulacro_Real.py", label="Práctica PJS cronometrada", icon="⏱️", use_container_width=True)
             st.page_link("pages/9_Etica_Integridad.py", label="Ética e integridad", icon="⚖️", use_container_width=True)
         with extra_three:
             st.page_link("pages/12_Mapa_Estudio.py", label="Mapa de estudio", icon="🗺️", use_container_width=True)
+            st.page_link("pages/16_Biblioteca_Estudio.py", label="Qué debo estudiar", icon="📖", use_container_width=True)
+
+    # Resumen de acción rápido. El análisis histórico completo queda disponible
+    # bajo demanda para no penalizar el arranque en celular.
+    weak_function_label = "Sin diagnóstico"
+    due_error_count = 0
+    pending_document_count = 0
+    recent_measurement_label = "Sin mediciones"
+    if active_opec is not None:
+        table_names = set(inspect(db.connection()).get_table_names())
+        if "opec_topic_states" in table_names:
+            topic_states = db.query(OpecTopicState).filter_by(
+                user_id=u_id,
+                competition_id=active_competition_id,
+                user_opec_id=active_opec.id,
+            ).all()
+            by_function = {}
+            for state in topic_states:
+                if state.function_number is None:
+                    continue
+                weight = max(int(state.evidence_count or 0), 1)
+                total, evidence = by_function.get(int(state.function_number), (0.0, 0))
+                by_function[int(state.function_number)] = (
+                    total + float(state.mastery_score or 0.0) * weight,
+                    evidence + weight,
+                )
+            if by_function:
+                weakest_number, (weak_total, weak_evidence) = min(
+                    by_function.items(),
+                    key=lambda item: item[1][0] / max(item[1][1], 1),
+                )
+                weak_function_label = (
+                    f"F{weakest_number} · {weak_total / max(weak_evidence, 1):.0f}% interno"
+                )
+        if "error_episodes" in table_names:
+            now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            due_error_count = (
+                db.query(ErrorEpisode)
+                .filter_by(
+                    user_id=u_id,
+                    competition_id=active_competition_id,
+                    user_opec_id=active_opec.id,
+                )
+                .filter(
+                    ErrorEpisode.status.notin_(("overcome", "dismissed")),
+                    or_(
+                        ErrorEpisode.next_review_at.is_(None),
+                        ErrorEpisode.next_review_at <= now_utc,
+                    ),
+                )
+                .count()
+            )
+        if "opec_learning_sessions" in table_names:
+            recent_measurements = (
+                db.query(OpecLearningSession)
+                .filter_by(
+                    user_id=u_id,
+                    competition_id=active_competition_id,
+                    user_opec_id=active_opec.id,
+                    mode="measurement",
+                    status="completed",
+                )
+                .order_by(OpecLearningSession.completed_at.desc())
+                .limit(2)
+                .all()
+            )
+            if recent_measurements:
+                recent_measurement_label = f"{float(recent_measurements[0].score or 0):.0f}%"
+                if len(recent_measurements) == 2:
+                    delta = float(recent_measurements[0].score or 0) - float(
+                        recent_measurements[1].score or 0
+                    )
+                    recent_measurement_label += f" ({delta:+.0f})"
+        documents = build_study_library(active_opec.opec_number)
+        if documents:
+            library_progress = load_library_progress(
+                db,
+                user_id=u_id,
+                competition_id=active_competition_id,
+                user_opec_id=active_opec.id,
+                opec_number=active_opec.opec_number,
+            )
+            pending_document_count = sum(
+                library_progress.get(document.source_id, "not_started") == "not_started"
+                for document in documents
+            )
+
+    st.subheader("Tu foco inmediato")
+    focus_cols = st.columns(4)
+    focus_cols[0].metric("Debilidad prioritaria", weak_function_label)
+    focus_cols[1].metric("Repasos vencidos", due_error_count)
+    focus_cols[2].metric("Documentos pendientes", pending_document_count)
+    focus_cols[3].metric("Última medición", recent_measurement_label)
+    if due_error_count:
+        st.page_link(
+            "pages/10_Repaso_Especial.py",
+            label="Resolver repasos vencidos",
+            icon="🧠",
+            use_container_width=True,
+        )
+
+    quick_active_run = None
+    if active_opec is not None:
+        quick_active_run = load_daily_run(
+            db,
+            u_id,
+            competition_id=active_competition_id,
+            opec_number=active_opec.opec_number,
+        )
+    if quick_active_run:
+        saved_kind = str(quick_active_run.get("session_kind") or "practice")
+        saved_position = int(quick_active_run.get("position") or 0) + 1
+        saved_total = len(quick_active_run.get("question_ids") or ())
+        st.info(
+            f"Tienes una práctica pendiente ({saved_kind}): pregunta "
+            f"{min(saved_position, saved_total)} de {saved_total}."
+        )
+        if st.button(
+            "▶️ Reanudar práctica pendiente",
+            type="primary",
+            use_container_width=True,
+            key="resume_quick_active_run",
+        ):
+            restore_daily_run_to_session(st.session_state, quick_active_run)
+            st.switch_page("pages/2_Ejecucion.py")
+
+    show_advanced_dashboard = st.toggle(
+        "Ver análisis avanzado, calendario y exportaciones",
+        value=False,
+        help="El resumen rápido evita cargar gráficos y exportaciones innecesarios en celular.",
+    )
+    if not show_advanced_dashboard:
+        st.caption(
+            "Inicio rápido activo. Usa Mi plan de hoy para recibir la misión completa o "
+            "abre el análisis avanzado cuando necesites detalle histórico."
+        )
+        st.stop()
 
     # Plan diario adaptativo por disponibilidad y zona horaria de Colombia.
     bogota_now = datetime.datetime.now(ZoneInfo("America/Bogota"))
-    study_config = db.query(StudyPlanConfig).filter_by(
-        user_id=u_id,
-        competition_id=active_competition_id,
-    ).first()
+    study_config = None
+    if active_opec is not None:
+        try:
+            study_config = db.query(OpecStudyPlan).filter_by(
+                user_id=u_id,
+                competition_id=active_competition_id,
+                user_opec_id=active_opec.id,
+            ).first()
+        except Exception:
+            db.rollback()
+            study_config = None
     configured_days = study_config.study_days if study_config and study_config.study_days else [0, 1, 2, 3, 4, 5]
     is_study_day = bogota_now.weekday() in configured_days
     configured_minutes = (
         study_config.saturday_minutes
         if study_config and bogota_now.weekday() == 5
-        else (study_config.daily_minutes if study_config else 30)
+        else (study_config.weekday_minutes if study_config else 30)
     )
     timed_session = build_timed_session(configured_minutes)
     daily_goal = timed_session.question_goal
@@ -148,16 +418,35 @@ try:
         local_day_start + datetime.timedelta(days=1)
     ).astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
-    today_attempt_rows = db.query(Attempt.question_id, Attempt.is_correct).join(Question).filter(
-        Attempt.user_id == u_id,
-        Question.competition_id == active_competition_id,
-        Attempt.created_at >= utc_day_start,
-        Attempt.created_at < utc_day_end,
-    ).all()
+    try:
+        if active_opec is None:
+            raise ValueError("No hay OPEC activa para consultar evidencia diaria.")
+        today_attempt_rows = (
+            db.query(
+                OpecLearningEvent.question_id,
+                OpecLearningEvent.is_correct,
+            )
+            .join(
+                OpecLearningSession,
+                OpecLearningEvent.session_id == OpecLearningSession.id,
+            )
+            .filter(
+                OpecLearningEvent.user_id == u_id,
+                OpecLearningSession.competition_id == active_competition_id,
+                OpecLearningSession.user_opec_id == active_opec.id,
+                OpecLearningEvent.created_at >= utc_day_start,
+                OpecLearningEvent.created_at < utc_day_end,
+                OpecLearningEvent.is_correct.is_not(None),
+            )
+            .all()
+        )
+    except Exception:
+        db.rollback()
+        today_attempt_rows = []
     completed_today_ids = {row.question_id for row in today_attempt_rows}
     completed_today = min(len(completed_today_ids), daily_goal)
-    review_now_utc = datetime.datetime.utcnow()
-    due_review_count = db.query(QuestionPerformance).join(Question).filter(
+    review_now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    due_review_rows = db.query(QuestionPerformance.question_id).join(Question).filter(
         Question.competition_id == active_competition_id,
         QuestionPerformance.user_id == u_id,
         or_(
@@ -167,12 +456,7 @@ try:
                 QuestionPerformance.misses > 0,
             ),
         ),
-    ).count()
-    daily_accuracy = (
-        sum(1 for row in today_attempt_rows if row.is_correct) / len(today_attempt_rows) * 100
-        if today_attempt_rows
-        else 0.0
-    )
+    ).all()
 
     try:
         daily_candidates = QuestionService.get_questions_for_user(
@@ -184,9 +468,31 @@ try:
         if "unexpected keyword argument" not in str(exc):
             raise
         daily_candidates = QuestionService.get_questions_for_user(db, u_id)
+    daily_candidate_ids = {question.question_id for question in daily_candidates}
+    today_attempt_rows = [
+        row for row in today_attempt_rows if row.question_id in daily_candidate_ids
+    ]
+    completed_today_ids = {row.question_id for row in today_attempt_rows}
+    completed_today = min(len(completed_today_ids), daily_goal)
+    due_review_count = sum(
+        row.question_id in daily_candidate_ids for row in due_review_rows
+    )
+    daily_accuracy = (
+        sum(1 for row in today_attempt_rows if row.is_correct) / len(today_attempt_rows) * 100
+        if today_attempt_rows
+        else 0.0
+    )
     daily_skills = db.query(Skill).filter_by(
         user_id=u_id, competition_id=active_competition_id
     ).all()
+    daily_candidate_topics = {
+        (question.track, question.competency, question.topic)
+        for question in daily_candidates
+    }
+    daily_skills = [
+        item for item in daily_skills
+        if (item.track, item.competency, item.topic) in daily_candidate_topics
+    ]
     daily_performances = (
         db.query(QuestionPerformance)
         .join(Question)
@@ -196,6 +502,9 @@ try:
         )
         .all()
     )
+    daily_performances = [
+        item for item in daily_performances if item.question_id in daily_candidate_ids
+    ]
     daily_skills_map = {
         (item.track, item.competency, item.topic): item for item in daily_skills
     }
@@ -248,11 +557,14 @@ try:
         week_start_date, datetime.time.min, tzinfo=bogota_now.tzinfo
     )
     week_start_utc = week_start_local.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-    weekly_attempt_times = db.query(Attempt.created_at).join(Question).filter(
+    weekly_attempt_times = db.query(Attempt.question_id, Attempt.created_at).join(Question).filter(
         Attempt.user_id == u_id,
         Question.competition_id == active_competition_id,
         Attempt.created_at >= week_start_utc,
     ).all()
+    weekly_attempt_times = [
+        row for row in weekly_attempt_times if row.question_id in daily_candidate_ids
+    ]
     studied_week_days = set()
     for row in weekly_attempt_times:
         created_at = row.created_at
@@ -454,7 +766,7 @@ try:
                 st.info("Brecha de práctica: " + ", ".join(row["area"] for row in practice_gaps))
             action_cols = st.columns(3)
             with action_cols[0]:
-                st.page_link("pages/7_Configuracion_OPEC.py", label="Revisar ficha OPEC", icon="📋", width="stretch")
+                st.page_link("pages/15_Centro_OPEC.py", label="Revisar ficha OPEC", icon="📋", width="stretch")
             with action_cols[1]:
                 st.page_link("pages/1_Nuevo_Simulacro.py", label="Practicar cobertura", icon="▶️", width="stretch")
             with action_cols[2]:
@@ -544,6 +856,7 @@ try:
         performance_query = db.query(QuestionPerformance).join(Question).filter(
             QuestionPerformance.user_id == u_id,
             Question.competition_id == active_competition_id,
+            Question.question_id.in_(daily_candidate_ids),
         )
         total_qs = performance_query.count()
         if hasattr(QuestionPerformance, "is_mastered"):
@@ -552,12 +865,15 @@ try:
             # Fallback: estimate mastery if field is missing Mikey
             mastered_qs = 0 
     except Exception as e:
-        print(f"⚠️ Error en Mastery Calculation: {e}")
+        log_ui_exception("dashboard.mastery", e)
 
     mastery_pct = (mastered_qs / total_qs * 100) if total_qs > 0 else 0
 
     # Quality Metrics v32 Mikey
-    bank_query = db.query(Question).filter(Question.competition_id == active_competition_id)
+    bank_query = db.query(Question).filter(
+        Question.competition_id == active_competition_id,
+        Question.question_id.in_(daily_candidate_ids),
+    )
     total_bank = bank_query.count()
     verified_bank = bank_query.filter(Question.is_verified.is_(True)).count()
     quality_idx = (verified_bank / total_bank * 100) if total_bank > 0 else 0
@@ -566,7 +882,7 @@ try:
     with col_s1:
         st.metric("🔥 Racha Actual", f"{stats.current_streak} días")
     with col_s2:
-        st.metric("🎓 Maestría Real", f"{mastery_pct:.1f}%", f"{mastered_qs}/{total_qs} Qs")
+        st.metric("🎓 Repaso consolidado", f"{mastery_pct:.1f}%", f"{mastered_qs}/{total_qs} preguntas")
     with col_s3:
         st.metric("🏆 Puntos Totales", f"{stats.total_points} pts")
     with col_s4:
@@ -574,6 +890,7 @@ try:
             QuestionPerformance.user_id == u_id,
             QuestionPerformance.is_favorite.is_(True),
             Question.competition_id == active_competition_id,
+            Question.question_id.in_(daily_candidate_ids),
         ).count()
         st.metric("⭐ Favoritas", f"{fav_count} Qs", "Para repasar")
 
@@ -599,6 +916,7 @@ try:
         performance_scope = db.query(QuestionPerformance).join(Question).filter(
             QuestionPerformance.user_id == u_id,
             Question.competition_id == active_competition_id,
+            Question.question_id.in_(daily_candidate_ids),
         )
         total_hits = performance_scope.with_entities(func.sum(QuestionPerformance.hits)).scalar() or 0
         total_misses = performance_scope.with_entities(func.sum(QuestionPerformance.misses)).scalar() or 0
@@ -627,25 +945,28 @@ try:
                 paper_bgcolor='rgba(0,0,0,0)',
             )
             st.plotly_chart(fig_balance, width="stretch", key="dashboard_balance_gauge")
-            st.caption(f"✅ {total_hits} aciertos · ❌ {total_misses} errores · Meta: 70%")
+            st.caption(
+                f"✅ {total_hits} aciertos · ❌ {total_misses} errores · "
+                "Umbral interno de refuerzo: 70%"
+            )
         else:
             st.info("No hay datos de intentos.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_b2:
         st.markdown('<div class="dian-card" style="height: 100%;">', unsafe_allow_html=True)
-        st.subheader("🎯 Nivel de Dominio por Eje")
+        st.subheader("🎯 Estimación interna por área de práctica")
         skills = daily_skills
         if skills:
             df_skills = pd.DataFrame([{
-                'Eje': s.track,
+                'Área de práctica': s.track,
                 'Macro-Dominio': getattr(s, 'macro_dominio', "Transversal") or "Transversal",
                 'Micro-Competencia': getattr(s, 'micro_competencia', s.topic) or s.topic,
                 'Dominio': s.mastery_score
             } for s in skills])
             
             eje_mastery = (
-                df_skills.groupby('Eje', as_index=False)['Dominio'].mean()
+                df_skills.groupby('Área de práctica', as_index=False)['Dominio'].mean()
                 .sort_values('Dominio', ascending=True)
             )
             bar_colors = [
@@ -653,14 +974,19 @@ try:
                 for value in eje_mastery['Dominio']
             ]
             fig = go.Figure(go.Bar(
-                x=eje_mastery['Dominio'], y=eje_mastery['Eje'], orientation='h',
+                x=eje_mastery['Dominio'], y=eje_mastery['Área de práctica'], orientation='h',
                 marker_color=bar_colors,
                 text=[f"{value:.0f}%" for value in eje_mastery['Dominio']],
                 textposition='outside', cliponaxis=False,
                 hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
             ))
-            fig.add_vline(x=70, line_dash="dash", line_color="#991b1b",
-                          annotation_text="Meta 70%", annotation_position="top")
+            fig.add_vline(
+                x=70,
+                line_dash="dash",
+                line_color="#991b1b",
+                annotation_text="Refuerzo interno 70%",
+                annotation_position="top",
+            )
             fig.update_xaxes(range=[0, 105], title=None, ticksuffix="%", fixedrange=True)
             fig.update_yaxes(title=None, fixedrange=True)
             fig.update_layout(
@@ -684,6 +1010,7 @@ try:
     attempts = db.query(Attempt).join(Question).filter(
         Attempt.user_id == u_id,
         Question.competition_id == active_competition_id,
+        Question.question_id.in_(daily_candidate_ids),
     ).order_by(Attempt.created_at.desc()).limit(50).all()
     if attempts:
         df_att = pd.DataFrame([{
@@ -710,8 +1037,13 @@ try:
             x=df_daily['Fecha'], y=df_daily['Promedio móvil'], name='Promedio móvil (3 días)',
             mode='lines+markers', line=dict(color='#1d4ed8', width=3),
         ))
-        fig_line.add_hline(y=70, line_dash='dash', line_color='#dc2626',
-                           annotation_text='Meta 70%', annotation_position='top left')
+        fig_line.add_hline(
+            y=70,
+            line_dash='dash',
+            line_color='#dc2626',
+            annotation_text='Refuerzo interno 70%',
+            annotation_position='top left',
+        )
         fig_line.update_yaxes(range=[0, 105], ticksuffix='%', title=None, fixedrange=True)
         fig_line.update_xaxes(title=None, fixedrange=True)
         fig_line.update_layout(
@@ -796,7 +1128,7 @@ try:
             if emerging_rows:
                 st.caption(
                     f"Ya comenzaste {len(emerging_rows)} tema(s), pero cada uno necesita al menos "
-                    f"{minimum_topic_attempts} respuestas para producir una estimación estable."
+                    f"{minimum_topic_attempts} respuestas para aportar evidencia mínima inicial."
                 )
 
     with col_d2:
@@ -832,7 +1164,10 @@ try:
                 for macro in pending_macros:
                     st.markdown(f"- **{macro}** · pendiente de evidencia suficiente")
             else:
-                st.success("Los macrodominios evaluados están actualmente sobre la meta del 70%.")
+                st.success(
+                    "Los macrodominios evaluados están actualmente sobre el umbral interno "
+                    "de refuerzo del 70%."
+                )
         else:
             st.info("No hay habilidades configuradas todavía.")
 
@@ -1001,6 +1336,7 @@ try:
     failed_qs = failed_query.filter(
         Question.competition_id == active_competition_id,
         Question.question_id.in_(failed_q_ids),
+        Question.question_id.in_(daily_candidate_ids),
     ).all() if failed_q_ids else []
     # 2. Obtener preguntas favoritas
     fav_q_ids = db.query(QuestionPerformance.question_id).filter(
@@ -1014,6 +1350,7 @@ try:
     fav_qs = fav_query.filter(
         Question.competition_id == active_competition_id,
         Question.question_id.in_(fav_q_ids),
+        Question.question_id.in_(daily_candidate_ids),
     ).all() if fav_q_ids else []
     def to_anki_standard_csv(questions):
         rows = []
@@ -1233,7 +1570,8 @@ try:
                         key="btn_export_anki_fallas_apkg"
                     )
                 except Exception as ex:
-                    st.error(f"Error generando APKG: {ex}")
+                    log_ui_exception("dashboard.anki.failures", ex)
+                    st.error("No fue posible generar el archivo APKG.")
                 
                 failed_int_csv = to_anki_interactive_csv(failed_qs)
                 st.download_button(
@@ -1286,7 +1624,8 @@ try:
                         key="btn_export_anki_favs_apkg"
                     )
                 except Exception as ex:
-                    st.error(f"Error generando APKG: {ex}")
+                    log_ui_exception("dashboard.anki.favorites", ex)
+                    st.error("No fue posible generar el archivo APKG.")
                 
                 fav_int_csv = to_anki_interactive_csv(fav_qs)
                 st.download_button(
@@ -1326,7 +1665,8 @@ try:
                 st.rerun()
 
 except Exception as e:
-    st.error(f"Error cargando dashboard: {e}")
+    log_ui_exception("dashboard.load", e)
+    st.error("No fue posible cargar el panel. Recarga la página e intenta nuevamente.")
 finally:
     db.close()
 

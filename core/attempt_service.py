@@ -4,7 +4,7 @@ Mantiene alineados el historial bruto, el rendimiento por pregunta, la
 habilidad y la cola de repaso espaciado. Las páginas pueden usar este servicio
 sin duplicar reglas de actualización.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from db.models import Attempt, Question, QuestionPerformance, Skill
@@ -17,7 +17,7 @@ def record_attempt(
     user_id: int,
     question: Question,
     chosen_key: str,
-    confidence: str = "unsure",
+    confidence: Optional[str] = None,
     error_type: Optional[str] = None,
     time_sec: Optional[int] = None,
     when: Optional[datetime] = None,
@@ -27,7 +27,7 @@ def record_attempt(
     Devuelve si la respuesta fue correcta. El commit queda a cargo del flujo
     que agrupa la sesión, permitiendo guardar un simulacro como unidad.
     """
-    now = when or datetime.utcnow()
+    now = when or datetime.now(UTC).replace(tzinfo=None)
     is_correct = chosen_key == question.correct_key
     db.add(Attempt(
         question_id=question.question_id,
@@ -49,8 +49,18 @@ def record_attempt(
     perf.misses = int(perf.misses or 0) + int(not is_correct)
     perf.mastery_level = (perf.hits / max(perf.hits + perf.misses, 1)) * 10.0
     perf.last_attempt = now
-    schedule_review(perf, is_correct=is_correct, confidence=confidence,
-                    error_type=error_type, now=now)
+    declared_confidence = confidence
+    schedule_review(
+        perf,
+        is_correct=is_correct,
+        confidence=confidence or "unsure",
+        error_type=error_type,
+        now=now,
+    )
+    # Scheduling needs a neutral fallback, but telemetry must not pretend the
+    # learner declared confidence when the flow never asked for it.
+    if declared_confidence is None:
+        perf.last_confidence = None
 
     skill = db.query(Skill).filter_by(
         user_id=user_id, competition_id=question.competition_id,

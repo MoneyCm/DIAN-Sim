@@ -1,0 +1,391 @@
+{
+  "opec_number": "236769",
+  "competition_code": "DIAN-2676",
+  "version": "phase1-2026-08-15-v2",
+  "reviewed_on": "2026-08-15",
+  "target_score": 85,
+  "target_score_status": "editorial_provisional_not_official",
+  "exam_format_status": "La PJS está especificada oficialmente; cantidad por cuadernillo, duración, ejes definitivos y GOA de pruebas escritas están pendientes de publicación.",
+  "planning_basis": "Las metas por función son una asignación provisional editable para construir 1.500 preguntas funcionales. No representan ponderaciones oficiales del examen.",
+  "editorial_fields_status": "Los objetivos numéricos, conocimientos derivados, tipos de situación, niveles cognitivos y vínculos de integridad son decisiones editoriales provisionales. No son ejes ni ponderaciones oficiales de la CNSC.",
+  "bank_targets": {
+    "functional": 1500,
+    "behavioral": 400,
+    "integrity": 300
+  },
+  "bank_targets_status": "editorial_provisional_not_official",
+  "opec_evidence": {
+    "merf_code": "AT-FL-3006",
+    "merf_profile_status": "official_verified",
+    "selection_modality": null,
+    "selection_modality_status": "pending_authenticated_simo_verification",
+    "note": "La ficha MERF acredita que el empleo exige experiencia, pero la modalidad de la vacante debe conservarse desde la ficha autenticada de SIMO antes de asignar ponderaciones."
+  },
+  "official_publication_status": {
+    "written_tests_goa": {
+      "status": "not_located_on_official_process_portal_as_of_consulted_on",
+      "consulted_on": "2026-08-15"
+    },
+    "definitive_opec_axes_and_indicators": {
+      "status": "not_publicly_available_as_of_consulted_on",
+      "consulted_on": "2026-08-15"
+    },
+    "exam_item_count": {
+      "value": null,
+      "status": "not_published_as_of_consulted_on",
+      "consulted_on": "2026-08-15"
+    },
+    "exam_duration_minutes": {
+      "value": null,
+      "status": "not_published_as_of_consulted_on",
+      "consulted_on": "2026-08-15"
+    },
+    "application_date_and_citation": {
+      "value": null,
+      "status": "not_published_as_of_consulted_on",
+      "consulted_on": "2026-08-15"
+    }
+  },
+  "official_exam_methodology": {
+    "status": "official_procurement_specification_available_goa_pending",
+    "source_id": "pjs_spec_lp004_2026",
+    "functional": {
+      "method": "Prueba de Juicio Situacional (PJS)",
+      "case_length_characters": {"minimum": 450, "maximum": 700},
+      "prompt_length_characters": {"minimum": 150, "maximum": 250},
+      "option_length_characters_approximate": {"minimum": 80, "maximum": 120},
+      "options_per_item": 3,
+      "correct_options_per_item": 1,
+      "maximum_prompts_per_case": 3
+    },
+    "behavioral": {
+      "method": "Autorreporte con escala Likert",
+      "options_per_statement": 4,
+      "has_correct_answer": false
+    },
+    "integrity": {
+      "method": "Autorreporte con escala Likert",
+      "options_per_statement": 4,
+      "has_correct_answer": false
+    },
+    "caveat": "Estas reglas describen la metodología oficial de construcción contratada. No publican la cantidad de ítems ni la duración del cuadernillo definitivo."
+  },
+  "behavioral_competencies": [
+    {"name": "Comportamiento ético", "level": 4, "source_id": "profile_at_fl_3006"},
+    {"name": "Adaptabilidad", "level": 3, "source_id": "profile_at_fl_3006"},
+    {"name": "Comunicación efectiva", "level": 3, "source_id": "profile_at_fl_3006"},
+    {"name": "Trabajo en equipo", "level": 3, "source_id": "profile_at_fl_3006"}
+  ],
+  "sources": [
+    {
+      "id": "agreement_21_2025",
+      "name": "Acuerdo CNSC No. 21 de 2025",
+      "entity": "CNSC",
+      "date_version": "2025-11-07",
+      "url": "https://www.cnsc.gov.co/sites/default/files/2025-11/acuerdo-no-21-dian-2676-de-20251.pdf",
+      "consulted_on": "2026-08-15",
+      "topics": ["reglas del proceso", "pruebas", "ponderaciones"],
+      "locators": "Artículo 17; páginas 20-22",
+      "validity": "Vigente para DIAN 2676",
+      "status": "official_available"
+    },
+    {
+      "id": "annex_2676_2025",
+      "name": "Anexo del Proceso de Selección DIAN 2676",
+      "entity": "CNSC",
+      "date_version": "2025-11-10",
+      "url": "https://www.cnsc.gov.co/sites/default/files/2025-11/anexo_ps-dian-2676-de-2025.pdf",
+      "consulted_on": "2026-08-15",
+      "topics": ["alcance de pruebas", "competencias", "reglas técnicas"],
+      "locators": "Numeral 5; páginas 34-39",
+      "validity": "Vigente para DIAN 2676",
+      "status": "official_available"
+    },
+    {
+      "id": "pjs_spec_lp004_2026",
+      "name": "Especificaciones técnicas LP-004-2026 para construcción de pruebas DIAN 2676",
+      "entity": "CNSC / SECOP",
+      "date_version": "2026-04 · LP-004-2026",
+      "url": "https://community.secop.gov.co/Public/Archive/RetrieveFile/Index?DocumentId=783745811&InCommunity=False&InPaymentGateway=False",
+      "consulted_on": "2026-08-15",
+      "topics": ["Prueba de Juicio Situacional", "estructura de ítems", "opciones de respuesta"],
+      "locators": "Páginas 10, 43 y 52-53",
+      "validity": "Especificación oficial disponible; no sustituye la futura GOA",
+      "status": "official_available",
+      "source_role": "official_item_construction_methodology_not_exam_logistics"
+    },
+    {
+      "id": "profile_at_fl_3006",
+      "name": "Ficha MERF AT-FL-3006 Gestor III",
+      "entity": "DIAN",
+      "date_version": "Formato 2023 · ficha versión 3 · vigencia desde 2023-01-27",
+      "url": "https://www.dian.gov.co/dian/entidad/ManualdeFunciones/FT_TAH_1824_Gestor_III_AT_FL_3006.pdf",
+      "consulted_on": "2026-08-15",
+      "topics": ["propósito", "nueve funciones", "requisitos del empleo"],
+      "locators": "Páginas 1-2: propósito, funciones esenciales, requisitos y competencias",
+      "validity": "Ficha oficial vigente del MERF adoptado por la Resolución DIAN 0067 de 2024",
+      "status": "official_verified",
+      "source_role": "official_opec_merf_basis"
+    },
+    {
+      "id": "resolution_67_2024",
+      "name": "Resolución DIAN 0067 de 2024",
+      "entity": "DIAN",
+      "date_version": "2024-04-11",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0067_2024.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["adopción del MERF", "funciones comunes", "responsabilidades"],
+      "locators": "Artículos 3, 4, 6, 10 y 12",
+      "validity": "Vigente según Normograma DIAN; la corrección de la Resolución 5324 de 2024 no afecta la ficha AT-FL-3006",
+      "status": "official_verified",
+      "source_role": "official_merf_adoption"
+    },
+    {
+      "id": "resolution_66_2024",
+      "name": "Resolución DIAN 0066 de 2024",
+      "entity": "DIAN",
+      "date_version": "2024-04-11",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0066_2024.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["requisitos mínimos", "Gestor III"],
+      "locators": "Artículo 1.3",
+      "validity": "Vigente según Normograma DIAN",
+      "status": "official_verified",
+      "source_role": "official_minimum_requirements"
+    },
+    {
+      "id": "resolution_65_2024",
+      "name": "Resolución DIAN 0065 de 2024",
+      "entity": "DIAN",
+      "date_version": "2024-04-11",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0065_2024.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["adopción del Diccionario de Competencias Comportamentales"],
+      "locators": "Artículos de adopción, publicación y vigencia",
+      "validity": "Vigente según Normograma DIAN",
+      "status": "official_verified",
+      "source_role": "official_behavioral_competency_adoption"
+    },
+    {
+      "id": "behavioral_dictionary_65_2024",
+      "name": "Anexo de la Resolución 0065 de 2024: Diccionario de Competencias Comportamentales DIAN",
+      "entity": "DIAN",
+      "date_version": "2024-04-11",
+      "url": "https://www.dian.gov.co/dian/entidad/Documents/Diccionario-de-Competencias-Comportamentales-Res-065-2024.pdf",
+      "consulted_on": "2026-08-15",
+      "topics": ["competencias comportamentales", "definiciones", "niveles de desarrollo", "conductas observables"],
+      "locators": "Definiciones y niveles de comportamiento ético, adaptabilidad, comunicación efectiva y trabajo en equipo",
+      "validity": "Anexo oficial vigente de la Resolución DIAN 0065 de 2024",
+      "status": "official_verified",
+      "source_role": "official_behavioral_competency_dictionary"
+    },
+    {
+      "id": "tax_statute",
+      "name": "Estatuto Tributario compilado",
+      "entity": "DIAN",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["fiscalización", "pruebas", "actos", "sanciones", "recursos"],
+      "locators": "Artículos aplicables indicados en cada pregunta",
+      "validity": "Debe verificarse artículo por artículo antes de habilitar contenido",
+      "status": "official_available",
+      "source_role": "official_normative_corpus_requires_item_level_verification"
+    },
+    {
+      "id": "tax_regulatory_decree_1625",
+      "name": "Decreto Único Reglamentario 1625 de 2016 en materia tributaria",
+      "entity": "Presidencia de la República / Compilación Jurídica DIAN",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_1625_2016.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["reglamentación tributaria", "obligaciones", "fiscalización", "procedimientos"],
+      "locators": "Artículo reglamentario aplicable indicado y contrastado en cada pregunta",
+      "validity": "Compilación oficial actualizada; verificar notas de vigencia y modificaciones por artículo",
+      "status": "official_available",
+      "source_role": "official_normative_corpus_requires_item_level_verification"
+    },
+    {
+      "id": "customs_decree_1165",
+      "name": "Decreto 1165 de 2019",
+      "entity": "DIAN",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_1165_2019.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["régimen aduanero", "fiscalización", "control posterior"],
+      "locators": "Artículo aplicable por caso",
+      "validity": "Compilación oficial; verificar modificaciones por artículo",
+      "status": "official_available"
+    },
+    {
+      "id": "customs_resolution_46",
+      "name": "Resolución DIAN 0046 de 2019",
+      "entity": "DIAN",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0046_2019.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["reglamentación aduanera", "procedimientos"],
+      "locators": "Artículo aplicable por caso",
+      "validity": "Compilación oficial; verificar modificaciones por artículo",
+      "status": "official_available"
+    },
+    {
+      "id": "exchange_decree_2245",
+      "name": "Decreto 2245 de 2011",
+      "entity": "DIAN",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_2245_2011.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["procedimiento sancionatorio cambiario", "investigación"],
+      "locators": "Artículo aplicable por caso",
+      "validity": "Compilación oficial; verificar modificaciones por artículo",
+      "status": "official_available"
+    },
+    {
+      "id": "cpaca_1437",
+      "name": "Ley 1437 de 2011 (CPACA)",
+      "entity": "DIAN / Congreso de Colombia",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/ley_1437_2011.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["procedimiento administrativo", "actos", "pruebas", "recursos"],
+      "locators": "Artículo aplicable por caso",
+      "validity": "Compilación oficial; verificar modificaciones por artículo",
+      "status": "official_available"
+    },
+    {
+      "id": "transparency_1712",
+      "name": "Ley 1712 de 2014",
+      "entity": "DIAN / Congreso de Colombia",
+      "date_version": "Compilación vigente consultada 2026-08-15",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/ley_1712_2014.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["transparencia", "información pública", "reserva"],
+      "locators": "Disposiciones aplicables a información y reserva",
+      "validity": "Compilación oficial vigente",
+      "status": "official_available"
+    },
+    {
+      "id": "career_decree_927",
+      "name": "Decreto-Ley 927 de 2023",
+      "entity": "DIAN / Presidencia de la República",
+      "date_version": "2023",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_0927_2023.htm",
+      "consulted_on": "2026-08-15",
+      "topics": ["sistema específico de carrera DIAN", "pruebas"],
+      "locators": "Artículos 32 y 57-61",
+      "validity": "Vigente según Normograma DIAN",
+      "status": "official_available"
+    }
+  ],
+  "functions": [
+    {
+      "number": 1,
+      "short_name": "Precrítica y clasificación de insumos",
+      "official_function_text": "Hacer la precrítica y clasificación de los insumos recibidos, estableciendo la pertinencia del inicio de una investigación, de acuerdo con los procedimientos y lineamientos institucionales.",
+      "functional_question_target": 90,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Precrítica", "Cruces de información", "Pertinencia de investigación", "Trazabilidad de clasificación"],
+      "competency_links": {"functional": ["Clasificar insumos", "Sustentar apertura, no apertura o remisión"], "behavioral": ["Comunicación efectiva", "Comportamiento ético"], "integrity": ["Objetividad", "Uso responsable de datos"]},
+      "situation_types": ["Inconsistencias en información exógena", "Insumo insuficiente", "Priorización por riesgo"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "cpaca_1437", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 2,
+      "short_name": "Análisis preliminar de denuncias de fiscalización",
+      "official_function_text": "Hacer el análisis preliminar de las denuncias de fiscalización recibidas, estableciendo la pertinencia del inicio de una acción de fiscalización, de acuerdo con la normativa vigente, procedimientos y lineamientos institucionales.",
+      "functional_question_target": 90,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Pertinencia y competencia", "Calidad mínima de la denuncia", "Reserva y trazabilidad", "Decisión de iniciar o remitir"],
+      "competency_links": {"functional": ["Analizar hechos y fuentes", "Aplicar criterios de fiscalización"], "behavioral": ["Comunicación efectiva", "Comportamiento ético"], "integrity": ["Imparcialidad", "Reserva de información"]},
+      "situation_types": ["Denuncia anónima", "Denuncia incompleta", "Traslado por competencia"],
+      "cognitive_levels": ["Comprender", "Aplicar", "Analizar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "cpaca_1437", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 3,
+      "short_name": "Investigaciones y reporte de operaciones sospechosas",
+      "official_function_text": "Realizar investigaciones para determinar el cumplimiento de las obligaciones tributarias, aduaneras o cambiarias y, el reporte de las operaciones sospechosas de lavado de activos y financiación del terrorismo, en el marco de su competencia y jurisdicción, de acuerdo con la normativa vigente, las directrices institucionales y los procedimientos establecidos.",
+      "functional_question_target": 220,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Investigación tributaria, aduanera y cambiaria", "Competencia y jurisdicción", "Señales de alerta", "Reserva", "Reporte de operaciones sospechosas"],
+      "competency_links": {"functional": ["Desarrollar investigaciones", "Integrar evidencia"], "behavioral": ["Adaptabilidad", "Trabajo en equipo", "Comportamiento ético"], "integrity": ["Reserva", "Prevención de conflictos"]},
+      "situation_types": ["Investigación tributaria", "Operación cambiaria", "Canalización ficticia", "Señales LA/FT", "Coordinación institucional"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "customs_decree_1165", "customs_resolution_46", "exchange_decree_2245", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 4,
+      "short_name": "Actos administrativos de trámite, preparatorios y de fondo",
+      "official_function_text": "Proferir los actos administrativos de trámite, preparatorios y de fondo requeridos dentro del proceso, de acuerdo con la normativa vigente y los procedimientos establecidos.",
+      "functional_question_target": 250,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Actos de trámite, preparatorios y de fondo", "Motivación", "Competencia", "Notificación", "Términos y recursos"],
+      "competency_links": {"functional": ["Proferir actos", "Controlar requisitos y términos"], "behavioral": ["Comunicación efectiva", "Comportamiento ético"], "integrity": ["Debido proceso", "Responsabilidad"]},
+      "situation_types": ["Requerimiento", "Liquidación", "Notificación", "Recurso", "Impedimento"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "cpaca_1437", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 5,
+      "short_name": "Revisión técnica y jurídica de expedientes y asuntos",
+      "official_function_text": "Revisar técnica y/o jurídicamente, en el marco de su competencia y jurisdicción, los expedientes y asuntos asignados propios del proceso, de acuerdo con la normativa vigente y las directrices institucionales.",
+      "functional_question_target": 100,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Competencia y jurisdicción", "Integridad del expediente", "Valoración probatoria", "Motivación", "Control de términos"],
+      "competency_links": {"functional": ["Revisar expedientes", "Detectar defectos técnicos y jurídicos"], "behavioral": ["Comunicación efectiva", "Trabajo en equipo", "Comportamiento ético"], "integrity": ["Independencia", "Debido proceso"]},
+      "situation_types": ["Proyecto de acto", "Expediente incompleto", "Glosa nueva", "Vencimiento de término"],
+      "cognitive_levels": ["Analizar", "Evaluar", "Decidir"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "cpaca_1437", "customs_decree_1165", "exchange_decree_2245", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 6,
+      "short_name": "Ejecución de acciones de fiscalización",
+      "official_function_text": "Participar en la ejecución de acciones de fiscalización, en el marco de su competencia y jurisdicción, tendientes a la verificación del cumplimiento de las obligaciones tributarias, aduaneras o cambiarias, de acuerdo con la normativa vigente, lineamientos institucionales y procedimientos establecidos.",
+      "functional_question_target": 360,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Facultades de fiscalización", "Procedimiento tributario", "Control aduanero", "Obligaciones cambiarias", "Debido proceso"],
+      "competency_links": {"functional": ["Ejecutar actuaciones", "Seleccionar el procedimiento aplicable"], "behavioral": ["Adaptabilidad", "Trabajo en equipo", "Comportamiento ético"], "integrity": ["Legalidad", "Imparcialidad"]},
+      "situation_types": ["Fiscalización tributaria", "Control posterior aduanero", "Verificación cambiaria", "Devoluciones", "Fiscalización internacional"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "customs_decree_1165", "customs_resolution_46", "exchange_decree_2245", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 7,
+      "short_name": "Información y propuestas para decisión directiva",
+      "official_function_text": "Organizar la información y propuestas de asuntos de fiscalización para presentarlos a consideración de la reunión del nivel directivo del proceso de fiscalización y liquidación para la decisión pertinente.",
+      "functional_question_target": 120,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Organización de evidencia", "Criterios de priorización", "Soportes de propuesta", "Competencia para decidir"],
+      "competency_links": {"functional": ["Preparar propuestas trazables", "Sintetizar evidencia"], "behavioral": ["Comunicación efectiva", "Trabajo en equipo"], "integrity": ["Confidencialidad", "Objetividad"]},
+      "situation_types": ["Plan de trabajo", "Propuesta incompleta", "Reunión directiva", "Información reservada"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "resolution_67_2024", "cpaca_1437", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 8,
+      "short_name": "Práctica de pruebas",
+      "official_function_text": "Realizar la práctica de pruebas solicitadas por una dependencia del nivel central o seccional, para que obre dentro de una investigación, de acuerdo con la normativa vigente y los procedimientos establecidos.",
+      "functional_question_target": 150,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Decreto y práctica de pruebas", "Pertinencia y conducencia", "Valoración", "Cadena documental", "Cooperación entre dependencias"],
+      "competency_links": {"functional": ["Practicar y valorar pruebas", "Documentar actuaciones"], "behavioral": ["Trabajo en equipo", "Comunicación efectiva", "Comportamiento ético"], "integrity": ["Objetividad probatoria", "Custodia de información"]},
+      "situation_types": ["Inspección", "Visita", "Prueba documental", "Solicitud de otra dependencia", "Prueba internacional"],
+      "cognitive_levels": ["Aplicar", "Analizar", "Evaluar"],
+      "source_ids": ["profile_at_fl_3006", "tax_statute", "tax_regulatory_decree_1625", "cpaca_1437", "customs_decree_1165", "exchange_decree_2245", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    },
+    {
+      "number": 9,
+      "short_name": "Funciones comunes y demás asignadas",
+      "official_function_text": "Las señaladas como comunes a todos los empleos de la planta de personal de la Entidad, incluidas en la resolución que adopta o modifica el manual y las demás asignadas por autoridad competente, de acuerdo con el nivel, grado de responsabilidad y el área de desempeño del empleo.",
+      "functional_question_target": 120,
+      "editorial_status": "provisional_not_official_axis_or_weight",
+      "knowledge": ["Riesgos e indicadores", "Seguridad y calidad de información", "Gestión documental", "Atención y mejora institucional"],
+      "competency_links": {"functional": ["Gestión institucional", "Uso seguro de información"], "behavioral": ["Adaptabilidad", "Comunicación efectiva", "Trabajo en equipo", "Comportamiento ético"], "integrity": ["Transparencia", "Diligencia"]},
+      "situation_types": ["Reporte de riesgos", "Manejo de datos", "PQR y documentos", "Mejora de procesos"],
+      "cognitive_levels": ["Comprender", "Aplicar", "Analizar"],
+      "source_ids": ["profile_at_fl_3006", "resolution_67_2024", "transparency_1712", "resolution_65_2024", "behavioral_dictionary_65_2024", "pjs_spec_lp004_2026"]
+    }
+  ]
+}

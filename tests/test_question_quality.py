@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from core.question_quality import audit_bank, audit_question_structure, store_deterministic_audit
+from core.question_quality import (
+    audit_bank,
+    audit_question_structure,
+    find_near_duplicate_pairs,
+    store_deterministic_audit,
+)
 
 
 def question(**overrides):
@@ -37,3 +42,67 @@ def test_bank_reports_answer_key_bias():
     assert summary["passed"] == 4
     assert summary["dominant_key"] == "A"
     assert summary["dominant_key_pct"] == 100.0
+
+
+def test_likert_structure_requires_four_options_and_no_key():
+    item = question(
+        track="COMPORTAMENTAL",
+        question_type="LIKERT",
+        options_json={"A": "Nunca", "B": "Casi nunca", "C": "Casi siempre", "D": "Siempre"},
+        correct_key=None,
+    )
+    assert audit_question_structure(item)["status"] == "PASS"
+
+    item.correct_key = "A"
+    report = audit_question_structure(item)
+    assert report["status"] == "REVIEW"
+    assert "likert_has_key" in {finding["code"] for finding in report["findings"]}
+
+
+def test_concise_likert_statement_is_valid_without_forcing_a_case_prompt():
+    item = question(
+        stem="Actúo coordinadamente con mi equipo.",
+        track="COMPORTAMENTAL",
+        question_type="LIKERT",
+        options_json={"A": "Nunca", "B": "Casi nunca", "C": "Casi siempre", "D": "Siempre"},
+        correct_key=None,
+    )
+
+    assert audit_question_structure(item)["status"] == "PASS"
+
+
+def test_likert_items_do_not_distort_answer_key_bias():
+    functional = question(question_id="functional", correct_key="B")
+    likert = question(
+        question_id="likert",
+        track="INTEGRIDAD",
+        question_type="LIKERT",
+        options_json={"A": "1", "B": "2", "C": "3", "D": "4"},
+        correct_key=None,
+    )
+    summary = audit_bank([functional, likert])
+    assert summary["dominant_key"] == "B"
+    assert summary["dominant_key_pct"] == 50.0
+
+
+def test_editorial_difficulty_accepts_full_one_to_ten_scale():
+    item = question(quality_report={"editorial_difficulty_1_10": 9})
+    assert audit_question_structure(item)["status"] == "PASS"
+
+
+def test_near_duplicate_paraphrases_are_reported_for_editorial_review():
+    first = question(
+        question_id="first",
+        stem="La dependencia recibe un hallazgo documentado y debe definir la actuación inicial.",
+    )
+    second = question(
+        question_id="second",
+        stem="La dependencia debe definir la actuación inicial ante un hallazgo documentado.",
+    )
+
+    pairs = find_near_duplicate_pairs([first, second], threshold=85)
+    summary = audit_bank([first, second])
+
+    assert pairs[0]["question_id"] == "first"
+    assert pairs[0]["duplicate_question_id"] == "second"
+    assert summary["near_duplicate_count"] == 1

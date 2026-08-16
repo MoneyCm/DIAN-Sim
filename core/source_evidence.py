@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from urllib.parse import urlparse
 
 
 SOURCE_EVIDENCE_VERSION = "official-links-v3"
@@ -34,6 +35,7 @@ OFFICIAL_DOMAINS = (
     "suin-juriscol.gov.co",
     "funcionpublica.gov.co",
 )
+VERIFIED_SOURCE_STATUSES = {"official_current", "official_verified"}
 
 
 def _normalise(value: object) -> str:
@@ -129,3 +131,41 @@ def record_source_evidence(question) -> dict:
     report["source_evidence"] = evidence
     question.quality_report = report
     return evidence
+
+
+def precise_source_verification_error(question) -> str | None:
+    """Validate the persisted editorial proof that supports a question key.
+
+    Detecting an official website is only an anchor.  Approval additionally
+    requires an editor to record the exact locator, supporting excerpt,
+    currency check, date and reviewer.  This deliberately does not ask an LLM
+    to certify legal correctness.
+    """
+    report = getattr(question, "quality_report", None)
+    verification = report.get("source_verification") if isinstance(report, dict) else None
+    if not isinstance(verification, dict):
+        return "Falta la verificación normativa individual de la fuente."
+
+    status = str(verification.get("status", "")).strip().casefold()
+    if status not in VERIFIED_SOURCE_STATUSES:
+        return "La fuente no está marcada como oficial y vigente."
+
+    url = str(verification.get("url", "")).strip()
+    host = (urlparse(url).hostname or "").casefold()
+    if not host or not any(host == domain or host.endswith(f".{domain}") for domain in OFFICIAL_DOMAINS):
+        return "La verificación debe enlazar una URL oficial."
+
+    if not str(verification.get("locator", "")).strip():
+        return "Falta el artículo, numeral o página exacta que sustenta la clave."
+    if len(str(verification.get("supporting_excerpt", "")).strip()) < 10:
+        return "Falta un fragmento breve de soporte contrastado con la fuente."
+    if not str(verification.get("verified_on", "")).strip():
+        return "Falta la fecha de verificación normativa."
+    if not str(verification.get("verified_by", "")).strip():
+        return "Falta identificar el proceso o responsable de la verificación."
+    return None
+
+
+def has_precise_source_verification(question) -> bool:
+    """Return whether the question carries complete, official source proof."""
+    return precise_source_verification_error(question) is None

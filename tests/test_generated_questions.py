@@ -1,6 +1,19 @@
 from core.generated_questions import candidate_issues, extract_candidates
 
 
+def test_generation_candidate_uses_canonical_difficulty_scale():
+    row = extract_candidates({"questions": [{
+        "stem": "La dependencia documenta un hallazgo y debe decidir cómo continuar.",
+        "options": {"A": "Aplicar la regla", "B": "Omitirla", "C": "Delegar sin revisar"},
+        "correct_key": "A",
+        "rationale": "La opción A mantiene el control y la trazabilidad.",
+        "source_refs": "Manual de funciones, función 6",
+        "difficulty": 9,
+    }]})[0]
+
+    assert row["difficulty"] == 9
+
+
 def test_import_normalizes_options_and_source():
     rows = extract_candidates({"questions": [{
         "stem": "Caso", "options": {"A": "Uno", "B": "Dos", "C": "Tres"},

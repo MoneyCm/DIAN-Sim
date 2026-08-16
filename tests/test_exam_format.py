@@ -2,7 +2,9 @@ from types import SimpleNamespace
 
 from core.exam_format import (
     LIKERT_OPTIONS, OFFICIAL_LABEL, PRACTICE_LABEL, REVIEW_LABEL,
-    build_official_case_blocks, is_official_functional_case, is_official_functional_payload, question_format_status,
+    build_official_case_blocks, build_trusted_pjs_case_blocks,
+    is_official_functional_case, is_official_functional_payload,
+    is_trusted_pjs_case, question_format_status, trusted_pjs_question_groups,
 )
 
 
@@ -16,6 +18,20 @@ def question(track="FUNCIONAL", options=None, correct_key="A", question_type="SI
         is_verified=is_verified,
         quality_report={"status": "APPROVED", "review": "human_source_grounded"} if trusted else None,
     )
+
+
+def precise_question(question_id="q-1"):
+    item = question()
+    item.question_id = question_id
+    item.quality_report["source_verification"] = {
+        "status": "official_current",
+        "url": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+        "locator": "Artículo 684",
+        "supporting_excerpt": "La Administración Tributaria tiene amplias facultades de fiscalización.",
+        "verified_on": "2026-08-15",
+        "verified_by": "revisión editorial de prueba",
+    }
+    return item
 
 
 def test_official_case_requires_three_functional_statements():
@@ -82,3 +98,46 @@ def test_verified_ten_question_case_yields_three_non_destructive_blocks():
     assert len(blocks) == 3
     assert all(len(block.questions) == 3 for block in blocks)
     assert len(case.questions) == 10
+
+
+def test_measurement_pjs_requires_precise_official_source_proof():
+    legacy = question()
+    legacy.question_id = "legacy"
+    case = SimpleNamespace(
+        id="case-precise",
+        title="Caso",
+        text="Contexto laboral",
+        topic="Fiscalización",
+        difficulty=3,
+        competition_id=1,
+        questions=[legacy],
+    )
+
+    assert trusted_pjs_question_groups(case) == []
+    assert build_trusted_pjs_case_blocks([case], eligible_question_ids={"legacy"}) == []
+
+
+def test_measurement_pjs_accepts_one_to_three_items_and_keeps_remainder():
+    questions = [precise_question(f"q-{index}") for index in range(4)]
+    for index, item in enumerate(questions):
+        item.created_at = index
+    case = SimpleNamespace(
+        id="case-pjs",
+        title="Caso",
+        text="Contexto laboral aplicable al empleo",
+        topic="Fiscalización",
+        difficulty=3,
+        competition_id=1,
+        questions=questions,
+    )
+
+    blocks = build_trusted_pjs_case_blocks(
+        [case],
+        eligible_question_ids={item.question_id for item in questions},
+        opec_number="236769",
+    )
+
+    assert [len(block.questions) for block in blocks] == [3, 1]
+    assert all(is_trusted_pjs_case(block) for block in blocks)
+    assert all(block.opec_number == "236769" for block in blocks)
+    assert all(block.bank_partition == "measurement" for block in blocks)

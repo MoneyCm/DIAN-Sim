@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
 from db.models import Competition, Question, UserOPEC
-from ui_utils import load_css, render_header
+from ui_utils import load_css, log_ui_exception, render_header
 
 from core.auth import AuthManager
 from core.competitions import ensure_builtin_competitions
@@ -372,6 +372,11 @@ with st.container(border=True):
     guide_cols[1].markdown("**2. Pega**  \nEl texto en ‘Ficha del empleo’")
     guide_cols[2].markdown("**3. Confirma**  \nY empieza tu preparación")
     st.markdown("#### ¿Solo tienes el número OPEC?")
+    st.caption(
+        "La búsqueda rápida reutiliza fichas que ya fueron verificadas y guardadas en "
+        "esta aplicación. SIMO no ofrece una API pública documentada para importar una "
+        "ficha nueva automáticamente."
+    )
     lookup_col, lookup_button_col = st.columns([3, 1])
     with lookup_col:
         lookup_number = st.text_input(
@@ -382,7 +387,7 @@ with st.container(border=True):
         )
     with lookup_button_col:
         lookup_requested = st.button(
-            "🔎 Buscar ficha", use_container_width=True,
+            "🔎 Buscar en la app", use_container_width=True,
             disabled=not bool(lookup_number.strip()),
         )
     if lookup_requested:
@@ -397,8 +402,9 @@ with st.container(border=True):
             lookup_db.close()
         if st.session_state["opec_lookup_result"] is None:
             st.warning(
-                "Esta OPEC todavía no está en el catálogo compartido. Consúltala en SIMO "
-                "y pega la ficha debajo; después quedará reutilizable por número."
+                "Esta OPEC no está guardada todavía. Ábrela en la consulta pública oficial "
+                "de SIMO, busca el número y copia la ficha completa. Al pegarla debajo, la "
+                "app extraerá los datos y la dejará disponible para próximas consultas."
             )
             st.link_button(
                 "Abrir búsqueda oficial de SIMO",
@@ -440,7 +446,8 @@ with st.container(border=True):
                 st.rerun()
             except Exception as exc:
                 attach_db.rollback()
-                st.error(f"No fue posible asociar la ficha: {exc}")
+                log_ui_exception("opec.manual_competition.attach", exc)
+                st.error("No fue posible asociar la ficha. Intenta nuevamente.")
             finally:
                 attach_db.close()
     if st.button("➕ Mi concurso no aparece y quiero registrarlo manualmente", use_container_width=True):
@@ -483,7 +490,6 @@ if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR
             )
         finally:
             seed_db.close()
-
     st.caption("Casos situacionales revisados para OPEC 241130: 10 situaciones, 3 preguntas por situación.")
     if st.button("Sincronizar casos situacionales de OPEC 241130", use_container_width=True):
         from scripts.data.seed_curated_opec241130 import seed as seed_curated_opec241130
@@ -497,9 +503,11 @@ if selected_competition and selected_competition.code == "TERRITORIAL-12-BOLIVAR
             st.rerun()
         except Exception as exc:
             seed_db.rollback()
-            st.error(f"No se pudieron sincronizar los casos situacionales: {exc}")
+            log_ui_exception("opec.cases.sync", exc)
+            st.error("No se pudieron sincronizar los casos situacionales.")
         finally:
             seed_db.close()
+
 if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-ABIERTO":
     seed_db = SessionLocal()
     try:
@@ -545,7 +553,8 @@ if selected_competition and selected_competition.code == "ALIMENTACION-ESCOLAR-A
             )
         except Exception as exc:
             seed_db.rollback()
-            st.error(f"No se pudo completar el banco UApA: {exc}")
+            log_ui_exception("opec.uapa.seed", exc)
+            st.error("No se pudo completar el banco provisional.")
         finally:
             seed_db.close()
 
@@ -591,7 +600,8 @@ if (
             st.rerun()
         except Exception as exc:
             db.rollback()
-            st.error(f"No se pudo asociar la ficha: {exc}")
+            log_ui_exception("opec.lookup.attach", exc)
+            st.error("No se pudo asociar la ficha. Intenta nuevamente.")
         finally:
             db.close()
 
@@ -759,7 +769,8 @@ with col1:
                             st.rerun()
                         except Exception as exc:
                             db.rollback()
-                            st.error(f"Error al guardar la ficha: {exc}")
+                            log_ui_exception("opec.profile.save", exc)
+                            st.error("No fue posible guardar la ficha.")
                         finally:
                             db.close()
         except ValueError as exc:
@@ -813,7 +824,10 @@ if selected_competition_id and active_opec:
     readiness_db = SessionLocal()
     try:
         readiness = inspect_competition(
-            readiness_db, selected_competition_id, is_pro=AuthManager.is_pro()
+            readiness_db,
+            selected_competition_id,
+            is_pro=AuthManager.is_pro(),
+            opec_number=active_opec.opec_number,
         )
     finally:
         readiness_db.close()
@@ -841,14 +855,14 @@ if selected_competition_id and active_opec:
     else:
         st.success("Banco listo para estudio")
     st.caption(
-        f"Casos tipo examen: {readiness.official_case_count} - "
-        f"Examen disponible: {readiness.exam_questions} preguntas - "
-        f"Duracion: {readiness.exam_minutes} min"
+        f"Casos PJS revisados: {readiness.reviewed_practice_case_count} · "
+        f"Sesión de práctica disponible: {readiness.exam_questions} preguntas · "
+        f"Duración provisional: {readiness.exam_minutes} min"
     )
     st.caption(
         f"Funcionales: {readiness.functional_count} · "
         f"Comportamentales: {readiness.behavioral_count} · "
-        f"Duración tipo examen: {readiness.exam_minutes} min"
+        f"Duración de práctica provisional: {readiness.exam_minutes} min"
     )
     st.info(f"Siguiente acción recomendada: {readiness.next_action}")
     if thematic_source["status"] == "pending_official_guide":
@@ -859,7 +873,7 @@ if selected_competition_id and active_opec:
         st.caption(thematic_source["next_action"])
     elif thematic_source["status"] == "official_framework_loaded":
         st.info(
-            f"Marco oficial registrado: {thematic_source['label']} - version {thematic_source['version']}."
+            f"Marco oficial registrado: {thematic_source['label']} · versión {thematic_source['version']}."
         )
         st.caption(thematic_source["next_action"])
 
@@ -870,7 +884,7 @@ if selected_competition_id and active_opec:
         row["status"].startswith("monitorear") for row in source_matrix
     )
     with st.expander(
-        f"🔎 Investigación oficial provisional · {len(source_matrix)} fuentes",
+        f"🔎 Registro provisional de fuentes oficiales · {len(source_matrix)} fuentes",
         expanded=not bool(current_opec),
     ):
         st.write(
@@ -895,13 +909,15 @@ if selected_competition_id and active_opec:
 st.subheader("🚀 Generación de Base Inicial (Auto-Seed)")
 st.markdown("""
 Si no quieres crear preguntas una por una, usa esta opción. El sistema leerá tu **Cargo y Funciones** y generará automáticamente:
-*   10 casos tipo examen, con 3 preguntas relacionadas por caso.
-*   Entre 48 y 60 preguntas funcionales, clasificadas por función y competencia.
-*   11 preguntas comportamentales y 11 de integridad/valores.
+*   Hasta 10 casos PJS de práctica, con 3 preguntas relacionadas por caso.
+*   Entre 48 y 60 preguntas funcionales como meta editorial del banco local.
+*   11 preguntas comportamentales y 11 de integridad/valores como meta editorial local.
 *   Niveles básico, intermedio y avanzado para la práctica adaptativa.
 
 La base progresiva se crea localmente y no requiere una clave de IA. Al volver a ejecutar
 Auto-Seed, el sistema reconoce el banco existente y evita duplicarlo.
+Estas cantidades no describen el cuadernillo oficial; podrán ajustarse cuando la CNSC publique
+la GOA, la duración y el número de ítems aplicables.
 """)
 
 if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_container_width=True):
@@ -936,18 +952,18 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             status = st.empty()
             
             db = SessionLocal()
-            
-            total_steps = 4
-            current_step = 0
-            
-            # 1. Generate verified case triplets for the real exam
-            from core.exam_format import is_official_functional_payload, official_question_groups
             target_competition_id = active_opec.competition_id or selected_competition_id
             target_competition = db.get(Competition, target_competition_id)
             if target_competition is None:
                 raise RuntimeError("No se encontro el concurso asociado a la OPEC activa.")
+            
+            total_steps = 4
+            current_step = 0
+            
+            # 1. Generate reviewed triplets for internal PJS practice.
+            from core.exam_format import is_official_functional_payload, official_question_groups
             from core.opec_case_factory import build_fallback_opec_case, build_fallback_questions
-            status.info("Generando hasta 10 casos tipo examen...")
+            status.info("Generando hasta 10 casos PJS de práctica...")
             existing_case_rows = db.query(CaseStudy).filter(
                 CaseStudy.competition_id == target_competition_id
             ).all()
@@ -972,7 +988,10 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                                 source_context=source_context,
                             )
                         except Exception as generation_exc:
-                            print(f"Case {case_number} AI attempt {attempt + 1}: {generation_exc}")
+                            print(
+                                f"Case {case_number} AI attempt {attempt + 1}: "
+                                f"{type(generation_exc).__name__}"
+                            )
                             candidate = None
                             if "cuota" in str(generation_exc).lower() or "quota" in str(generation_exc).lower():
                                 break
@@ -1026,8 +1045,8 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                     db.commit()
                 except Exception as e:
                     db.rollback()
-                    print(f"Error generating case {case_number}: {e}")
-                    status.error(f"No se pudo guardar el caso {case_number}: {e}")
+                    log_ui_exception(f"opec.auto_seed.case.{case_number}", e)
+                    status.error(f"No se pudo guardar el caso {case_number}.")
             
             current_step += 1
             progress.progress(25, text="Casos generados. Iniciando preguntas funcionales...")
@@ -1087,7 +1106,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 ) if behavioral_needed and gen is not None else []
             except Exception as exc:
                 status.info("Cuota de IA no disponible; completando preguntas comportamentales localmente.")
-                print(f"Behavioral AI fallback: {exc}")
+                log_ui_exception("opec.auto_seed.behavioral_fallback", exc)
                 q_behav = build_fallback_questions(
                     active_opec, "COMPORTAMENTAL", behavioral_needed, existing_behavioral
                 )
@@ -1128,7 +1147,7 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
                 ) if integrity_needed and gen is not None else []
             except Exception as exc:
                 status.info("Cuota de IA no disponible; completando integridad y valores localmente.")
-                print(f"Integrity AI fallback: {exc}")
+                log_ui_exception("opec.auto_seed.integrity_fallback", exc)
                 q_int = build_fallback_questions(
                     active_opec, "INTEGRIDAD", integrity_needed, existing_integrity
                 )
@@ -1153,14 +1172,15 @@ if st.button("✨ Generar Base Inicial para este Cargo", type="primary", use_con
             db.commit()
             
             progress.progress(100, text="¡Proceso Finalizado!")
-            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro tipo examen!")
+            status.success("✅ Base inicial generada con éxito. Ya puedes ir a la práctica PJS cronometrada.")
             st.balloons()
             
-            status.success("✅ Base inicial generada con éxito. ¡Ya puedes ir al Simulacro tipo examen!")
+            status.success("✅ Base inicial generada con éxito. Ya puedes ir a la práctica PJS cronometrada.")
             st.balloons()
             
         except Exception as e:
-            st.error(f"Error crítico en Auto-Seed: {e}")
+            log_ui_exception("opec.auto_seed", e)
+            st.error("No fue posible completar la generación inicial.")
             if 'db' in locals():
                 db.rollback()
         finally:

@@ -16,13 +16,15 @@ def test_personalized_practice_starts_with_basic_questions():
     assert {item.difficulty for item in selected} == {1}
 
 
-def test_personalized_practice_unlocks_advanced_questions_after_mastery():
+def test_personalized_practice_does_not_unlock_advanced_from_mastery_alone():
     questions = [question(f"q{difficulty}-{index}", difficulty) for difficulty in (1, 2, 3) for index in range(4)]
     skill = SimpleNamespace(mastery_score=82)
     selected = select_questions_for_simulation(
         questions, {("FUNCIONAL", "Arquitectura", "F13 · Arquitectura"): skill}, n=4
     )
-    assert {item.difficulty for item in selected} == {3}
+    # A legacy Skill has no evidence of new questions, delayed retention or
+    # measurement; its score alone cannot unlock harder content.
+    assert {item.difficulty for item in selected} == {1}
 
 
 def test_personalized_practice_uses_a_complete_goa_case_before_mastery(monkeypatch):

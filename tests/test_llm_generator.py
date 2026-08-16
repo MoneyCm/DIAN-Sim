@@ -35,7 +35,7 @@ def test_gemini_case_study_honors_explicit_model():
     assert generator.gemini_client.models.generate_content.call_args.kwargs["model"] == "gemini-flash-latest"
 
 
-def test_gemini_audit_reports_the_real_provider_error_without_optional_fallback():
+def test_gemini_audit_redacts_provider_error_without_optional_fallback():
     generator = LLMGenerator.__new__(LLMGenerator)
     generator.provider = "gemini"
     generator.model_name = None
@@ -55,7 +55,8 @@ def test_gemini_audit_reports_the_real_provider_error_without_optional_fallback(
     )
 
     assert result["status"] == "ERROR"
-    assert "Gemini unavailable" in result["critique"]
+    assert "Gemini unavailable" not in result["critique"]
+    assert "continúa pendiente" in result["critique"]
     assert "NoneType" not in result["critique"]
 
 

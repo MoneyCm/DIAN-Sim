@@ -133,7 +133,7 @@ class LLMGenerator:
                 if remaining > 0:
                     time.sleep(1)
             except Exception as e:
-                print(f"ERROR: Batch {i} failed: {e}")
+                print(f"ERROR: Batch {i} failed: {type(e).__name__}")
                 if all_results: break
                 else: raise e
                     
@@ -158,7 +158,7 @@ class LLMGenerator:
                     opec_context += "FUNCIONES CLAVE A EVALUAR:\n- " + "\n- ".join(active_opec.functions[:10]) + "\n"
             db.close()
         except Exception as e:
-            print(f"DEBUG: Error fetching OPEC context: {e}")
+            print(f"DEBUG: Error fetching OPEC context: {type(e).__name__}")
 
         # The supplied document is the only normative authority for question
         # generation. Automatic RAG results can be useful for tutoring, but here
@@ -181,7 +181,7 @@ class LLMGenerator:
                             behavioral_context += f"  Conductas Nivel 3 (Profesional): {'; '.join(val['levels']['3'])}\n"
                     print(f"DEBUG: Loaded Behavioral Context ({len(behavioral_context)} chars). Mikey v48")
         except Exception as e:
-            print(f"DEBUG: Error loading Res 65 context: {e}")
+            print(f"DEBUG: Error loading Res 65 context: {type(e).__name__}")
 
         # Situational-practice logic. This is an internal quality standard, not
         # a claim about an unpublished or external CNSC item template.
@@ -214,8 +214,9 @@ class LLMGenerator:
         context = text[:15000]
         
         prompt = f"""
-        Actúa como un Experto en Normativa de la DIAN y Constructor de Preguntas para el nivel Profesional.
-        Tu misión es generar EXACTAMENTE {count} preguntas FUNCIONALES de selección múltiple con un nivel de DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado).
+        Actúa como editor especializado en material de práctica basado en normativa aplicable a la DIAN.
+        Tu misión es generar EXACTAMENTE {count} preguntas FUNCIONALES de selección múltiple con DIFICULTAD EDITORIAL INTERNA {difficulty}/10.
+        Rúbrica: 1-2 reconocimiento/comprensión; 3-4 aplicación; 5-6 integración y análisis; 7-8 juicio avanzado; 9-10 transferencia compleja. Esta no es una escala oficial de la CNSC.
         
         REGLA DE ORO DE ENTIDAD:
         * El protagonista siempre trabaja para la DIAN (Dirección de Impuestos y Aduanas Nacionales).
@@ -265,7 +266,13 @@ class LLMGenerator:
                     response = self.openai_client.chat.completions.create(
                         model=model,
                         messages=[
-                            {"role": "system", "content": "Actúa como un experto en DIAN. Genera exclusivamente JSON válido."},
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Edita material de práctica basado únicamente en la fuente suministrada. "
+                                    "No afirmes representar a la DIAN ni a la CNSC. Genera exclusivamente JSON válido."
+                                ),
+                            },
                             {"role": "user", "content": prompt}
                         ],
                         response_format={"type": "json_object"}
@@ -345,7 +352,10 @@ class LLMGenerator:
                             print(f"[429] Cuota excedida en {model_name}.")
                             raise e 
                         
-                        print(f"DEBUG: Error Gemini {model_name}: {err_str[:100]}")
+                        print(
+                            f"DEBUG: Error Gemini {model_name}: "
+                            f"{type(e).__name__}"
+                        )
                         continue
                 
                 # v47.1 Validation & Rescue Mikey (if needed for non-429 failures)
@@ -363,7 +373,10 @@ class LLMGenerator:
                         )
                         content = fb_response.choices[0].message.content
                     except Exception as fe:
-                        print(f"❌ Falló incluso el rescate {fb_t}: {fe}")
+                        print(
+                            f"❌ Falló incluso el rescate {fb_t}: "
+                            f"{type(fe).__name__}"
+                        )
 
                 if not content:
                     raise Exception(f"Falla total v47.1 Mikey: La IA no devolvió contenido tras {len(candidates)} intentos y rescate.")
@@ -431,8 +444,12 @@ class LLMGenerator:
                         "o selecciona Mistral en la configuración del generador."
                     )
                 else:
-                    raise Exception(f"Límite de velocidad (Rate Limit) alcanzado: {error_msg}")
-            raise Exception(f"Fallo en lote: {error_msg}")
+                    raise RuntimeError(
+                        "Límite de velocidad del proveedor alcanzado. Inténtalo más tarde."
+                    ) from e
+            raise RuntimeError(
+                f"No se pudo completar el lote con {self.provider or 'el proveedor configurado'}."
+            ) from e
 
     def explain_socratically(self, question_data: dict) -> str:
         """Orienta el razonamiento sin revelar ni recalificar la respuesta."""
@@ -486,10 +503,13 @@ class LLMGenerator:
             normativa = NormativaManager()
             normativa_context = normativa.get_law_context(question_data.get('rationale', ''))
         except Exception as e:
-            print(f"DEBUG: Error fetching normativa context for explanation: {e}")
+            print(
+                "DEBUG: Error fetching normativa context for explanation: "
+                f"{type(e).__name__}"
+            )
 
         prompt = f"""
-        Actúa como un Tutor Experto de la DIAN. Tu objetivo es explicar la lógica detrás de la siguiente pregunta de examen sin revelar la respuesta correcta directamente si es posible, o guiando al estudiante a través del razonamiento legal.
+        Actúa como tutor de práctica especializado en normativa aplicable a la DIAN. Tu objetivo es explicar la lógica detrás de la siguiente pregunta de práctica sin revelar la respuesta correcta directamente si es posible, o guiando al estudiante a través del razonamiento legal.
         
         {normativa_context}
         
@@ -552,10 +572,13 @@ class LLMGenerator:
         except Exception as e:
             # Let's see what model was active
             m_name = getattr(self, "model_name", "Unknown")
-            return f"Tutor Mikey Error con modelo [{m_name}]: {str(e)}"
+            return (
+                f"No se pudo obtener la explicación con el modelo [{m_name}] "
+                f"({type(e).__name__})."
+            )
 
     def audit_question(self, question_data: dict, source_context: str = "") -> dict:
-        """Audits a question against CNSC quality standards using IA. Mikey"""
+        """Audit a question against the internal PJS practice rubric using AI."""
         # Fetch Normativa Context for Audit
         normativa_context = source_context.strip()
         try:
@@ -564,10 +587,13 @@ class LLMGenerator:
                 normativa = NormativaManager()
                 normativa_context = normativa.get_law_context(question_data.get('stem', '') + " " + question_data.get('rationale', ''))
         except Exception as e:
-            print(f"DEBUG: Error fetching normativa context for audit: {e}")
+            print(
+                "DEBUG: Error fetching normativa context for audit: "
+                f"{type(e).__name__}"
+            )
 
         prompt = f"""
-        Actúa como un Auditor de Calidad Senior de la CNSC. Evalúa la siguiente pregunta bajo el Protocolo 2667 para la DIAN.
+        Actúa como auditor editorial independiente. Evalúa la pregunta según la metodología PJS descrita en las especificaciones CNSC LP-004-2026 para DIAN 2676; no afirmes representar a la CNSC ni disponer de la GOA aún no publicada.
         
         {normativa_context}
         
@@ -643,7 +669,7 @@ class LLMGenerator:
                             content = response.text
                             break
                     except Exception as e:
-                        fail_log.append(f"{model_name}: {str(e)[:40]}")
+                        fail_log.append(f"{model_name}: {type(e).__name__}")
                         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                             time.sleep(2) # Cooldown Mikey
                         continue
@@ -672,7 +698,9 @@ class LLMGenerator:
                             )
                             content = response.choices[0].message.content
                         except Exception as ge:
-                            fail_log.append(f"Fallback_Error: {str(ge)[:40]}")
+                            fail_log.append(
+                                f"Fallback_Error: {type(ge).__name__}"
+                            )
                 
                 if not content:
                     raise Exception(f"Falla total v47.1 Mikey - Auditoría Inalcanzable: {', '.join(fail_log)}")
@@ -689,17 +717,25 @@ class LLMGenerator:
             res["critique"] = f"[v47.1] {res.get('critique', '')}" # Quantum Shield v2 Mikey
             return res
         except Exception as e:
-            return {"score": 0, "status": "ERROR", "critique": f"Error en auditoría (v45.0 Mikey): {e}"}
+            return {
+                "score": 0,
+                "status": "ERROR",
+                "critique": (
+                    "La auditoría IA no pudo completarse "
+                    f"({type(e).__name__}). La candidata continúa pendiente."
+                ),
+            }
 
     def generate_case_study(self, topic: str, num_questions: int = 3, difficulty: int = 2, source_context: str = "") -> dict:
-        """Generates a full Case Study (Scenario + Questions) for Simulacro Real. Mikey v49"""
+        """Generate a PJS practice case with one scenario and related questions."""
         
         # Internal practice composition: a functional case shares three items.
         num_questions = 3
 
         prompt = f"""
-        Actúa como un Diseñador de Pruebas Situacionales para la DIAN (Dirección de Impuestos y Aduanas Nacionales). 
-        Tu tarea es crear un CASO PROTAGÓNICO (Case Study) completo y original.
+        Actúa como editor de material de práctica situacional enfocado en funciones de la DIAN.
+        Tu tarea es crear un caso PJS de práctica completo y original. No afirmes representar
+        a la DIAN o a la CNSC ni disponer de la GOA aún no publicada.
         
         REGLA CRÍTICA DE CONTEXTO:
         * El entorno de trabajo debe ser EXCLUSIVAMENTE la DIAN.
@@ -707,11 +743,12 @@ class LLMGenerator:
         * EVITA CUALQUIER MENCIÓN a la CNSC como lugar de trabajo o jefatura.
         
         TEMA PRINCIPAL: {topic}
-        DIFICULTAD: {difficulty} (1=Básico, 2=Intermedio, 3=Avanzado)
+        DIFICULTAD EDITORIAL INTERNA: {difficulty}/10
+        RÚBRICA: 1-2 reconocimiento/comprensión; 3-4 aplicación; 5-6 integración y análisis; 7-8 juicio avanzado; 9-10 transferencia compleja. No la presentes como escala oficial de la CNSC.
         CANTIDAD DE PREGUNTAS: {num_questions}
 
-        FUENTE OFICIAL AUTORIZADA:
-        {source_context or "No se suministró una fuente oficial. Evita detalles jurídicos no sustentados."}
+        FUENTE DE REFERENCIA SUMINISTRADA (su oficialidad y vigencia deben verificarse):
+        {source_context or "No se suministró una fuente verificable. Evita detalles jurídicos no sustentados."}
 
         REGLA DE PRECISIÓN NORMATIVA:
         * Usa exclusivamente hechos jurídicos comprobables en la fuente autorizada.
@@ -801,26 +838,23 @@ class LLMGenerator:
                 )
                  content = response.choices[0].message.content
                  
-            # Parse JSON
-            print(f"DEBUG: LLM Content ({len(content)} chars): {content[:200]}...") # Debug Mikey
+            # Parse JSON without writing provider content to application logs.
             data = repair_and_parse_json(content)
             if not data:
-                raise Exception(f"Failed to parse Case Study JSON. Content preview: {content[:100]}...")
+                raise ValueError("La respuesta del proveedor no contiene un caso JSON válido.")
                 
             return data
             
         except Exception as e:
-            print(f"ERROR generating Case Study: {e}")
-            # If content exists, print it all for deep debug
-            if 'content' in locals() and content:
-                print(f"DEBUG FULL CONTENT: {content}")
+            print(f"ERROR generating Case Study: {type(e).__name__}")
             raise e
 
     def optimize_question(self, question_data: dict, audit_report: dict) -> dict:
         """Optimizes a question based on audit findings, rewriting distractors and stem if necessary. Mikey v50"""
         
         prompt = f"""
-        Actúa como un Constructor de Pruebas Psicométricas Senior de la CNSC y Experto en Normativa de la DIAN.
+        Actúa como editor independiente de material de práctica PJS basado en normativa aplicable a la DIAN.
+        No afirmes representar a la CNSC ni a la DIAN, y no atribuyas esta plantilla a la GOA.
         Tu misión es corregir, pulir y optimizar la siguiente pregunta de juicio situacional basándote en los hallazgos de una auditoría previa.
         
         DATOS DE LA PREGUNTA ORIGINAL:
@@ -919,7 +953,10 @@ class LLMGenerator:
                             content = response.text
                             break
                     except Exception as e:
-                        print(f"DEBUG: Error Gemini {model_name}: {str(e)[:100]}")
+                        print(
+                            f"DEBUG: Error Gemini {model_name}: "
+                            f"{type(e).__name__}"
+                        )
                         continue
                         
                 # Fallback Rescue
@@ -935,7 +972,7 @@ class LLMGenerator:
                         )
                         content = fb_response.choices[0].message.content
                     except Exception as fe:
-                        print(f"❌ Rescue failed: {fe}")
+                        print(f"❌ Rescue failed: {type(fe).__name__}")
             
             if not content:
                 raise Exception("La IA no devolvió contenido para la optimización.")
@@ -952,6 +989,6 @@ class LLMGenerator:
             return data
             
         except Exception as e:
-            print(f"ERROR optimizing question: {e}")
+            print(f"ERROR optimizing question: {type(e).__name__}")
             raise e
 

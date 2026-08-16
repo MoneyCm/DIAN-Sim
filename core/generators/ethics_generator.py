@@ -124,7 +124,7 @@ Genera ahora {count} afirmaciones nuevas y variadas para la categoría {categori
             raise Exception("No JSON found in response")
             
     except Exception as e:
-        print(f"Error generating ethics statements: {e}")
+        print(f"Error generating ethics statements: {type(e).__name__}")
         return []
 
 
@@ -226,5 +226,5 @@ def detect_weak_categories(user_id: int, db_session) -> List[str]:
         
         return weak_categories
     except Exception as e:
-        print(f"Error detecting weak categories: {e}")
+        print(f"Error detecting weak categories: {type(e).__name__}")
         return []

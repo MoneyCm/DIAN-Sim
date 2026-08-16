@@ -188,7 +188,7 @@ def build_remaining_daily_plan(
 
 def _topic_key(question: Question) -> SkillKey:
     return (
-        getattr(question, "track", None) or "Sin eje",
+        getattr(question, "track", None) or "Sin área",
         getattr(question, "competency", None) or "Sin competencia",
         getattr(question, "topic", None) or "Sin tema",
     )
@@ -247,7 +247,7 @@ def build_study_plan_stage(
             "exam_integration",
             "Simulacros y corrección",
             0.40 if pending_topics else 0.0,
-            "Integra casos tipo examen sin abandonar los temas con evidencia insuficiente.",
+            "Integra casos PJS de práctica sin abandonar los temas con evidencia insuficiente.",
         )
     if pending_ratio >= 0.50:
         return StudyPlanStage(
@@ -365,7 +365,7 @@ def build_hybrid_remaining_daily_plan(
                     DailyRecommendation(
                         recommendation.question,
                         recommendation.score,
-                        ("caso tipo examen",) + recommendation.reasons,
+                        ("caso PJS de práctica",) + recommendation.reasons,
                     )
                 )
                 selected_ids.add(question_id)
@@ -397,10 +397,10 @@ def select_questions_for_simulation(
     n: int = 20,
 ) -> List[Question]:
     """Selector adaptativo general usado por los simulacros configurables."""
-    # El formato GOA se practica desde el inicio: el dominio adapta la
-    # dificultad del contenido, no el acceso al formato real de caso.
+    # La metodología PJS se practica desde el inicio: el dominio adapta la
+    # dificultad del contenido, no el acceso al formato situacional.
     from core.exam_format import official_question_groups
-    from core.learning.engine import difficulty_for_mastery
+    from core.learning.engine import difficulty_for_mastery, editorial_question_difficulty
 
     selected = []
     selected_ids = set()
@@ -439,7 +439,7 @@ def select_questions_for_simulation(
         mastery = skill.mastery_score if skill else 0.0
 
         target = difficulty_for_mastery(mastery, 3 if skill else 0)
-        difficulty = min(max(int(question.difficulty or 2), 1), 3)
+        difficulty = editorial_question_difficulty(question)
         ranked_questions.append((abs(difficulty - target), mastery, random.random(), question))
 
     ranked_questions.sort(key=lambda item: (item[0], item[1], item[2]))

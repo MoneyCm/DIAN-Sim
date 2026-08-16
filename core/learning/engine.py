@@ -19,6 +19,13 @@ from core.learning.config import (
     PRIORITY_WEIGHTS,
     RESULT_SCORES,
 )
+from core.learning.review_policy import review_interval
+from core.learning.difficulty import (
+    difficulty_label,
+    legacy_difficulty_to_editorial,
+    mastery_difficulty,
+    normalize_difficulty,
+)
 
 
 def utc_now() -> datetime:
@@ -51,13 +58,12 @@ def schedule_next_review(
     if result not in RESULT_SCORES or confidence not in CONFIDENCE_STRENGTH:
         raise ValueError("Resultado o seguridad no válidos")
     now = now or utc_now()
-    base_days = {
-        "correct": {"low": 2.0, "medium": 4.0, "high": 7.0},
-        "partial": {"low": 0.5, "medium": 1.0, "high": 2.0},
-        "incorrect": {"low": 0.25, "medium": 0.5, "high": 1.0},
-    }[result][confidence]
-    mastery_factor = 0.75 + min(max(mastery_score, 0.0), 100.0) / 200.0
-    return now + timedelta(days=max(0.25, base_days * mastery_factor))
+    # ``mastery_score`` remains in the signature for backwards compatibility,
+    # but elapsed time and aggregate mastery do not alter the scheduling rule.
+    # The answer outcome and declared confidence are the auditable inputs.
+    del mastery_score
+    decision = review_interval(result=result, confidence=confidence)
+    return now + timedelta(days=decision.interval_days)
 
 
 def calculate_topic_priority(
@@ -93,13 +99,35 @@ def calculate_topic_priority(
 
 
 def difficulty_for_mastery(mastery_score: float, attempts: int = 0) -> int:
-    """Unlock difficulty gradually; new topics always begin at the basic level."""
+    """Legacy fallback on the internal 1–10 scale.
+
+    Full promotion decisions use ``target_difficulty`` with new-item,
+    retention and measurement evidence.  This two-argument helper remains for
+    historical selectors and therefore applies conservative attempt caps.
+    """
     mastery = min(max(float(mastery_score or 0.0), 0.0), 100.0)
-    if int(attempts or 0) < 3 or mastery < 40.0:
+    attempts = max(0, int(attempts or 0))
+    if attempts < 8:
         return 1
-    if mastery < 75.0:
-        return 2
-    return 3
+    evidence_cap = min(10, 1 + attempts // 4)
+    return min(mastery_difficulty(mastery), evidence_cap)
+
+
+def editorial_question_difficulty(question) -> int:
+    """Read a canonical value or conservatively map a legacy 1–3 item."""
+    direct = getattr(question, "editorial_difficulty", None)
+    if direct is None:
+        direct = getattr(question, "difficulty_level", None)
+    report = getattr(question, "quality_report", None)
+    if direct is None and isinstance(report, dict):
+        direct = report.get("editorial_difficulty_1_10")
+    if direct is not None:
+        try:
+            return int(normalize_difficulty(int(direct), source_scale="editorial"))
+        except (TypeError, ValueError):
+            pass
+    legacy = int(getattr(question, "difficulty", 2) or 2)
+    return int(legacy_difficulty_to_editorial(min(max(legacy, 1), 3)))
 
 
 def select_next_question(
@@ -121,7 +149,7 @@ def select_next_question(
         mastery = (topic_mastery_scores or {}).get(topic_id, 0.0)
         attempts = (topic_attempt_counts or {}).get(topic_id, 0)
         target_difficulty = difficulty_for_mastery(mastery, attempts)
-        question_difficulty = min(max(int(question.difficulty or 2), 1), 3)
+        question_difficulty = editorial_question_difficulty(question)
         return (
             abs(question_difficulty - target_difficulty),
             -topic_priorities.get(topic_id, 0.5),

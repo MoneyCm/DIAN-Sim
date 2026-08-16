@@ -77,7 +77,10 @@ class AuthManager:
             st.session_state["logout_manual_flag"] = False
             return True
         except Exception as exc:
-            print(f"Persistent session restore error: {exc}", file=sys.stderr)
+            print(
+                f"Persistent session restore error: {type(exc).__name__}",
+                file=sys.stderr,
+            )
             return False
 
     @staticmethod
@@ -120,7 +123,7 @@ class AuthManager:
                     attempts.pop(str(username), None)
                     return True
         except Exception as e:
-            print(f"🔥 Auth Error: {e}", file=sys.stderr)
+            print(f"🔥 Auth Error: {type(e).__name__}", file=sys.stderr)
         state["count"] = int(state.get("count", 0)) + 1
         if state["count"] >= 5:
             state["locked_until"] = now + 60
@@ -179,7 +182,7 @@ class AuthManager:
                     st.session_state["opec_onboarding"] = True
                 return True
         except Exception as exc:
-            print(f"Google login error: {exc}", file=sys.stderr)
+            print(f"Google login error: {type(exc).__name__}", file=sys.stderr)
             st.session_state["google_login_error"] = (
                 "No se pudo completar la cuenta con Google. Inténtalo de nuevo "
                 "en unos minutos; si continúa, avísanos sin crear otra cuenta."
@@ -266,7 +269,7 @@ class AuthManager:
             st.session_state["user_role"] = role
             return role == "admin"
         except Exception as exc:
-            print(f"Admin authorization error: {exc}", file=sys.stderr)
+            print(f"Admin authorization error: {type(exc).__name__}", file=sys.stderr)
             return False
 
     @staticmethod

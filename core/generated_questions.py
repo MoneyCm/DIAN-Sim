@@ -28,13 +28,19 @@ def extract_candidates(payload, difficulty: int = 2, source_ref: str = "") -> li
         options = item.get("options_json") or item.get("options")
         if not stem or not isinstance(options, dict):
             continue
+        try:
+            candidate_difficulty = int(item.get("difficulty") or difficulty)
+        except (TypeError, ValueError):
+            candidate_difficulty = int(difficulty)
+        if not 1 <= candidate_difficulty <= 10:
+            candidate_difficulty = min(max(int(difficulty), 1), 10)
         candidates.append({
             "track": str(item.get("track") or "FUNCIONAL").upper(),
             "macro_dominio": item.get("macro_dominio") or "Transversal",
             "micro_competencia": item.get("micro_competencia") or item.get("competency") or "General",
             "competency": item.get("competency") or item.get("micro_competencia") or "General",
             "topic": item.get("topic") or "Candidato generado",
-            "difficulty": int(item.get("difficulty") or difficulty),
+            "difficulty": candidate_difficulty,
             "stem": stem,
             "options_json": options,
             "correct_key": str(item.get("correct_key") or "").upper(),

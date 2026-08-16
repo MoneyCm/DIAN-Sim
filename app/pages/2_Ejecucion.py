@@ -8,6 +8,7 @@ if PROJECT_ROOT not in sys.path:
 from db.session import SessionLocal
 from db.models import Question, Attempt, Skill, UserOPEC
 import datetime
+from sqlalchemy import inspect
 from core.adaptive import calculate_mastery_update, update_priority
 from core.attempt_service import record_attempt
 from core.session_results import save_last_result
@@ -15,12 +16,21 @@ from core.spaced_repetition import schedule_review
 from core.gamification import update_user_stats
 from core.rank_system import get_rank_info
 from core.exam_format import OFFICIAL_LABEL, official_question_groups, question_format_status
+from core.competitions import get_active_competition_id
 from core.opec_question_context import manual_function_context
+from services.question_service import QuestionService
 from core.study_resume import (
     clear_daily_run, load_daily_run, restore_daily_run_to_session, save_daily_run,
 )
 try:
-    from core.study_resume import active_elapsed_seconds, pause_daily_run, resume_daily_run
+    from core.study_resume import (
+        StudyRunConflictError,
+        active_elapsed_seconds,
+        checkpoint_daily_run,
+        is_resumable_practice,
+        pause_daily_run,
+        resume_daily_run,
+    )
 except ImportError:
     # Streamlit Cloud puede conservar durante una recarga el módulo anterior.
     def active_elapsed_seconds(payload, now=None):
@@ -36,16 +46,55 @@ except ImportError:
         paused["paused"] = True
         return paused
 
+    def checkpoint_daily_run(payload, now=None):
+        checkpoint = dict(payload)
+        if not checkpoint.get("paused"):
+            current_time = time.time() if now is None else now
+            checkpoint["active_seconds"] = active_elapsed_seconds(
+                checkpoint, current_time
+            )
+            checkpoint["last_resumed_at"] = current_time
+        return checkpoint
+
     def resume_daily_run(payload, now=None):
         resumed = dict(payload)
         resumed["last_resumed_at"] = now or time.time()
         resumed["paused"] = False
         return resumed
+
+    def is_resumable_practice(session_kind, practice_mode=None):
+        kind = str(session_kind or "daily").strip().lower()
+        mode = str(practice_mode or "").strip().lower()
+        evidence_tokens = {"diagnostic", "measurement"}
+        if evidence_tokens.intersection(
+            kind.split("_")
+        ) or evidence_tokens.intersection(mode.split("_")):
+            return False
+        return (
+            kind in {"daily", "custom"}
+            or kind.startswith("training_")
+            or (kind == "practice" and mode == "custom")
+        )
+
+    class StudyRunConflictError(RuntimeError):
+        pass
 from core.generators.llm import LLMGenerator
 from core.guided_learning import build_guided_learning_brief
-from ui_utils import load_css, render_header, render_favorite_button, escape_html
+from ui_utils import (
+    escape_html,
+    load_css,
+    log_ui_exception,
+    render_favorite_button,
+    render_header,
+)
 from core.session_recovery import recover_question_ids
 from core.socratic_tutor import local_socratic_hint
+from core.error_notebook import ERROR_CATEGORIES
+from core.learning.evidence_service import (
+    finalize_opec_session,
+    record_opec_event,
+    start_opec_session,
+)
 
 # --- v21: Safe Attribute Assignment Mikey ---
 def safe_setattr(obj, attr, value):
@@ -55,8 +104,34 @@ def safe_setattr(obj, attr, value):
     except:
         pass
 
+
+def _eligible_training_question_ids(db, user_id, competition_id, active_opec):
+    if active_opec is None or competition_id is None:
+        return set()
+    return {
+        str(question.question_id)
+        for question in QuestionService.get_questions_for_user(
+            db,
+            user_id,
+            competition_id=competition_id,
+            user_opec=active_opec,
+            bank_partitions=("training",),
+        )
+    }
+
+
+def _phase2_evidence_available(db):
+    required = {
+        "question_revisions",
+        "opec_learning_sessions",
+        "opec_learning_events",
+        "opec_topic_states",
+        "error_episodes",
+    }
+    return required.issubset(set(inspect(db.connection()).get_table_names()))
+
 # --- v22: Exam Termination Function ---
-def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
+def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None, question_times=None):
     """Processes all answers and saves to DB."""
     try:
         correct_count = 0
@@ -66,15 +141,59 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
         
         confidences = confidences or {}
         error_types = error_types or {}
+        question_times = question_times or {}
+        active_opec = db.query(UserOPEC).filter_by(user_id=u_id, is_active=True).first()
+        competition_id = get_active_competition_id(db, u_id)
+        if active_opec is None:
+            raise ValueError("No hay una OPEC activa para guardar este resultado.")
+        eligible_question_ids = _eligible_training_question_ids(
+            db, u_id, competition_id, active_opec
+        )
+        question_by_id = {
+            str(question.question_id): question
+            for question in db.query(Question).filter(Question.question_id.in_(q_ids)).all()
+        }
+        if set(map(str, q_ids)) != set(question_by_id):
+            raise ValueError("Una o más preguntas de la sesión ya no existen.")
+
+        evidence_session = None
+        if _phase2_evidence_available(db):
+            raw_started_at = st.session_state.get("exam_start_time")
+            started_at = (
+                datetime.datetime.fromtimestamp(
+                    float(raw_started_at), datetime.timezone.utc
+                ).replace(tzinfo=None)
+                if isinstance(raw_started_at, (int, float))
+                else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            )
+            session_kind = st.session_state.get("study_session_kind", "practice")
+            evidence_session = start_opec_session(
+                db,
+                user_id=u_id,
+                questions=[question_by_id[str(qid)] for qid in q_ids],
+                mode="diagnostic" if session_kind == "diagnostic" else "training",
+                bank_partition="training",
+                competition_id=competition_id,
+                user_opec_id=active_opec.id,
+                feedback_enabled=session_kind == "daily",
+                aids_used=bool(st.session_state.get("practice_aids_used", False)),
+                now=started_at,
+            )
         for qid in q_ids:
-            q_obj = db.query(Question).get(qid)
+            q_obj = question_by_id.get(str(qid))
+            if (
+                q_obj is None
+                or q_obj.competition_id != competition_id
+                or str(q_obj.question_id) not in eligible_question_ids
+            ):
+                raise ValueError("La sesión contiene una pregunta fuera de la OPEC activa.")
             key_chosen = answers_dict.get(qid, "NONE")
             
             is_right = (key_chosen == q_obj.correct_key)
             if is_right:
                 correct_count += 1
                 
-            # Track by Eje for weighting
+            # Group by the internal bank classification for the practice index.
             track = q_obj.track or "FUNCIONAL"
             if track not in eje_results:
                 eje_results[track] = [0, 0]
@@ -85,36 +204,86 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
             # Registro Ãºnico: historial, rendimiento, dominio y repaso espaciado.
             record_attempt(
                 db, user_id=u_id, question=q_obj, chosen_key=key_chosen,
-                confidence=confidences.get(qid, "unsure" if is_right else "guess"),
+                confidence=confidences.get(qid),
                 error_type=error_types.get(qid),
+                time_sec=question_times.get(qid),
             )
+            if evidence_session is not None:
+                record_opec_event(
+                    db,
+                    session_id=evidence_session.id,
+                    user_id=u_id,
+                    question_id=str(q_obj.question_id),
+                    chosen_key=key_chosen,
+                    confidence=confidences.get(qid),
+                    time_sec=question_times.get(qid),
+                    error_category=error_types.get(qid),
+                    user_reasoning=(st.session_state.get("error_reasoning") or {}).get(qid),
+                )
             if is_right:
                 safe_setattr(q_obj, "global_hits", getattr(q_obj, "global_hits", 0) + 1)
             else:
                 safe_setattr(q_obj, "global_misses", getattr(q_obj, "global_misses", 0) + 1)
+
+        if evidence_session is not None:
+            finalize_opec_session(
+                db,
+                session_id=evidence_session.id,
+                user_id=u_id,
+                require_complete=True,
+            )
+
+        # Claim the persisted run before gamification commits the transaction.
+        # A stale tab must not record attempts, evidence or points for a run
+        # that a newer tab has already replaced.
+        if is_resumable_practice(
+            st.session_state.get("study_session_kind"),
+            st.session_state.get("practice_mode"),
+        ):
+            cleared = clear_daily_run(
+                db,
+                u_id,
+                expected_run_id=st.session_state.get("practice_run_id"),
+            )
+            if not cleared:
+                raise StudyRunConflictError(
+                    "La práctica fue reemplazada o finalizada en otra pestaña."
+                )
         
         # Breakdown into dict of tuples for update_user_stats
         breakdown = {k: (v[0], v[1]) for k,v in eje_results.items()}
         
-        # Update Gamification with official weighting
+        # Actualiza el índice interno de práctica; no es una ponderación oficial.
         stats, points_earned, new_achievements, rank_up, is_passed = update_user_stats(db, datetime.date.today(), correct_count, total_questions=total_q, eje_breakdown=breakdown, user_id=u_id)
-        if st.session_state.get("study_session_kind") == "daily":
-            clear_daily_run(db, u_id)
         db.commit()
         
         # Store results for next page
         st.session_state["exam_mode"] = False
+        result_now = time.time()
+        if is_resumable_practice(
+            st.session_state.get("study_session_kind"),
+            st.session_state.get("practice_mode"),
+        ):
+            duration_seconds = int(
+                active_elapsed_seconds(
+                    current_daily_payload(
+                        q_ids, st.session_state.get("current_idx", 0)
+                    ),
+                    result_now,
+                )
+            )
+        else:
+            duration_seconds = int(
+                max(
+                    0.0,
+                    result_now
+                    - float(st.session_state.get("exam_start_time", result_now)),
+                )
+            )
         st.session_state["last_results"] = {
             "session_kind": st.session_state.get("study_session_kind", "simulation"),
-            "duration_seconds": int(
-                float(st.session_state.get("active_seconds", 0.0))
-                + max(
-                    0.0,
-                    time.time() - float(
-                        st.session_state.get("last_resumed_at", st.session_state.get("exam_start_time", time.time()))
-                    ),
-                )
-            ),
+            "practice_mode": st.session_state.get("practice_mode", "custom"),
+            "duration_seconds": duration_seconds,
             "total": total_q,
             "correct": correct_count,
             "score": (correct_count / total_q) * 100 if total_q > 0 else 0,
@@ -126,12 +295,32 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None):
             "new_achievements": [a.name for a in new_achievements],
             "breakdown": breakdown
         }
+        st.session_state["last_results"]["marked_for_review"] = list(
+            dict.fromkeys(st.session_state.get("marked_for_review", []))
+        )
+        if evidence_session is not None:
+            st.session_state["last_results"].update({
+                "evidence_session_id": evidence_session.id,
+                "mode": evidence_session.mode,
+                "bank_partition": evidence_session.bank_partition,
+                "policy_version": evidence_session.policy_version,
+                "blueprint_version": evidence_session.blueprint_version,
+                "completed": evidence_session.status == "completed",
+                "feedback_enabled": evidence_session.feedback_enabled,
+                "aids_used": evidence_session.aids_used,
+                "question_revision_ids": list(evidence_session.question_revision_ids or []),
+                "case_ids": list(evidence_session.case_ids or []),
+                "coverage": dict(evidence_session.coverage or {}),
+            })
+        st.session_state["last_results"]["competition_id"] = competition_id
+        st.session_state["last_results"]["opec_number"] = str(active_opec.opec_number)
         save_last_result(db, u_id, st.session_state["last_results"])
         db.commit()
         return True
     except Exception as e:
         db.rollback()
-        st.error(f"❌ Error al guardar resultados: {e}")
+        log_ui_exception("practice.results.save", e)
+        st.error("❌ No fue posible guardar los resultados. Intenta nuevamente.")
         return False
 
 # --- UI Setup ---
@@ -193,13 +382,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+restored_run_this_render = False
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     resume_db = SessionLocal()
 
     resumed_run = load_daily_run(resume_db, st.session_state.get("user_id"))
     resume_db.close()
     if resumed_run:
+        # A recovered browser session starts frozen: time spent away from the
+        # app is not study time and the user must resume it explicitly.
+        resumed_run = dict(resumed_run)
+        resumed_run["paused"] = True
         restore_daily_run_to_session(st.session_state, resumed_run)
+        restored_run_this_render = True
 
 if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
     if "last_results" in st.session_state:
@@ -242,26 +437,95 @@ if "exam_mode" not in st.session_state or not st.session_state["exam_mode"]:
             st.switch_page("pages/1_Nuevo_Simulacro.py")
     st.stop()
 
-is_daily_session = st.session_state.get("study_session_kind") == "daily"
+context_db = SessionLocal()
+try:
+    context_user_id = st.session_state.get("user_id")
+    context_opec = context_db.query(UserOPEC).filter_by(
+        user_id=context_user_id, is_active=True
+    ).first()
+    current_exam_scope = {
+        "competition_id": get_active_competition_id(context_db, context_user_id),
+        "opec_number": str(context_opec.opec_number) if context_opec else None,
+    }
+finally:
+    context_db.close()
+
+stored_exam_scope = st.session_state.get("exam_scope")
+if stored_exam_scope and stored_exam_scope != current_exam_scope:
+    for key in (
+        "exam_mode", "exam_questions", "answers", "checked_answers", "confidences",
+        "error_types", "error_reasoning", "question_times", "last_results",
+    ):
+        st.session_state.pop(key, None)
+    st.session_state.pop("_practice_resume_checkpoint", None)
+    st.rerun()
+st.session_state["exam_scope"] = current_exam_scope
+
+session_kind = st.session_state.get("study_session_kind", "practice")
+practice_mode = st.session_state.get("practice_mode", "custom")
+is_daily_session = session_kind == "daily"
+is_resumable_session = is_resumable_practice(session_kind, practice_mode)
 st.session_state.setdefault("confidences", {})
 st.session_state.setdefault("error_types", {})
+st.session_state.setdefault("error_reasoning", {})
+st.session_state.setdefault("question_times", {})
+st.session_state.setdefault("marked_for_review", [])
 
 def current_daily_payload(question_ids, position):
+    exam_scope = st.session_state.get("exam_scope") or {}
     return {
+        "run_id": st.session_state.get("practice_run_id"),
+        "session_kind": st.session_state.get("study_session_kind", "practice"),
+        "practice_mode": st.session_state.get("practice_mode", "custom"),
+        "hardcore_mode": bool(st.session_state.get("hardcore_mode", False)),
+        "aids_used": bool(st.session_state.get("practice_aids_used", False)),
         "question_ids": question_ids,
         "answers": st.session_state.get("answers", {}),
         "checked_answers": st.session_state.get("checked_answers", {}),
         "confidences": st.session_state.get("confidences", {}),
         "error_types": st.session_state.get("error_types", {}),
+        "error_reasoning": st.session_state.get("error_reasoning", {}),
+        "marked_for_review": st.session_state.get("marked_for_review", []),
+        "question_times": st.session_state.get("question_times", {}),
         "current_idx": position,
-        "total_time_limit": st.session_state["total_time_limit"],
+        "total_time_limit": st.session_state.get("total_time_limit", 1800),
         "started_at": st.session_state["exam_start_time"],
-        "learning_complete": st.session_state.get("daily_learning_complete", False),
+        "learning_complete": (
+            st.session_state.get("daily_learning_complete", False)
+            if is_daily_session
+            else True
+        ),
         "learning_minutes": st.session_state.get("daily_learning_minutes", 8),
         "active_seconds": st.session_state.get("active_seconds", 0.0),
         "last_resumed_at": st.session_state.get("last_resumed_at", st.session_state["exam_start_time"]),
         "paused": st.session_state.get("daily_run_paused", False),
+        "competition_id": exam_scope.get("competition_id"),
+        "opec_number": exam_scope.get("opec_number"),
     }
+
+
+def save_current_run(db, payload, *, replace=False):
+    """Persist one checkpoint without letting a stale tab overwrite a newer run."""
+    payload = checkpoint_daily_run(payload)
+    try:
+        saved = save_daily_run(
+            db,
+            st.session_state.get("user_id"),
+            payload,
+            expected_run_id=(
+                None if replace else st.session_state.get("practice_run_id")
+            ),
+        )
+    except StudyRunConflictError as exc:
+        db.rollback()
+        log_ui_exception("practice.resume.conflict", exc)
+        st.error("Esta práctica fue reemplazada o finalizada en otra pestaña.")
+        st.stop()
+    st.session_state["practice_run_id"] = saved["run_id"]
+    st.session_state["active_seconds"] = saved["active_seconds"]
+    st.session_state["last_resumed_at"] = saved["last_resumed_at"]
+    st.session_state["daily_run_paused"] = saved["paused"]
+    return saved
 
 render_header(title="Sesión diaria guiada" if is_daily_session else "Simulacro en curso")
 
@@ -282,13 +546,79 @@ total_q = len(q_ids)
 
 db = SessionLocal()
 
-if is_daily_session and st.session_state.get("daily_run_paused", False):
-    st.info("Sesión pausada. El cronómetro no está contando tiempo.")
+active_opec = db.query(UserOPEC).filter_by(
+    user_id=st.session_state.get("user_id"), is_active=True
+).first()
+competition_id = get_active_competition_id(db, st.session_state.get("user_id"))
+loaded_questions = db.query(Question).filter(Question.question_id.in_(q_ids)).all()
+eligible_training_ids = _eligible_training_question_ids(
+    db,
+    st.session_state.get("user_id"),
+    competition_id,
+    active_opec,
+)
+valid_ids = {
+    item.question_id for item in loaded_questions
+    if active_opec is not None
+    and item.competition_id == competition_id
+    and str(item.question_id) in eligible_training_ids
+}
+recovered_ids, recovered_position = recover_question_ids(q_ids, valid_ids, current_idx)
+if recovered_ids != q_ids:
+    if not recovered_ids:
+        if is_resumable_session:
+            clear_daily_run(
+                db,
+                st.session_state.get("user_id"),
+                expected_run_id=st.session_state.get("practice_run_id"),
+            )
+            db.commit()
+        db.close()
+        st.session_state["exam_mode"] = False
+        st.session_state.pop("exam_questions", None)
+        st.error("La sesión pertenecía a otra OPEC y fue cerrada para proteger tu progreso.")
+        st.stop()
+    st.session_state["exam_questions"] = recovered_ids
+    st.session_state["current_idx"] = recovered_position
+    db.close()
+    st.rerun()
+
+if is_resumable_session:
+    checkpoint_id = (
+        str(st.session_state.get("exam_start_time")),
+        tuple(map(str, q_ids)),
+        session_kind,
+        practice_mode,
+        current_exam_scope.get("competition_id"),
+        current_exam_scope.get("opec_number"),
+    )
+    if st.session_state.get("_practice_resume_checkpoint") != checkpoint_id:
+        if not restored_run_this_render:
+            st.session_state.pop("practice_run_id", None)
+            st.session_state["active_seconds"] = 0.0
+            st.session_state["last_resumed_at"] = st.session_state.get(
+                "exam_start_time", time.time()
+            )
+            st.session_state["daily_run_paused"] = False
+            st.session_state["last_answer_time"] = time.time()
+            st.session_state["tutor_explanation"] = None
+        save_current_run(
+            db,
+            current_daily_payload(q_ids, current_idx),
+            replace=not restored_run_this_render,
+        )
+        st.session_state["_practice_resume_checkpoint"] = checkpoint_id
+
+if is_resumable_session and st.session_state.get("daily_run_paused", False):
+    st.info("Práctica pausada. El cronómetro no está contando tiempo.")
     if st.button("▶️ Reanudar sesión", type="primary", use_container_width=True):
         resumed = resume_daily_run(current_daily_payload(st.session_state["exam_questions"], st.session_state["current_idx"]))
-        save_daily_run(db, st.session_state.get("user_id"), resumed)
+        resumed = save_current_run(db, resumed)
         restore_daily_run_to_session(st.session_state, resumed)
+        db.close()
         st.rerun()
+    db.close()
+    st.stop()
 
 current_q_id = q_ids[current_idx]
 question = db.query(Question).filter(Question.question_id == current_q_id).first()
@@ -304,6 +634,13 @@ if question is None:
     }
     recovered_ids, recovered_position = recover_question_ids(q_ids, valid_ids, current_idx)
     if not recovered_ids:
+        if is_resumable_session:
+            clear_daily_run(
+                db,
+                st.session_state.get("user_id"),
+                expected_run_id=st.session_state.get("practice_run_id"),
+            )
+            db.commit()
         db.close()
         st.session_state["exam_mode"] = False
         st.session_state.pop("exam_questions", None)
@@ -312,6 +649,20 @@ if question is None:
     st.session_state["current_idx"] = recovered_position
     db.close()
     st.rerun()
+
+
+def checkpoint_question_time(question_id, now=None):
+    """Accumulate active time for the current question across pause/resume."""
+    now = now or time.time()
+    last_answer_time = float(st.session_state.get("last_answer_time", now))
+    delta = max(0, int(now - last_answer_time))
+    previous = max(
+        0, int(st.session_state["question_times"].get(question_id, 0) or 0)
+    )
+    st.session_state["question_times"][question_id] = previous + delta
+    st.session_state["last_answer_time"] = now
+    return delta
+
 
 if is_daily_session and not st.session_state.get("daily_learning_complete", False):
     loaded_questions = db.query(Question).filter(Question.question_id.in_(q_ids)).all()
@@ -352,10 +703,7 @@ if is_daily_session and not st.session_state.get("daily_learning_complete", Fals
             disabled=not ready,
         ):
             st.session_state["daily_learning_complete"] = True
-            save_daily_run(
-                db, st.session_state.get("user_id"),
-                current_daily_payload(q_ids, current_idx),
-            )
+            save_current_run(db, current_daily_payload(q_ids, current_idx))
             st.rerun()
     db.close()
     st.stop()
@@ -365,17 +713,17 @@ if is_daily_session:
 
 # --- v2.0 NEW: Chronometer / Timer ---
 if "total_time_limit" not in st.session_state:
-    # GOA Rule: 2.5 minutes per situational question
+    # Parámetro provisional editable del simulador; la duración oficial no se ha publicado.
     st.session_state["total_time_limit"] = 150 * total_q 
 
 # Calculate real-time remaining
-if is_daily_session:
+if is_resumable_session:
     elapsed = active_elapsed_seconds(current_daily_payload(q_ids, current_idx))
 else:
     now = time.time()
-    elapsed = float(st.session_state.get("active_seconds", 0.0)) + max(
+    elapsed = max(
         0.0,
-        now - float(st.session_state.get("last_resumed_at", st.session_state.get("exam_start_time", now))),
+        now - float(st.session_state.get("exam_start_time", now)),
     )
 time_left = max(0, int(st.session_state["total_time_limit"] - elapsed))
 
@@ -455,7 +803,9 @@ if time_left <= 0:
 # Question content. Streamlit cannot wrap later widgets by opening an HTML DIV
 # in one markdown call and closing it in another; the opening tag rendered as
 # an empty styled card and produced a large blank space above the question.
-st.caption(f"Eje: {question.track} | Macro: {question.macro_dominio or 'General'}")
+st.caption(
+    f"Área del banco: {question.track} | Macro: {question.macro_dominio or 'General'}"
+)
 active_opec = db.query(UserOPEC).filter_by(
     user_id=st.session_state.get("user_id"), is_active=True
 ).first()
@@ -490,7 +840,7 @@ if case is not None and question_format_status(question) == OFFICIAL_LABEL:
         "var(--dian-red); padding: 24px; border-radius: 4px 20px 20px 4px; "
         "margin-bottom: 24px;'>"
         "<div style='color: var(--dian-red); text-transform: uppercase; font-size: 0.75rem; "
-        "font-weight: 800; margin-bottom: 12px;'>Caso tipo examen · "
+        "font-weight: 800; margin-bottom: 12px;'>Caso PJS de práctica · "
         f"Pregunta {position} de {len(group)}</div>"
         f"<div style='font-size: 1.1rem; line-height: 1.7;'>{escape_html(case.text)}</div></div>",
         unsafe_allow_html=True,
@@ -526,8 +876,8 @@ selected_val = st.radio(
 )
 if selected_val and not is_answer_checked:
     st.session_state["answers"][current_q_id] = selected_val.split(")")[0]
-    if is_daily_session:
-        save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
+    if is_resumable_session:
+        save_current_run(db, current_daily_payload(q_ids, current_idx))
 if is_daily_session and not is_answer_checked:
     confidence_labels = {
         "guess": "Adiviné",
@@ -547,13 +897,30 @@ if is_daily_session and not is_answer_checked:
     )
     if selected_confidence and st.session_state["confidences"].get(current_q_id) != selected_confidence:
         st.session_state["confidences"][current_q_id] = selected_confidence
-        save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
+        save_current_run(db, current_daily_payload(q_ids, current_idx))
 render_favorite_button(current_q_id, st.session_state.get("user_id"))
 
-if is_daily_session:
+marked_ids = set(st.session_state.get("marked_for_review", []))
+mark_for_review = st.checkbox(
+    "🔖 Marcar para revisar antes de finalizar",
+    value=str(current_q_id) in marked_ids,
+    key=f"mark_review_{current_q_id}",
+)
+if mark_for_review:
+    marked_ids.add(str(current_q_id))
+else:
+    marked_ids.discard(str(current_q_id))
+updated_marked = sorted(marked_ids)
+if updated_marked != sorted(st.session_state.get("marked_for_review", [])):
+    st.session_state["marked_for_review"] = updated_marked
+    if is_resumable_session:
+        save_current_run(db, current_daily_payload(q_ids, current_idx))
+
+if is_resumable_session:
     if st.button("⏸️ Pausar y salir", use_container_width=True):
+        checkpoint_question_time(current_q_id)
         payload = pause_daily_run(current_daily_payload(q_ids, current_idx))
-        save_daily_run(db, st.session_state.get("user_id"), payload)
+        save_current_run(db, payload)
         st.session_state["daily_run_paused"] = True
         st.session_state["exam_mode"] = False
         db.close()
@@ -562,10 +929,11 @@ if is_daily_session:
 col1, col2, col3 = st.columns([1, 4, 1])
 with col1:
     if st.button("↩️ Anterior", use_container_width=True):
+        checkpoint_question_time(current_q_id)
         st.session_state["current_idx"] = max(0, st.session_state["current_idx"] - 1)
-        if is_daily_session:
-            save_daily_run(
-                db, st.session_state.get("user_id"),
+        if is_resumable_session:
+            save_current_run(
+                db,
                 current_daily_payload(q_ids, st.session_state["current_idx"]),
             )
         st.session_state["tutor_explanation"] = None
@@ -582,7 +950,7 @@ with col2:
                 ),
             ):
                 st.session_state["checked_answers"][current_q_id] = True
-                save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
+                save_current_run(db, current_daily_payload(q_ids, current_idx))
                 st.rerun()
         else:
             chosen_key = st.session_state["answers"].get(current_q_id)
@@ -594,11 +962,7 @@ with col2:
                     f"La respuesta correcta es {question.correct_key}) {correct_text}"
                 )
                 error_labels = {
-                    "desconocimiento": "No conocía la regla",
-                    "confusion_conceptual": "Confundí conceptos",
-                    "mala_interpretacion": "Interpreté mal el caso",
-                    "lectura_incompleta": "No vi una palabra clave",
-                    "apuro": "Respondí con afán",
+                    key: label for key, label in ERROR_CATEGORIES.items()
                 }
                 selected_error = st.radio(
                     "¿Cuál fue la causa principal?",
@@ -613,7 +977,19 @@ with col2:
                 )
                 if selected_error and st.session_state["error_types"].get(current_q_id) != selected_error:
                     st.session_state["error_types"][current_q_id] = selected_error
-                    save_daily_run(db, st.session_state.get("user_id"), current_daily_payload(q_ids, current_idx))
+                    save_current_run(db, current_daily_payload(q_ids, current_idx))
+                reasoning = st.text_area(
+                    "¿Qué pensaste al elegir tu respuesta? (opcional)",
+                    value=st.session_state["error_reasoning"].get(current_q_id, ""),
+                    key=f"error_reasoning_{current_q_id}",
+                    help="Esto permite distinguir desconocimiento, confusión, lectura y exceso de confianza.",
+                )
+                if reasoning.strip() != st.session_state["error_reasoning"].get(current_q_id, ""):
+                    if reasoning.strip():
+                        st.session_state["error_reasoning"][current_q_id] = reasoning.strip()
+                    else:
+                        st.session_state["error_reasoning"].pop(current_q_id, None)
+                    save_current_run(db, current_daily_payload(q_ids, current_idx))
             st.info(f"💡 {question.rationale or 'No hay explicación disponible.'}")
             if question.source_refs:
                 st.caption(f"📖 Fuente: {question.source_refs}")
@@ -625,6 +1001,9 @@ with col2:
             use_container_width=True,
             disabled=not selected_key,
         ):
+            st.session_state["practice_aids_used"] = True
+            if is_resumable_session:
+                save_current_run(db, current_daily_payload(q_ids, current_idx))
             with st.spinner("Analizando..."):
                 selected_text = question.options_json.get(selected_key, "")
                 fallback_hint = local_socratic_hint(
@@ -676,10 +1055,11 @@ with col3:
         ):
             if time_spent < 45 and not is_hardcore:
                 st.toast("⚠️ Estás respondiendo muy rápido.", icon="⏱️")
+            checkpoint_question_time(current_q_id, current_time)
             st.session_state["current_idx"] += 1
-            if is_daily_session:
-                save_daily_run(
-                    db, st.session_state.get("user_id"),
+            if is_resumable_session:
+                save_current_run(
+                    db,
                     current_daily_payload(q_ids, st.session_state["current_idx"]),
                 )
             st.session_state["last_answer_time"] = time.time()
@@ -697,10 +1077,12 @@ with col3:
                 )
             ),
         ):
+            checkpoint_question_time(current_q_id, current_time)
             if finalize_exam(
                 db, q_ids, st.session_state["answers"],
-                st.session_state.get("confidences") if is_daily_session else None,
-                st.session_state.get("error_types") if is_daily_session else None,
+                st.session_state.get("confidences"),
+                st.session_state.get("error_types"),
+                st.session_state.get("question_times"),
             ):
                 db.close()
                 if "show_ejecucion_analisis" in st.session_state:

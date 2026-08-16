@@ -28,27 +28,42 @@ def validate_import_df(df: pd.DataFrame):
     for index, row in df.iterrows():
         row_num = index + 2 # Excel starts at 1, +1 for header
         
+        track = str(row.get('track', '') or '').strip().upper()
+        is_likert = track in {'COMPORTAMENTAL', 'INTEGRIDAD'}
+
         # Campos que no pueden ser nulos
-        critical_fields = ['track', 'stem', 'correct_key', 'options_A', 'options_B', 'options_C']
+        critical_fields = ['track', 'stem', 'options_A', 'options_B', 'options_C']
+        if not is_likert:
+            critical_fields.append('correct_key')
         for field in critical_fields:
             if pd.isna(row[field]) or str(row[field]).strip() == "":
                 errors.append(f"Fila {row_num}: El campo '{field}' está vacío.")
         
-        # Opciones D es opcional (algunas IAs generan 3 opciones)
-        if 'options_D' in row and not pd.isna(row['options_D']) and str(row['options_D']).strip() != "":
-            pass # Válido
+        if is_likert and (
+            'options_D' not in row
+            or pd.isna(row['options_D'])
+            or not str(row['options_D']).strip()
+        ):
+            errors.append(
+                f"Fila {row_num}: La afirmación Likert requiere una cuarta opción."
+            )
         
         # Validar llave de respuesta
-        if not pd.isna(row['correct_key']):
-            if str(row['correct_key']).strip().upper() not in ['A', 'B', 'C', 'D']:
-                errors.append(f"Fila {row_num}: La respuesta correcta debe ser A, B, C o D.")
+        if is_likert:
+            if not pd.isna(row['correct_key']) and str(row['correct_key']).strip():
+                errors.append(
+                    f"Fila {row_num}: El autorreporte Likert no debe tener clave correcta."
+                )
+        elif not pd.isna(row['correct_key']):
+            if str(row['correct_key']).strip().upper() not in ['A', 'B', 'C']:
+                errors.append(f"Fila {row_num}: La respuesta correcta debe ser A, B o C.")
 
         # Validar dificultad (opcional pero debe ser entero si existe)
         if 'difficulty' in row and not pd.isna(row['difficulty']):
             try:
                 d = int(float(row['difficulty']))
-                if d < 1 or d > 5:
-                    errors.append(f"Fila {row_num}: La dificultad debe estar entre 1 y 5.")
+                if d < 1 or d > 10:
+                    errors.append(f"Fila {row_num}: La dificultad debe estar entre 1 y 10.")
             except (ValueError, TypeError):
                 errors.append(f"Fila {row_num}: La dificultad debe ser un número entero.")
 

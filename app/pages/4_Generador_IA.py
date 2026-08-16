@@ -1,5 +1,7 @@
 import streamlit as st
 import os, sys, uuid
+import math
+import time
 
 # --- ESCUDO DE RUTAS MIKEY v25 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -12,16 +14,22 @@ from core.generators.llm import LLMGenerator
 from core.generators.utils import repair_and_parse_json
 from core.dedupe import compute_hash
 from core.config import get_api_key, save_api_key_local # NUEVO
-from ui_utils import load_css, render_header, render_custom_sidebar, metric_card, get_db_info
-
-import pypdf
-import io
+from ui_utils import get_db_info, load_css, log_ui_exception, metric_card, render_header
 
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
 from core.generated_questions import candidate_issues, extract_candidates
 from core.user_keys import get_user_key, save_user_key
 from core.access_control import require_admin
+from core.ai.usage_policy import AIUsageLimitError, reserve_ai_usage
+from core.safe_uploads import (
+    DEFAULT_DOCUMENT_LIMITS,
+    UnsafeUpload,
+    extract_pdf_pages,
+    extract_text_file,
+    sanitize_upload_name,
+)
+from core.learning.difficulty import difficulty_label, legacy_difficulty_to_editorial
 
 # pass # Removed st.set_page_config
 
@@ -142,14 +150,19 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     
-    # --- RECEPCIÓN DE REFUERZOS DESDE SIMULACRO REAL (v6.0) ---
+    # --- RECEPCIÓN DE REFUERZOS DESDE LA PRÁCTICA PJS CRONOMETRADA (v6.0) ---
     reinforcement_topic = st.session_state.get("ai_reinforcement_topic", None)
     reinforcement_source_context = st.session_state.get("ai_reinforcement_source_context", "")
     default_gen_idx = 1 if reinforcement_topic else 0 # 1 is Case Study
     
     # --- MODE SELECTION v5.0 ---
     generate_btn = False
-    gen_mode = st.radio("Modo de Generación", ["Preguntas desde Texto/PDF", "Caso de Estudio (Simulacro Real)"], index=default_gen_idx, horizontal=True)
+    gen_mode = st.radio(
+        "Modo de Generación",
+        ["Preguntas desde Texto/PDF", "Caso PJS de práctica"],
+        index=default_gen_idx,
+        horizontal=True,
+    )
     
     if gen_mode == "Preguntas desde Texto/PDF":
         if reinforcement_topic:
@@ -184,24 +197,35 @@ with col1:
                         height=300)
                 
         with tab_file:
-            uploaded_file = st.file_uploader("Sube un documento (PDF, TXT)", type=["pdf", "txt"])
+            uploaded_file = st.file_uploader(
+                "Sube un documento (PDF, TXT)",
+                type=["pdf", "txt"],
+                help=(
+                    f"PDF: máximo {DEFAULT_DOCUMENT_LIMITS.max_pdf_bytes // (1024 * 1024)} MB y "
+                    f"{DEFAULT_DOCUMENT_LIMITS.max_pdf_pages} páginas. TXT: máximo "
+                    f"{DEFAULT_DOCUMENT_LIMITS.max_text_bytes // (1024 * 1024)} MB."
+                ),
+            )
             if uploaded_file:
                 try:
-                    if uploaded_file.type == "application/pdf":
-                        reader = pypdf.PdfReader(uploaded_file)
-                        extracted = []
-                        for page in reader.pages:
-                            extracted.append(page.extract_text())
+                    safe_upload_name = sanitize_upload_name(
+                        uploaded_file.name, allowed_suffixes=(".pdf", ".txt")
+                    )
+                    upload_payload = bytes(uploaded_file.getbuffer())
+                    if safe_upload_name.lower().endswith(".pdf"):
+                        extracted = extract_pdf_pages(upload_payload)
                         st.session_state["ai_source_text"] = "\n".join(extracted)
-                        st.success(f"PDF cargado: {len(reader.pages)} páginas leídas.")
-                        st.rerun() # Force refresh for counter Mikey
+                        st.success(f"PDF cargado: {len(extracted)} páginas leídas.")
+                        st.rerun()
                     else:
-                        # TXT
-                        st.session_state["ai_source_text"] = uploaded_file.read().decode("utf-8")
+                        st.session_state["ai_source_text"] = extract_text_file(upload_payload)
                         st.success("Archivo de texto cargado.")
-                        st.rerun() # Force refresh Mikey
-                except Exception as e:
-                    st.error(f"Error leyendo archivo: {e}")
+                        st.rerun()
+                except UnsafeUpload as exc:
+                    st.error(str(exc))
+                except Exception as exc:
+                    log_ui_exception("generator.source_upload", exc)
+                    st.error("No fue posible leer el archivo de forma segura.")
     
         with tab_json:
             st.info("💡 Usa esta opción si generaste las preguntas en **Gemini Web** usando el Mega-Prompt.")
@@ -226,20 +250,32 @@ with col1:
                             else:
                                 st.error("El JSON no contiene preguntas reconocibles.")
                     except Exception as exc:
-                        st.error(f"No se pudo importar el JSON: {exc}")
+                        print(
+                            f"AI JSON import failed: {type(exc).__name__}",
+                            file=sys.stderr,
+                        )
+                        st.error("No se pudo importar el JSON. Revisa su estructura.")
 
         source_text = st.session_state.get("ai_source_text", "")
         char_count = len(source_text)
         st.caption(f"Caracteres detectados: {char_count}")
-        difficulty_p_val = st.session_state.get("ai_default_diff", 2)
-        difficulty_map = {"Básico": 1, "Intermedio": 2, "Avanzado": 3}
-        inv_difficulty_map = {value: label for label, value in difficulty_map.items()}
-        difficulty_label = st.select_slider(
-            "Nivel de dificultad",
-            options=list(difficulty_map),
-            value=inv_difficulty_map.get(difficulty_p_val, "Intermedio"),
+        raw_default_difficulty = int(st.session_state.get("ai_default_diff", 5) or 5)
+        if 1 <= raw_default_difficulty <= 3:
+            raw_default_difficulty = int(
+                legacy_difficulty_to_editorial(raw_default_difficulty)
+            )
+        difficulty_value = st.slider(
+            "Dificultad editorial",
+            min_value=1,
+            max_value=10,
+            value=min(max(raw_default_difficulty, 1), 10),
+            format="%d",
+            help="Escala interna 1–10; no es una escala publicada por la CNSC.",
         )
-        difficulty_value = difficulty_map[difficulty_label]
+        st.caption(
+            f"Nivel {difficulty_value}: {difficulty_label(difficulty_value)} · "
+            "complejidad editorial interna."
+        )
 
         goa_mode = st.toggle(
             "📄 Generar preguntas situacionales",
@@ -260,7 +296,10 @@ with col1:
 
     else:
         # --- CASE STUDY MODE ---
-        st.info("🎭 **Modo Simulacro Real:** Crea un escenario narrativo complejo (Caso Protagónico) y preguntas asociadas para entrenar lectura crítica.")
+        st.info(
+            "🎭 **Modo caso PJS de práctica:** crea un escenario laboral y preguntas "
+            "asociadas para entrenar análisis y lectura crítica."
+        )
         
         # Pre-fill with reinforcement topic if available
         initial_cs_topic = reinforcement_topic if reinforcement_topic else "Procedimiento Tributario"
@@ -272,7 +311,14 @@ with col1:
             
         cs_num = 3
         st.caption("Formato de práctica recomendado: cada caso funcional contiene tres preguntas relacionadas. No sustituye el formato oficial que publique la CNSC.")
-        cs_diff = st.slider("Dificultad del Caso", 1, 3, 2)
+        cs_diff = st.slider(
+            "Dificultad editorial del caso",
+            1,
+            10,
+            5,
+            help="Escala interna 1–10; no es una escala publicada por la CNSC.",
+        )
+        st.caption(f"Nivel {cs_diff}: {difficulty_label(cs_diff)}")
         
         generate_cs_btn = st.button("✨ Generar Caso Protagónico", type="primary", use_container_width=True)
         
@@ -283,7 +329,20 @@ with col1:
                 st.error("No hay una fuente verificada para esta debilidad. Adjunta primero la norma oficial en modo Texto/PDF.")
              else:
                 with st.spinner("Creando narrativa y preguntas..."):
+                    reservation = None
+                    started_case = time.perf_counter()
                     try:
+                        case_planned_calls = 2 if provider.lower() == "gemini" else 1
+                        reservation = reserve_ai_usage(
+                            SessionLocal,
+                            user_id=st.session_state.get("user_id"),
+                            provider=provider,
+                            model=model_name,
+                            task_type="case_generation",
+                            prompt=f"{cs_topic}\n{reinforcement_source_context}",
+                            planned_calls=case_planned_calls,
+                            prompt_version="case-generator-v1",
+                        )
                         generator = LLMGenerator(provider, api_key, model_name=model_name)
                         result = generator.generate_case_study(
                             cs_topic,
@@ -291,16 +350,30 @@ with col1:
                             cs_diff,
                             source_context=reinforcement_source_context,
                         )
+                        reservation.finish(
+                            success=True,
+                            output_text=str(result),
+                            latency_ms=int((time.perf_counter() - started_case) * 1000),
+                        )
+                        result["difficulty"] = cs_diff
                         st.session_state["generated_case"] = result
                         st.success("¡Caso Generado!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                    except AIUsageLimitError as exc:
+                        st.warning(str(exc))
+                    except Exception as exc:
+                        log_ui_exception("generator.case.generate", exc)
+                        if reservation is not None:
+                            reservation.finish(
+                                success=False,
+                                latency_ms=int((time.perf_counter() - started_case) * 1000),
+                                error=exc,
+                            )
+                        st.error("No fue posible generar el caso en este momento.")
 
     # Common Logic separation managed by flags or logic below
 
 # --- v2.0 NEW: Sidebar Gamification Info ---
-stats_s, rank = render_custom_sidebar()
 total_q, current_db = get_db_info()
 
 st.sidebar.markdown(f"""
@@ -322,7 +395,23 @@ if generate_btn:
         st.warning("📚 Indica la referencia normativa antes de generar preguntas.")
     else:
         with st.spinner("Analizando texto y creando preguntas... (Esto puede tardar unos segundos)"):
+            reservation = None
+            started_generation = time.perf_counter()
             try:
+                calls_per_batch = 3 if provider.lower() == "gemini" else 1
+                planned_calls = max(
+                    1, math.ceil(int(num_q) / 5) * calls_per_batch
+                )
+                reservation = reserve_ai_usage(
+                    SessionLocal,
+                    user_id=st.session_state.get("user_id"),
+                    provider=provider,
+                    model=model_name,
+                    task_type="question_generation",
+                    prompt=source_text,
+                    planned_calls=planned_calls,
+                    prompt_version="question-generator-v1",
+                )
                 generator = LLMGenerator(provider, api_key, model_name=model_name, goa_mode=goa_mode)
                 
                 # Progress simulation/placeholder Mikey
@@ -354,6 +443,11 @@ if generate_btn:
                 results = extract_candidates(
                     results, difficulty=difficulty_value, source_ref=source_reference
                 )
+                reservation.finish(
+                    success=True,
+                    output_text=str(results),
+                    latency_ms=int((time.perf_counter() - started_generation) * 1000),
+                )
                 # Apply Custom Topic Override
                 if results and custom_topic.strip():
                     for q in results:
@@ -375,9 +469,18 @@ if generate_btn:
                             
                     st.success(f"¡{len(results)} preguntas generadas!")
                     print(f"DEBUG: Generated {len(results)} questions for review.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-                print(f"DEBUG: Generation ERROR: {e}")
+            except AIUsageLimitError as exc:
+                st.warning(str(exc))
+            except Exception as exc:
+                log_ui_exception("generator.questions.generate", exc)
+                if reservation is not None:
+                    reservation.finish(
+                        success=False,
+                        latency_ms=int((time.perf_counter() - started_generation) * 1000),
+                        error=exc,
+                    )
+                st.error("No fue posible generar preguntas en este momento.")
+                print(f"DEBUG: Generation ERROR: {type(exc).__name__}")
 
 # Create DB Session safely for checks
 def check_duplicate(hash_norm):
@@ -387,8 +490,10 @@ def check_duplicate(hash_norm):
         exists = db.query(Question).filter_by(hash_norm=hash_norm).first()
         db.close()
         return exists
-    except Exception as e:
-        print(f"DEBUG: Error checking duplicate: {e}")
+    except Exception as exc:
+        print(
+            f"Duplicate check failed: {type(exc).__name__}", file=sys.stderr
+        )
         return None
 
 with col2:
@@ -419,9 +524,9 @@ with col2:
 
                 st.write(f"**{q['stem']}**")
                 
-                diff_labels = {1: "🟢 Básico", 2: "🟡 Intermedio", 3: "🔴 Avanzado"}
-                diff_tag = diff_labels.get(q.get('difficulty', 2), "Intermedio")
-                st.caption(f"{q['track']} | **{q.get('macro_dominio', 'Macro')}** > {q.get('micro_competencia', 'Micro')} | Dificultad: {diff_tag}")
+                candidate_difficulty = min(max(int(q.get("difficulty", 5) or 5), 1), 10)
+                diff_tag = difficulty_label(candidate_difficulty)
+                st.caption(f"{q['track']} | **{q.get('macro_dominio', 'Macro')}** > {q.get('micro_competencia', 'Micro')} | Dificultad editorial: {candidate_difficulty}/10 · {diff_tag}")
                 
                 # Show Options
                 ops = q.get('options_json', {})
@@ -474,7 +579,7 @@ with col2:
                             micro_competencia=data.get('micro_competencia'),
                             competency=data.get('micro_competencia', data.get('competency', 'General')),
                             topic=data.get('topic', 'Generado por IA'),
-                            difficulty=data.get('difficulty', 2),
+                            difficulty=min(max(round(int(data.get('difficulty', 5)) / 3), 1), 3),
                             stem=data.get('stem'),
                             options_json=data.get('options_json'),
                             correct_key=data.get('correct_key'),
@@ -488,6 +593,9 @@ with col2:
                                 "origin": "ai_text_generator",
                                 "provider": provider,
                                 "model": model_name,
+                                "editorial_difficulty_1_10": min(
+                                    max(int(data.get("difficulty", 5) or 5), 1), 10
+                                ),
                             },
                             created_at=datetime.datetime.utcnow(),
                             hash_norm=h
@@ -514,10 +622,12 @@ with col2:
                 else:
                     st.warning("⚠️ No se guardaron preguntas nuevas. Todas las seleccionadas ya existen en el banco.")
                     
-            except Exception as e:
+            except Exception as exc:
                 db.rollback()
-                st.error(f"❌ Error al guardar en la base de datos: {str(e)}")
-                print(f"CRITICAL ERROR SAVING: {e}")
+                st.error("❌ No fue posible guardar los candidatos en este momento.")
+                print(
+                    f"Candidate save failed: {type(exc).__name__}", file=sys.stderr
+                )
             finally:
                 db.close()
             
@@ -529,7 +639,7 @@ with col2:
         from core.exam_format import is_official_functional_payload
         case_is_official = is_official_functional_payload(case_data)
         if not case_is_official:
-            st.error("El caso generado no cumple el formato oficial: debe contener exactamente 3 enunciados funcionales, cada uno con opciones A, B y C y una clave valida.")
+            st.error("El caso no cumple el formato editorial configurado: esta plantilla exige 3 enunciados funcionales, cada uno con opciones A, B y C y una clave válida. La especificación PJS permite hasta 3 por caso.")
         else:
             st.warning("Candidato pendiente de revisión normativa. Guardarlo no lo habilita automáticamente para el simulacro ni el estudio activo.")
         
@@ -563,7 +673,10 @@ with col2:
                     title=case_data.get("title"),
                     text=case_data.get("text"),
                     topic=case_data.get("topic"),
-                    difficulty=2
+                    difficulty=min(
+                        max(round(int(case_data.get("difficulty", 5) or 5) / 3), 1),
+                        3,
+                    )
                 )
                 db.add(new_case)
                 db.flush() # Get ID
@@ -588,7 +701,10 @@ with col2:
                         correct_key=q.get("correct_key"),
                         rationale=q.get("rationale"),
                         topic=case_data.get("topic"),
-                        difficulty=2,
+                        difficulty=min(
+                            max(round(int(case_data.get("difficulty", 5) or 5) / 3), 1),
+                            3,
+                        ),
                         question_type="SITUATIONAL",
                         
                         # Fix NotNull Constraint (v5.3)
@@ -602,6 +718,9 @@ with col2:
                             "status": "PENDING_REVIEW",
                             "review": "reinforcement_candidate",
                             "weak_topic": reinforcement_topic,
+                            "editorial_difficulty_1_10": min(
+                                max(int(case_data.get("difficulty", 5) or 5), 1), 10
+                            ),
                         },
                         hash_norm=question_hash
                     )
@@ -615,9 +734,10 @@ with col2:
                 if st.button("Generar Otro"):
                     st.rerun()
                     
-            except Exception as e:
+            except Exception as exc:
                 db.rollback()
-                st.error(f"Error guardando caso: {e}")
+                print(f"Case save failed: {type(exc).__name__}", file=sys.stderr)
+                st.error("No fue posible guardar el caso en este momento.")
             finally:
                 db.close()
 

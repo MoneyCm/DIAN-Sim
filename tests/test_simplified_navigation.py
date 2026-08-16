@@ -6,8 +6,9 @@ def test_menu_prioritizes_daily_actions_and_hides_execution_page():
     assert "learner_pages = [p_dashboard]" in source
     assert "learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])" in source
     assert "secondary_learner_pages" in source
-    assert '"Estudiar": registered_learner_pages' in source
+    assert '"Estudiar": admin_study_pages' in source
     assert '"Herramientas de administración"' in source
+    assert "learner_configuration_pages = [p_config, p_opec_tools]" in source
     assert "p_ejecucion" in source.split("secondary_learner_pages", 1)[1].split("registered_learner_pages", 1)[0]
 
 

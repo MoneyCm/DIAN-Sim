@@ -2,25 +2,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
+from core.learning.review_policy import review_interval
 
-CONFIDENCE_FACTORS = {
-    "guess": 1.2,
-    "unsure": 1.8,
-    "confident": 2.6,
-}
 
 CONFIDENCE_EASE_DELTA = {
     "guess": -0.15,
     "unsure": 0.0,
     "confident": 0.1,
 }
-
-FIRST_INTERVALS = {
-    "guess": 1.0,
-    "unsure": 2.0,
-    "confident": 4.0,
-}
-
 
 @dataclass(frozen=True)
 class ReviewSchedule:
@@ -39,7 +28,7 @@ def schedule_review(
     now: Optional[datetime] = None,
 ) -> ReviewSchedule:
     """Actualiza una ficha de rendimiento con su siguiente fecha de repaso."""
-    if confidence not in CONFIDENCE_FACTORS:
+    if confidence not in CONFIDENCE_EASE_DELTA:
         raise ValueError(f"Nivel de confianza no válido: {confidence}")
 
     now = now or datetime.now()
@@ -49,19 +38,19 @@ def schedule_review(
     ease_factor = float(getattr(performance, "ease_factor", 2.5) or 2.5)
 
     if is_correct:
-        if previous_reviews == 0 or previous_interval <= 0:
-            interval = FIRST_INTERVALS[confidence]
-        else:
-            interval = max(
-                1.0,
-                previous_interval
-                * CONFIDENCE_FACTORS[confidence]
-                * (ease_factor / 2.5),
-            )
+        decision = review_interval(
+            result="correct",
+            confidence=confidence,
+            previous_interval_days=previous_interval,
+            review_count=previous_reviews,
+            ease_factor=ease_factor,
+        )
+        interval = decision.interval_days
         ease_factor = min(3.0, max(1.3, ease_factor + CONFIDENCE_EASE_DELTA[confidence]))
         stored_error_type = None
     else:
-        interval = 1.0
+        decision = review_interval(result="incorrect", confidence=confidence)
+        interval = decision.interval_days
         ease_factor = max(1.3, ease_factor - 0.2)
         lapse_count += 1
         stored_error_type = error_type or "sin_clasificar"
@@ -77,9 +66,9 @@ def schedule_review(
     performance.last_error_type = stored_error_type
     performance.last_reviewed_at = now
     performance.next_review = next_review
-    if is_correct and interval >= 30:
-        performance.is_mastered = True
-    elif not is_correct:
+    # A long scheduling interval alone is not proof of transfer or retention.
+    # Canonical mastery is evaluated separately from review timing.
+    if not is_correct:
         performance.is_mastered = False
 
     return ReviewSchedule(
