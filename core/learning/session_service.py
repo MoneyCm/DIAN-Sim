@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from core.learning.engine import (
     calculate_mastery,
     calculate_topic_priority,
@@ -262,6 +263,32 @@ class LearningSessionService:
                 now=now,
             )
         return priorities
+
+    def _load_profile_states(self, user_id: int, competition_id: Optional[int], active_opec: UserOPEC):
+        """Load progress states for profile chart with legacy compatibility."""
+        try:
+            return (
+                self.db.query(OpecTopicState)
+                .filter_by(
+                    user_id=user_id,
+                    competition_id=competition_id,
+                    user_opec_id=active_opec.id,
+                )
+                .order_by(OpecTopicState.mastery_score.asc())
+                .all()
+            )
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            try:
+                return (
+                    self.db.query(TopicMastery)
+                    .filter_by(user_id=user_id, competition_id=competition_id)
+                    .order_by(TopicMastery.mastery_score.asc())
+                    .all()
+                )
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                return []
 
     def _select(self, session: LearningSession, now: datetime):
         active_opec = self._active_opec(session.user_id, session.competition_id)
@@ -634,16 +661,7 @@ class LearningSessionService:
         }
         states = []
         if active_opec is not None:
-            states = (
-                self.db.query(OpecTopicState)
-                .filter_by(
-                    user_id=user_id,
-                    competition_id=competition_id,
-                    user_opec_id=active_opec.id,
-                )
-                .order_by(OpecTopicState.mastery_score.asc())
-                .all()
-            )
+            states = self._load_profile_states(user_id, competition_id, active_opec)
         topics = [
             TutorTopicProfile(
                 topic_id=row.topic_id,
@@ -659,8 +677,16 @@ class LearningSessionService:
                     else None
                 ),
                 mastery_score=float(row.mastery_score or 0.0),
-                attempts=int(row.evidence_count or 0),
-                last_reviewed_at=row.last_event_at,
+                attempts=int(
+                    row.evidence_count
+                    if hasattr(row, "evidence_count")
+                    else row.attempts
+                ),
+                last_reviewed_at=(
+                    row.last_event_at
+                    if hasattr(row, "last_event_at")
+                    else getattr(row, "last_reviewed_at", None)
+                ),
                 next_review_at=row.next_review_at,
             )
             for row in states
