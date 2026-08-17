@@ -451,47 +451,52 @@ class LearningSessionService:
         now = now or utc_now()
         active_opec: Optional[UserOPEC] = None
         eligible_questions: list[Question] = []
-        if self._legacy_schema_available_for_learning():
-            try:
-                active_opec = self._active_opec(user_id, competition_id)
-                eligible_questions = self._questions(
-                    competition_id,
-                    user_id,
-                    user_opec=active_opec,
-                )
-                return self._start_learning_session_legacy(
-                    user_id=user_id,
-                    target_minutes=target_minutes,
-                    competition_id=competition_id,
-                    now=now,
-                    active_opec=active_opec,
-                    eligible_questions=eligible_questions,
-                )
-            except (OperationalError, ProgrammingError):
-                self.db.rollback()
-                self._legacy_schema_available = False
-                active_opec = None
-                eligible_questions = []
-
         try:
+            if self._legacy_schema_available_for_learning():
+                try:
+                    active_opec = self._active_opec(user_id, competition_id)
+                    eligible_questions = self._questions(
+                        competition_id,
+                        user_id,
+                        user_opec=active_opec,
+                    )
+                    return self._start_learning_session_legacy(
+                        user_id=user_id,
+                        target_minutes=target_minutes,
+                        competition_id=competition_id,
+                        now=now,
+                        active_opec=active_opec,
+                        eligible_questions=eligible_questions,
+                    )
+                except (OperationalError, ProgrammingError):
+                    self.db.rollback()
+                    self._legacy_schema_available = False
+                    active_opec = None
+                    eligible_questions = []
+
             active_opec = self._active_opec(user_id, competition_id)
             eligible_questions = self._questions(
                 competition_id,
                 user_id,
                 user_opec=active_opec,
             )
+            return self._start_learning_session_opec(
+                user_id=user_id,
+                target_minutes=target_minutes,
+                competition_id=competition_id,
+                now=now,
+                active_opec=active_opec,
+                eligible_questions=eligible_questions,
+            )
         except (OperationalError, ProgrammingError):
             self.db.rollback()
-            active_opec = None
-            eligible_questions = []
-        return self._start_learning_session_opec(
-            user_id=user_id,
-            target_minutes=target_minutes,
-            competition_id=competition_id,
-            now=now,
-            active_opec=active_opec,
-            eligible_questions=eligible_questions,
-        )
+            return SessionView(
+                session_id="",
+                status="inactive",
+                target_minutes=int(target_minutes),
+                started_at=now,
+                question=None,
+            )
 
     def _start_learning_session_legacy(
         self,
