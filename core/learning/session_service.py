@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from core.learning.engine import (
     calculate_mastery,
@@ -84,6 +85,19 @@ def question_view(question: Optional[Question]) -> Optional[QuestionView]:
 class LearningSessionService:
     def __init__(self, db):
         self.db = db
+        self._legacy_schema_available: Optional[bool] = None
+
+    def _legacy_schema_available_for_learning(self) -> bool:
+        """Detect once whether legacy session tables exist in the active DB."""
+        if self._legacy_schema_available is not None:
+            return self._legacy_schema_available
+        try:
+            self.db.execute(text("SELECT 1 FROM learning_sessions LIMIT 1"))
+            self._legacy_schema_available = True
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            self._legacy_schema_available = False
+        return self._legacy_schema_available
 
     def _active_opec(
         self, user_id: int, competition_id: Optional[int]
@@ -92,7 +106,11 @@ class LearningSessionService:
         query = self.db.query(UserOPEC).filter_by(user_id=user_id, is_active=True)
         if competition_id is not None:
             query = query.filter(UserOPEC.competition_id == competition_id)
-        rows = query.order_by(UserOPEC.updated_at.desc(), UserOPEC.id.desc()).all()
+        try:
+            rows = query.order_by(UserOPEC.updated_at.desc(), UserOPEC.id.desc()).all()
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            return None
         return rows[0] if len(rows) == 1 else None
 
     def _questions(
@@ -145,6 +163,29 @@ class LearningSessionService:
                 return row
         return None
 
+    @staticmethod
+    def _session_current_question_id(session) -> Optional[str]:
+        if hasattr(session, "current_question_id") and session.current_question_id:
+            return str(session.current_question_id)
+        if isinstance(session, OpecLearningSession):
+            coverage = session.coverage if isinstance(session.coverage, dict) else {}
+            question_id = coverage.get("current_question_id")
+            return str(question_id) if question_id is not None else None
+        return None
+
+    @staticmethod
+    def _set_session_current_question_id(session, question_id: Optional[str]) -> None:
+        if hasattr(session, "current_question_id"):
+            session.current_question_id = question_id
+            return
+        if isinstance(session, OpecLearningSession):
+            coverage = session.coverage if isinstance(session.coverage, dict) else {}
+            if question_id is None:
+                coverage.pop("current_question_id", None)
+            else:
+                coverage["current_question_id"] = str(question_id)
+            session.coverage = coverage
+
     def _invalidate_context(
         self,
         session: LearningSession,
@@ -160,6 +201,15 @@ class LearningSessionService:
         if canonical is not None and canonical.status == "active":
             canonical.status = "invalid"
             canonical.completed_at = now
+
+    def _invalidate_opec_context(
+        self,
+        session: OpecLearningSession,
+        now: datetime,
+    ) -> None:
+        if session.status == "active":
+            session.status = "abandoned"
+            session.completed_at = now
 
     def _validated_context(
         self,
@@ -198,6 +248,35 @@ class LearningSessionService:
             return canonical, active_opec, []
         return canonical, active_opec, questions
 
+    def _validated_opec_context(
+        self,
+        session: OpecLearningSession,
+        now: datetime,
+    ) -> tuple[OpecLearningSession, Optional[UserOPEC], list[Question]]:
+        active_opec = self._active_opec(session.user_id, session.competition_id)
+        questions = self._questions(
+            session.competition_id,
+            session.user_id,
+            user_opec=active_opec,
+        )
+        eligibility_ids = {str(question.question_id) for question in questions}
+        coverage = session.coverage if isinstance(session.coverage, dict) else {}
+        snapshot_ids = {str(value) for value in coverage.get("question_ids", [])}
+        current_id = self._session_current_question_id(session)
+        if (
+            active_opec is None
+            or session.status != "active"
+            or str(session.opec_number) != str(active_opec.opec_number)
+            or session.user_opec_id != active_opec.id
+            or session.competition_id != active_opec.competition_id
+            or not snapshot_ids
+            or not snapshot_ids.issubset(eligibility_ids)
+            or (current_id is not None and current_id not in snapshot_ids)
+        ):
+            self._invalidate_opec_context(session, now)
+            return session, active_opec, []
+        return session, active_opec, questions
+
     def _topic_priorities(
         self,
         user_id: int,
@@ -206,29 +285,29 @@ class LearningSessionService:
         questions,
         now,
     ):
-        mastery_rows = (
-            self.db.query(OpecTopicState)
-            .filter_by(
+        try:
+            mastery_rows = self.db.query(OpecTopicState).filter_by(
                 user_id=user_id,
                 competition_id=competition_id,
                 user_opec_id=user_opec.id,
+            ).all()
+            recent = (
+                self.db.query(OpecLearningEvent)
+                .join(OpecLearningSession)
+                .filter(
+                    OpecLearningEvent.user_id == user_id,
+                    OpecLearningSession.competition_id == competition_id,
+                    OpecLearningSession.user_opec_id == user_opec.id,
+                )
+                .order_by(OpecLearningEvent.created_at.desc())
+                .limit(50)
+                .all()
             )
-            .all()
-        )
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            mastery_rows = []
+            recent = []
         mastery_map = {row.topic_id: row for row in mastery_rows}
-
-        recent = (
-            self.db.query(OpecLearningEvent)
-            .join(OpecLearningSession)
-            .filter(
-                OpecLearningEvent.user_id == user_id,
-                OpecLearningSession.competition_id == competition_id,
-                OpecLearningSession.user_opec_id == user_opec.id,
-            )
-            .order_by(OpecLearningEvent.created_at.desc())
-            .limit(50)
-            .all()
-        )
         eligible_topic_ids = {
             topic_id_for(question.track, question.competency, question.topic)
             for question in questions
@@ -290,7 +369,7 @@ class LearningSessionService:
                 self.db.rollback()
                 return []
 
-    def _select(self, session: LearningSession, now: datetime):
+    def _select(self, session, now: datetime):
         active_opec = self._active_opec(session.user_id, session.competition_id)
         if active_opec is None:
             return None
@@ -321,21 +400,34 @@ class LearningSessionService:
         mastery_attempts = {
             row.topic_id: int(row.evidence_count or 0) for row in mastery_rows
         }
-        attempted_ids = {
-            str(row[0])
-            for row in self.db.query(LearningAttempt.question_id)
-            .filter(LearningAttempt.session_id == session.id)
-            .all()
-        }
+        if isinstance(session, LearningSession):
+            attempted_ids = {
+                str(row[0])
+                for row in self.db.query(LearningAttempt.question_id)
+                .filter(LearningAttempt.session_id == session.id)
+                .all()
+            }
+        else:
+            try:
+                attempted_ids = {
+                    str(row[0])
+                    for row in self.db.query(OpecLearningEvent.question_id)
+                    .filter(OpecLearningEvent.session_id == session.id)
+                    .all()
+                }
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                attempted_ids = set()
         selected = select_next_question(
             questions, priorities, excluded_question_ids=attempted_ids,
             topic_mastery_scores=mastery_scores, topic_attempt_counts=mastery_attempts,
         )
         if selected is None and questions:
+            current_id = self._session_current_question_id(session)
             selected = select_next_question(
                 questions,
                 priorities,
-                excluded_question_ids={str(session.current_question_id)} if session.current_question_id else set(),
+                excluded_question_ids={str(current_id)} if current_id else set(),
                 topic_mastery_scores=mastery_scores,
                 topic_attempt_counts=mastery_attempts,
             )
@@ -358,6 +450,34 @@ class LearningSessionService:
             user_id,
             user_opec=active_opec,
         )
+        if self._legacy_schema_available_for_learning():
+            return self._start_learning_session_legacy(
+                user_id=user_id,
+                target_minutes=target_minutes,
+                competition_id=competition_id,
+                now=now,
+                active_opec=active_opec,
+                eligible_questions=eligible_questions,
+            )
+        return self._start_learning_session_opec(
+            user_id=user_id,
+            target_minutes=target_minutes,
+            competition_id=competition_id,
+            now=now,
+            active_opec=active_opec,
+            eligible_questions=eligible_questions,
+        )
+
+    def _start_learning_session_legacy(
+        self,
+        *,
+        user_id: int,
+        target_minutes: int,
+        competition_id: Optional[int],
+        now: datetime,
+        active_opec: Optional[UserOPEC],
+        eligible_questions: list[Question],
+    ) -> SessionView:
         active = self.db.query(LearningSession).filter_by(
             user_id=user_id, competition_id=competition_id, status="active"
         ).all()
@@ -409,23 +529,106 @@ class LearningSessionService:
             question=question_view(selected),
         )
 
+    def _start_learning_session_opec(
+        self,
+        *,
+        user_id: int,
+        target_minutes: int,
+        competition_id: Optional[int],
+        now: datetime,
+        active_opec: Optional[UserOPEC],
+        eligible_questions: list[Question],
+    ) -> SessionView:
+        if active_opec is None or not eligible_questions:
+            return SessionView(
+                session_id="",
+                status="inactive",
+                target_minutes=int(target_minutes),
+                started_at=now,
+                question=None,
+            )
+        active = self.db.query(OpecLearningSession).filter_by(
+            user_id=user_id,
+            competition_id=competition_id,
+            status="active",
+        ).all()
+        for previous in active:
+            previous.status = "abandoned"
+            previous.completed_at = now
+
+        canonical = start_opec_session(
+            self.db,
+            user_id=user_id,
+            questions=eligible_questions,
+            mode="training",
+            bank_partition="training",
+            competition_id=competition_id,
+            user_opec_id=active_opec.id,
+            feedback_enabled=True,
+            now=now,
+        )
+        coverage = dict(canonical.coverage or {})
+        coverage.update({
+            "legacy_session_id": None,
+            "target_minutes": int(target_minutes),
+        })
+        selected = self._select(canonical, now) if active_opec is not None else None
+        if selected is not None:
+            coverage["current_question_id"] = str(selected.question_id)
+        else:
+            coverage.pop("current_question_id", None)
+        canonical.coverage = coverage
+        self._set_session_current_question_id(canonical, selected.question_id if selected else None)
+        self.db.commit()
+        return SessionView(
+            session_id=canonical.id,
+            status=canonical.status,
+            target_minutes=int(target_minutes),
+            started_at=canonical.started_at,
+            question=question_view(selected),
+        )
+
     def get_session(self, session_id: str, user_id: int) -> Optional[SessionView]:
-        session = self.db.query(LearningSession).filter_by(id=session_id, user_id=user_id).first()
+        if self._legacy_schema_available_for_learning():
+            session = self.db.query(LearningSession).filter_by(
+                id=session_id, user_id=user_id
+            ).first()
+            if session is None:
+                return None
+            question = None
+            if session.status == "active":
+                self._validated_context(session, utc_now())
+                if session.status != "active":
+                    self.db.commit()
+                elif session.current_question_id:
+                    question = self.db.get(Question, session.current_question_id)
+            return SessionView(
+                session_id=session.id,
+                status=session.status,
+                target_minutes=session.target_minutes,
+                started_at=session.started_at,
+                question=question_view(question),
+            )
+
+        session = self.db.get(OpecLearningSession, session_id)
         if session is None:
             return None
         question = None
         if session.status == "active":
-            _canonical, _active_opec, _questions = self._validated_context(
-                session, utc_now()
-            )
+            session, _active_opec, _questions = self._validated_opec_context(session, utc_now())
             if session.status != "active":
                 self.db.commit()
-            elif session.current_question_id:
-                question = self.db.get(Question, session.current_question_id)
+            else:
+                current_id = self._session_current_question_id(session)
+                if current_id:
+                    question = self.db.get(Question, current_id)
+        coverage = session.coverage if isinstance(session.coverage, dict) else {}
         return SessionView(
             session_id=session.id,
             status=session.status,
-            target_minutes=session.target_minutes,
+            target_minutes=int(
+                coverage.get("target_minutes") or 0
+            ),
             started_at=session.started_at,
             question=question_view(question),
         )
@@ -449,6 +652,43 @@ class LearningSessionService:
         confidence = ConfidenceLevel(confidence).value
         if response_time_seconds is not None and int(response_time_seconds) < 0:
             raise ValueError("El tiempo de respuesta no puede ser negativo")
+        if self._legacy_schema_available_for_learning():
+            return self._submit_learning_session_legacy(
+                session_id=session_id,
+                user_id=user_id,
+                answer=answer,
+                confidence=confidence,
+                response_time_seconds=response_time_seconds,
+                result_override=result_override,
+                error_type=error_type,
+                user_reasoning=user_reasoning,
+                now=now,
+            )
+        return self._submit_learning_session_opec(
+            session_id=session_id,
+            user_id=user_id,
+            answer=answer,
+            confidence=confidence,
+            response_time_seconds=response_time_seconds,
+            result_override=result_override,
+            error_type=error_type,
+            user_reasoning=user_reasoning,
+            now=now,
+        )
+
+    def _submit_learning_session_legacy(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        answer: str,
+        confidence: str,
+        response_time_seconds: Optional[int],
+        result_override: Optional[str],
+        error_type: Optional[str],
+        user_reasoning: Optional[str],
+        now: datetime,
+    ) -> SubmissionResult:
         session = self.db.query(LearningSession).filter_by(
             id=session_id, user_id=user_id, status="active"
         ).first()
@@ -584,7 +824,7 @@ class LearningSessionService:
         skill.updated_at = now
 
         next_question = self._select(session, now)
-        session.current_question_id = next_question.question_id if next_question else None
+        self._set_session_current_question_id(session, next_question.question_id if next_question else None)
         self.db.commit()
         canonical_mastery = (
             self.db.query(OpecTopicState)
@@ -622,11 +862,132 @@ class LearningSessionService:
             next_review_at=reported_review,
         )
 
+    def _submit_learning_session_opec(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        answer: str,
+        confidence: str,
+        response_time_seconds: Optional[int],
+        result_override: Optional[str],
+        error_type: Optional[str],
+        user_reasoning: Optional[str],
+        now: datetime,
+    ) -> SubmissionResult:
+        session = self.db.get(OpecLearningSession, session_id)
+        if session is None or session.user_id != user_id:
+            raise ValueError("No existe una sesión activa con pregunta pendiente")
+        session, _active_opec, _eligible = self._validated_opec_context(session, now)
+        if session.status != "active":
+            self.db.commit()
+            raise ValueError("La OPEC activa cambió; inicia una sesión nueva")
+        current_id = self._session_current_question_id(session)
+        if current_id is None:
+            selected = self._select(session, now)
+            if selected is None:
+                raise ValueError("No existe una sesión activa con pregunta pendiente")
+            current_id = str(selected.question_id)
+            self._set_session_current_question_id(session, current_id)
+            question = self.db.get(Question, current_id)
+            if question is None:
+                self.db.rollback()
+                raise ValueError("La pregunta activa ya no existe")
+        question = self.db.get(Question, current_id)
+        if question is None:
+            raise ValueError("La pregunta activa ya no existe")
+
+        result = (
+            LearningResult(result_override).value
+            if result_override
+            else ("correct" if answer == question.correct_key else "incorrect")
+        )
+        score = {"correct": 1.0, "partial": 0.6, "incorrect": 0.0}[result]
+        if result == "correct":
+            error_type = None
+        elif error_type is None:
+            error_type = "overconfidence" if confidence == "high" else "distractor"
+        if error_type is not None:
+            error_type = ErrorType(error_type).value
+
+        canonical_event = record_opec_event(
+            self.db,
+            session_id=session.id,
+            user_id=user_id,
+            question_id=str(question.question_id),
+            chosen_key=answer,
+            confidence=confidence,
+            time_sec=(
+                int(response_time_seconds)
+                if response_time_seconds is not None
+                else None
+            ),
+            error_category=error_type,
+            user_reasoning=user_reasoning,
+            now=now,
+        )
+
+        next_question = self._select(session, now)
+        self._set_session_current_question_id(session, next_question.question_id if next_question else None)
+        self.db.commit()
+
+        canonical_state = (
+            self.db.query(OpecTopicState)
+            .filter_by(
+                user_id=user_id,
+                competition_id=session.competition_id,
+                user_opec_id=session.user_opec_id,
+                topic_id=canonical_event.topic_id,
+            )
+            .first()
+        )
+        reported_mastery = float(canonical_state.mastery_score) if canonical_state is not None else 0.0
+        reported_review = (
+            canonical_state.next_review_at
+            if canonical_state is not None
+            else now
+        )
+        feedback = question.rationale or (
+            "Respuesta correcta." if result == "correct" else "Revisa el criterio central de este tema."
+        )
+        return SubmissionResult(
+            evaluation=EvaluationResult(
+                result=result,
+                score=score,
+                error_type=error_type,
+                feedback=feedback,
+                needs_review=result != "correct" or confidence == "low",
+            ),
+            next_question=question_view(next_question),
+            mastery_score=reported_mastery,
+            next_review_at=reported_review,
+        )
+
     def finish_session(
         self, session_id: str, user_id: int, *, now: Optional[datetime] = None
     ) -> LearningSession:
         now = now or utc_now()
-        session = self.db.query(LearningSession).filter_by(id=session_id, user_id=user_id).first()
+        if self._legacy_schema_available_for_learning():
+            return self._finish_learning_session_legacy(
+                session_id=session_id,
+                user_id=user_id,
+                now=now,
+            )
+        return self._finish_learning_session_opec(
+            session_id=session_id,
+            user_id=user_id,
+            now=now,
+        )
+
+    def _finish_learning_session_legacy(
+        self,
+        session_id: str,
+        user_id: int,
+        now: datetime,
+    ) -> LearningSession:
+        session = self.db.query(LearningSession).filter_by(
+            id=session_id, user_id=user_id
+        ).first()
         if session is None or session.status != "active":
             raise ValueError("Sesión no encontrada")
         canonical, _active_opec, _eligible = self._validated_context(session, now)
@@ -641,9 +1002,41 @@ class LearningSessionService:
             require_complete=False,
         )
         session.finished_at = session.finished_at or now
-        session.actual_minutes = max(0, int((session.finished_at - session.started_at).total_seconds() // 60))
+        session.actual_minutes = max(
+            0, int((session.finished_at - session.started_at).total_seconds() // 60)
+        )
         session.status = "completed"
         session.current_question_id = None
+        self.db.commit()
+        return session
+
+    def _finish_learning_session_opec(
+        self,
+        session_id: str,
+        user_id: int,
+        now: datetime,
+    ) -> LearningSession:
+        session = self.db.get(OpecLearningSession, session_id)
+        if session is None or session.user_id != user_id or session.status != "active":
+            raise ValueError("Sesión no encontrada")
+        session, _active_opec, _eligible = self._validated_opec_context(session, now)
+        if session.status != "active":
+            self.db.commit()
+            raise ValueError("La OPEC activa cambió; la sesión no puede finalizarse")
+        finalize_opec_session(
+            self.db,
+            session_id=session.id,
+            user_id=user_id,
+            now=now,
+            require_complete=False,
+        )
+        self._set_session_current_question_id(session, None)
+        coverage = session.coverage if isinstance(session.coverage, dict) else {}
+        duration_minutes = max(
+            0, int((now - session.started_at).total_seconds() // 60)
+        )
+        coverage["actual_minutes"] = duration_minutes
+        session.coverage = coverage
         self.db.commit()
         return session
 
