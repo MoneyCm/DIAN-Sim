@@ -456,14 +456,18 @@ class LearningSessionService:
             user_opec=active_opec,
         )
         if self._legacy_schema_available_for_learning():
-            return self._start_learning_session_legacy(
-                user_id=user_id,
-                target_minutes=target_minutes,
-                competition_id=competition_id,
-                now=now,
-                active_opec=active_opec,
-                eligible_questions=eligible_questions,
-            )
+            try:
+                return self._start_learning_session_legacy(
+                    user_id=user_id,
+                    target_minutes=target_minutes,
+                    competition_id=competition_id,
+                    now=now,
+                    active_opec=active_opec,
+                    eligible_questions=eligible_questions,
+                )
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                self._legacy_schema_available = False
         return self._start_learning_session_opec(
             user_id=user_id,
             target_minutes=target_minutes,
@@ -595,25 +599,29 @@ class LearningSessionService:
 
     def get_session(self, session_id: str, user_id: int) -> Optional[SessionView]:
         if self._legacy_schema_available_for_learning():
-            session = self.db.query(LearningSession).filter_by(
-                id=session_id, user_id=user_id
-            ).first()
-            if session is None:
-                return None
-            question = None
-            if session.status == "active":
-                self._validated_context(session, utc_now())
-                if session.status != "active":
-                    self.db.commit()
-                elif session.current_question_id:
-                    question = self.db.get(Question, session.current_question_id)
-            return SessionView(
-                session_id=session.id,
-                status=session.status,
-                target_minutes=session.target_minutes,
-                started_at=session.started_at,
-                question=question_view(question),
-            )
+            try:
+                session = self.db.query(LearningSession).filter_by(
+                    id=session_id, user_id=user_id
+                ).first()
+                if session is None:
+                    return None
+                question = None
+                if session.status == "active":
+                    self._validated_context(session, utc_now())
+                    if session.status != "active":
+                        self.db.commit()
+                    elif session.current_question_id:
+                        question = self.db.get(Question, session.current_question_id)
+                return SessionView(
+                    session_id=session.id,
+                    status=session.status,
+                    target_minutes=session.target_minutes,
+                    started_at=session.started_at,
+                    question=question_view(question),
+                )
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                self._legacy_schema_available = False
 
         session = self.db.get(OpecLearningSession, session_id)
         if session is None:
@@ -658,17 +666,21 @@ class LearningSessionService:
         if response_time_seconds is not None and int(response_time_seconds) < 0:
             raise ValueError("El tiempo de respuesta no puede ser negativo")
         if self._legacy_schema_available_for_learning():
-            return self._submit_learning_session_legacy(
-                session_id=session_id,
-                user_id=user_id,
-                answer=answer,
-                confidence=confidence,
-                response_time_seconds=response_time_seconds,
-                result_override=result_override,
-                error_type=error_type,
-                user_reasoning=user_reasoning,
-                now=now,
-            )
+            try:
+                return self._submit_learning_session_legacy(
+                    session_id=session_id,
+                    user_id=user_id,
+                    answer=answer,
+                    confidence=confidence,
+                    response_time_seconds=response_time_seconds,
+                    result_override=result_override,
+                    error_type=error_type,
+                    user_reasoning=user_reasoning,
+                    now=now,
+                )
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                self._legacy_schema_available = False
         return self._submit_learning_session_opec(
             session_id=session_id,
             user_id=user_id,
@@ -973,11 +985,15 @@ class LearningSessionService:
     ) -> LearningSession:
         now = now or utc_now()
         if self._legacy_schema_available_for_learning():
-            return self._finish_learning_session_legacy(
-                session_id=session_id,
-                user_id=user_id,
-                now=now,
-            )
+            try:
+                return self._finish_learning_session_legacy(
+                    session_id=session_id,
+                    user_id=user_id,
+                    now=now,
+                )
+            except (OperationalError, ProgrammingError):
+                self.db.rollback()
+                self._legacy_schema_available = False
         return self._finish_learning_session_opec(
             session_id=session_id,
             user_id=user_id,
