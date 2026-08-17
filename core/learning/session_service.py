@@ -93,6 +93,11 @@ class LearningSessionService:
             return self._legacy_schema_available
         try:
             self.db.execute(text("SELECT 1 FROM learning_sessions LIMIT 1"))
+            # Legacy OPEC + adaptive flow in this service also depends on
+            # TopicMastery persistence when using LearningSession/attempts.
+            # If TopicMastery no longer exists (new deployments), avoid forcing
+            # the legacy branch and fall back to OPEC-only adaptive mode.
+            self.db.execute(text("SELECT 1 FROM topic_mastery LIMIT 1"))
             self._legacy_schema_available = True
         except (OperationalError, ProgrammingError):
             self.db.rollback()
@@ -1042,19 +1047,29 @@ class LearningSessionService:
 
     def learning_profile(self, user_id: int, competition_id: Optional[int], now=None) -> dict:
         now = now or utc_now()
-        active_opec = self._active_opec(user_id, competition_id)
-        questions = self._questions(
-            competition_id,
-            user_id,
-            user_opec=active_opec,
-        )
+        try:
+            active_opec = self._active_opec(user_id, competition_id)
+            questions = self._questions(
+                competition_id,
+                user_id,
+                user_opec=active_opec,
+            )
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            active_opec = None
+            questions = []
+
         topic_metadata = {
             topic_id_for(question.track, question.competency, question.topic): question
             for question in questions
         }
-        states = []
-        if active_opec is not None:
-            states = self._load_profile_states(user_id, competition_id, active_opec)
+        try:
+            states = []
+            if active_opec is not None:
+                states = self._load_profile_states(user_id, competition_id, active_opec)
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            states = []
         topics = [
             TutorTopicProfile(
                 topic_id=row.topic_id,
