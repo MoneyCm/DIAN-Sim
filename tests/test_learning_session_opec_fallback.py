@@ -146,3 +146,19 @@ def test_opec_fallback_finish_session_without_learning_sessions_table():
     service._legacy_schema_available = True
     finished = service.finish_session(started.session_id, user_id)
     assert finished.status == "completed"
+
+
+def test_opec_fallback_handles_missing_user_opec_table_in_start_session():
+    from tests.test_learning_session import seeded_db
+
+    db, user_id, competition_id = seeded_db()
+    db.execute(text("DROP TABLE user_opec"))
+    db.commit()
+
+    service = LearningSessionService(db)
+    started = service.start_learning_session(
+        user_id=user_id,
+        target_minutes=10,
+        competition_id=competition_id,
+    )
+    assert started.status in {"active", "inactive"}

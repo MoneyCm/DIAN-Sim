@@ -449,14 +449,16 @@ class LearningSessionService:
         if not 5 <= int(target_minutes) <= 180:
             raise ValueError("La sesión debe durar entre 5 y 180 minutos")
         now = now or utc_now()
-        active_opec = self._active_opec(user_id, competition_id)
-        eligible_questions = self._questions(
-            competition_id,
-            user_id,
-            user_opec=active_opec,
-        )
+        active_opec: Optional[UserOPEC] = None
+        eligible_questions: list[Question] = []
         if self._legacy_schema_available_for_learning():
             try:
+                active_opec = self._active_opec(user_id, competition_id)
+                eligible_questions = self._questions(
+                    competition_id,
+                    user_id,
+                    user_opec=active_opec,
+                )
                 return self._start_learning_session_legacy(
                     user_id=user_id,
                     target_minutes=target_minutes,
@@ -468,6 +470,20 @@ class LearningSessionService:
             except (OperationalError, ProgrammingError):
                 self.db.rollback()
                 self._legacy_schema_available = False
+                active_opec = None
+                eligible_questions = []
+
+        try:
+            active_opec = self._active_opec(user_id, competition_id)
+            eligible_questions = self._questions(
+                competition_id,
+                user_id,
+                user_opec=active_opec,
+            )
+        except (OperationalError, ProgrammingError):
+            self.db.rollback()
+            active_opec = None
+            eligible_questions = []
         return self._start_learning_session_opec(
             user_id=user_id,
             target_minutes=target_minutes,
