@@ -105,7 +105,28 @@ def safe_setattr(obj, attr, value):
         pass
 
 
-def _eligible_training_question_ids(db, user_id, competition_id, active_opec):
+def _exam_scope_include_review(stored_exam_scope):
+    if stored_exam_scope is None:
+        return False
+    if "include_review" in stored_exam_scope:
+        return bool(stored_exam_scope.get("include_review"))
+    session_kind = str(st.session_state.get("study_session_kind", "practice"))
+    practice_mode = str(st.session_state.get("practice_mode", "custom"))
+    return (
+        session_kind.startswith("training_")
+        or session_kind == "diagnostic"
+        or practice_mode not in {"custom", "daily"}
+    )
+
+
+def _eligible_training_question_ids(
+    db,
+    user_id,
+    competition_id,
+    active_opec,
+    *,
+    include_review=False,
+):
     if active_opec is None or competition_id is None:
         return set()
     return {
@@ -116,6 +137,7 @@ def _eligible_training_question_ids(db, user_id, competition_id, active_opec):
             competition_id=competition_id,
             user_opec=active_opec,
             bank_partitions=("training",),
+            include_review=include_review,
         )
     }
 
@@ -146,8 +168,14 @@ def finalize_exam(db, q_ids, answers_dict, confidences=None, error_types=None, q
         competition_id = get_active_competition_id(db, u_id)
         if active_opec is None:
             raise ValueError("No hay una OPEC activa para guardar este resultado.")
+        exam_scope = st.session_state.get("exam_scope") or {}
+        include_review = _exam_scope_include_review(exam_scope)
         eligible_question_ids = _eligible_training_question_ids(
-            db, u_id, competition_id, active_opec
+            db,
+            u_id,
+            competition_id,
+            active_opec,
+            include_review=include_review,
         )
         question_by_id = {
             str(question.question_id): question
@@ -443,7 +471,7 @@ try:
     context_opec = context_db.query(UserOPEC).filter_by(
         user_id=context_user_id, is_active=True
     ).first()
-    current_exam_scope = {
+    current_exam_scope_core = {
         "competition_id": get_active_competition_id(context_db, context_user_id),
         "opec_number": str(context_opec.opec_number) if context_opec else None,
     }
@@ -451,7 +479,11 @@ finally:
     context_db.close()
 
 stored_exam_scope = st.session_state.get("exam_scope")
-if stored_exam_scope and stored_exam_scope != current_exam_scope:
+stored_exam_scope_core = {
+    "competition_id": stored_exam_scope.get("competition_id"),
+    "opec_number": stored_exam_scope.get("opec_number"),
+} if isinstance(stored_exam_scope, dict) else {}
+if stored_exam_scope and stored_exam_scope_core != current_exam_scope_core:
     for key in (
         "exam_mode", "exam_questions", "answers", "checked_answers", "confidences",
         "error_types", "error_reasoning", "question_times", "last_results",
@@ -459,6 +491,10 @@ if stored_exam_scope and stored_exam_scope != current_exam_scope:
         st.session_state.pop(key, None)
     st.session_state.pop("_practice_resume_checkpoint", None)
     st.rerun()
+current_exam_scope = {
+    **current_exam_scope_core,
+    "include_review": _exam_scope_include_review(stored_exam_scope),
+}
 st.session_state["exam_scope"] = current_exam_scope
 
 session_kind = st.session_state.get("study_session_kind", "practice")
@@ -556,6 +592,7 @@ eligible_training_ids = _eligible_training_question_ids(
     st.session_state.get("user_id"),
     competition_id,
     active_opec,
+    include_review=current_exam_scope.get("include_review", False),
 )
 valid_ids = {
     item.question_id for item in loaded_questions

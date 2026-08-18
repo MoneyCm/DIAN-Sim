@@ -803,6 +803,7 @@ if run_sim:
             st.session_state["exam_scope"] = {
                 "competition_id": competition_id,
                 "opec_number": str(opec.opec_number),
+                "include_review": bool(use_opec_mode_builder or diagnostic_requested),
             }
             st.session_state["exam_start_time"] = time.time()
             st.session_state["total_time_limit"] = max(10 * 60, len(selected) * 120)
