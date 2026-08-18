@@ -251,7 +251,7 @@ p_simulacro = st.Page("pages/1_Nuevo_Simulacro.py", title="Practicar ahora", ico
 # La ejecución se abre desde una práctica iniciada; no necesita ocupar un
 # puesto permanente en el menú principal.
 p_ejecucion = st.Page("pages/2_Ejecucion.py", title="Simulacro en curso", icon="▶️")
-p_sim_real = st.Page("pages/Simulacro_Real.py", title="Práctica PJS cronometrada", icon="⏱️")
+p_sim_real = st.Page("pages/Simulacro_Real.py", title="Simulacro tipo examen", icon="⏱️")
 p_repaso = st.Page("pages/10_Repaso_Especial.py", title="Repasos de hoy", icon="🧠")
 p_resultados = st.Page("pages/3_Resultados.py", title="Mi progreso", icon="📈")
 
@@ -272,12 +272,12 @@ account_pages.extend([p_config, p_opec_tools, p_study_plan, p_study_map, p_logou
 learner_pages = [p_dashboard]
 if p_mis_opec is not None:
     learner_pages.append(p_mis_opec)
-learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])
+learner_pages.extend([p_simulacro, p_sim_real, p_resultados, p_perfil, p_logout])
 # Streamlit only permits ``st.page_link`` and ``st.switch_page`` to pages
 # registered in navigation. These stay registered for contextual actions,
 # while CSS keeps them out of the learner sidebar.
 secondary_learner_pages = [
-    p_ejecucion, p_study_plan, p_adaptive_tutor, p_sim_real, p_repaso,
+    p_ejecucion, p_study_plan, p_adaptive_tutor, p_repaso,
     p_study_map, p_study_library, p_etica,
 ]
 learner_configuration_pages = [p_config, p_opec_tools]

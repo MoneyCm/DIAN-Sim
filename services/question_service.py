@@ -1,17 +1,25 @@
 import json
-from sqlalchemy import inspect
+from urllib.parse import urlparse
+
+from sqlalchemy import func, inspect
 from sqlalchemy.orm import selectinload
 
 from db.models import (
     CaseStudy,
     OpecProfile,
     Question,
+    QuestionCitation,
     QuestionOpecScope,
+    QuestionRevision,
+    SourceDocument,
     UserOPEC,
 )
 from core.competitions import get_active_competition_id
+from core.learning.engine import editorial_question_difficulty
 from core.legacy_question_audit import is_safe_for_active_study
 from core.question_opec_scope import question_matches_opec
+from core.question_revision import question_revision_hash
+from core.source_evidence import OFFICIAL_DOMAINS
 
 
 SUPPORTED_BANK_PARTITIONS = frozenset({"training", "measurement", "anchor", "reserved"})
@@ -24,7 +32,7 @@ def _normalise_bank_partitions(bank_partitions):
     return values
 
 
-def _explicit_opec_question_ids(
+def _explicit_opec_question_scopes(
     db,
     competition_id,
     opec_number,
@@ -51,12 +59,124 @@ def _explicit_opec_question_ids(
     if profile is None:
         return None
     return {
-        row[0]
-        for row in db.query(QuestionOpecScope.question_id).filter(
+        str(question_id): str(bank_partition)
+        for question_id, bank_partition in db.query(
+            QuestionOpecScope.question_id,
+            QuestionOpecScope.bank_partition,
+        ).filter(
             QuestionOpecScope.opec_profile_id == profile.id,
             QuestionOpecScope.bank_partition.in_(bank_partitions),
         ).all()
     }
+
+
+def _official_source_url(value):
+    host = (urlparse(str(value or "").strip()).hostname or "").casefold()
+    return bool(host) and any(
+        host == domain or host.endswith(f".{domain}")
+        for domain in OFFICIAL_DOMAINS
+    )
+
+
+def _canonical_deliverable_question_ids(
+    db,
+    questions,
+    *,
+    scope_partitions,
+):
+    """Return IDs backed by a current revision and official citation.
+
+    Revisions and citations are fetched in bulk.  The latest revision is
+    authoritative even when an older approved revision exists.
+    """
+    question_by_id = {
+        str(question.question_id): question
+        for question in questions
+    }
+    if not question_by_id:
+        return set()
+
+    inspector = inspect(db.connection())
+    required = {
+        "question_revisions",
+        "question_citations",
+        "source_documents",
+    }
+    if not all(inspector.has_table(table) for table in required):
+        return set()
+
+    question_ids = tuple(question_by_id)
+    latest_numbers = (
+        db.query(
+            QuestionRevision.question_id.label("question_id"),
+            func.max(QuestionRevision.revision_number).label("revision_number"),
+        )
+        .filter(QuestionRevision.question_id.in_(question_ids))
+        .group_by(QuestionRevision.question_id)
+        .subquery()
+    )
+    revisions = (
+        db.query(QuestionRevision)
+        .join(
+            latest_numbers,
+            (QuestionRevision.question_id == latest_numbers.c.question_id)
+            & (
+                QuestionRevision.revision_number
+                == latest_numbers.c.revision_number
+            ),
+        )
+        .filter(
+            QuestionRevision.question_id.in_(question_ids),
+            QuestionRevision.status == "approved",
+            QuestionRevision.bank_partition.in_(tuple(set(scope_partitions.values()))),
+        )
+        .all()
+    )
+    coherent_revision_ids = {
+        str(revision.question_id)
+        for revision in revisions
+        if (
+            revision.bank_partition
+            == scope_partitions.get(str(revision.question_id))
+            and revision.content_hash
+            == question_revision_hash(
+                question_by_id[str(revision.question_id)],
+                editorial_question_difficulty(
+                    question_by_id[str(revision.question_id)]
+                ),
+            )
+        )
+    }
+    if not coherent_revision_ids:
+        return set()
+
+    citation_rows = (
+        db.query(
+            QuestionCitation.question_id,
+            SourceDocument.official_url,
+        )
+        .join(
+            SourceDocument,
+            SourceDocument.id == QuestionCitation.source_document_id,
+        )
+        .filter(
+            QuestionCitation.question_id.in_(tuple(coherent_revision_ids)),
+            QuestionCitation.supports_key.is_(True),
+            QuestionCitation.verified_at.is_not(None),
+            func.length(func.trim(QuestionCitation.verified_by)) > 0,
+            func.length(func.trim(QuestionCitation.locator)) > 0,
+            func.length(func.trim(QuestionCitation.excerpt)) >= 10,
+            SourceDocument.validity_status == "current",
+            func.length(func.trim(SourceDocument.official_url)) > 0,
+        )
+        .all()
+    )
+    cited_ids = {
+        str(question_id)
+        for question_id, official_url in citation_rows
+        if _official_source_url(official_url)
+    }
+    return coherent_revision_ids & cited_ids
 
 class QuestionService:
     @staticmethod
@@ -107,16 +227,31 @@ class QuestionService:
         # proceso. El material sin una OPEC demostrable queda fuera hasta que se
         # clasifique de forma explícita.
         if competition_id is not None:
-            explicit_ids = _explicit_opec_question_ids(
+            explicit_scopes = _explicit_opec_question_scopes(
                 db,
                 competition_id,
                 user_opec.opec_number,
                 bank_partitions=requested_partitions,
             )
-            if explicit_ids is not None:
-                return [
+            if explicit_scopes is not None:
+                scoped_questions = [
                     question for question in all_candidates
-                    if question.question_id in explicit_ids
+                    if str(question.question_id) in explicit_scopes
+                ]
+                # Explicit review inventory is editorial, not student
+                # delivery. It remains OPEC/partition scoped so the bank can
+                # finish evidence without exposing candidates to practice.
+                if include_review:
+                    return scoped_questions
+                deliverable_ids = _canonical_deliverable_question_ids(
+                    db,
+                    scoped_questions,
+                    scope_partitions=explicit_scopes,
+                )
+                return [
+                    question
+                    for question in scoped_questions
+                    if str(question.question_id) in deliverable_ids
                 ]
             # Legacy metadata has no trustworthy concept of measurement,
             # anchor or reserved partitions.  Only training may use the

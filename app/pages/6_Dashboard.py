@@ -245,7 +245,7 @@ try:
             st.page_link("pages/13_Tutor_Adaptativo.py", label="Tutor adaptativo", icon="🧭", use_container_width=True)
             st.page_link("pages/10_Repaso_Especial.py", label="Repasos", icon="🧠", use_container_width=True)
         with extra_two:
-            st.page_link("pages/Simulacro_Real.py", label="Práctica PJS cronometrada", icon="⏱️", use_container_width=True)
+            st.page_link("pages/Simulacro_Real.py", label="Simulacro tipo examen", icon="⏱️", use_container_width=True)
             st.page_link("pages/9_Etica_Integridad.py", label="Ética e integridad", icon="⚖️", use_container_width=True)
         with extra_three:
             st.page_link("pages/12_Mapa_Estudio.py", label="Mapa de estudio", icon="🗺️", use_container_width=True)

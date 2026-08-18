@@ -1,12 +1,19 @@
-from sqlalchemy import create_engine
+import datetime
+
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
+from core.learning.engine import editorial_question_difficulty
+from core.question_revision import question_revision_hash
 from db.models import (
     Base,
     Competition,
     OpecProfile,
     Question,
+    QuestionCitation,
     QuestionOpecScope,
+    QuestionRevision,
+    SourceDocument,
     User,
     UserOPEC,
 )
@@ -47,6 +54,71 @@ def _question(competition_id, opec_number):
             },
         },
     )
+
+
+def _add_delivery_evidence(
+    db,
+    question,
+    *,
+    partition="training",
+    revision_number=1,
+    revision_status="approved",
+    content_hash=None,
+    source_status="current",
+    official_url=(
+        "https://normograma.dian.gov.co/dian/compilacion/"
+        "docs/estatuto_tributario.htm"
+    ),
+    excerpt="La administración dispone de facultades de fiscalización.",
+    add_citation=True,
+):
+    db.flush()
+    revision = QuestionRevision(
+        question_id=question.question_id,
+        revision_number=revision_number,
+        content_hash=(
+            content_hash
+            or question_revision_hash(
+                question, editorial_question_difficulty(question)
+            )
+        ),
+        stem=question.stem,
+        options_json=dict(question.options_json),
+        correct_key=question.correct_key,
+        rationale=question.rationale,
+        difficulty_level=editorial_question_difficulty(question),
+        bank_partition=partition,
+        source_snapshot=dict(question.quality_report["source_verification"]),
+        status=revision_status,
+        actor="test-editor",
+        actor_type="human",
+    )
+    db.add(revision)
+    if not add_citation:
+        return revision
+    document = SourceDocument(
+        document_key=f"doc-{question.question_id}-{revision_number}",
+        title="Estatuto Tributario",
+        entity="DIAN",
+        document_type="norma",
+        official_url=official_url,
+        validity_status=source_status,
+        last_verified_at=datetime.datetime(2026, 8, 15),
+    )
+    db.add(document)
+    db.flush()
+    db.add(
+        QuestionCitation(
+            question_id=question.question_id,
+            source_document_id=document.id,
+            locator="Artículo 684",
+            excerpt=excerpt,
+            supports_key=True,
+            verified_at=datetime.datetime(2026, 8, 15),
+            verified_by="test-editor",
+        )
+    )
+    return revision
 
 
 def test_question_service_excludes_other_opec_in_same_competition():
@@ -150,6 +222,7 @@ def test_explicit_scope_is_authoritative_and_can_be_shared():
             scope_kind="shared",
         ),
     ])
+    _add_delivery_evidence(db, shared)
     db.commit()
 
     questions = QuestionService.get_questions_for_user(
@@ -233,6 +306,9 @@ def test_bank_partitions_are_isolated_by_use_case():
             bank_partition="anchor",
         ),
     ])
+    _add_delivery_evidence(db, training, partition="training")
+    _add_delivery_evidence(db, measurement, partition="measurement")
+    _add_delivery_evidence(db, anchor, partition="anchor")
     db.commit()
 
     practice = QuestionService.get_questions_for_user(
@@ -248,6 +324,271 @@ def test_bank_partitions_are_isolated_by_use_case():
 
     assert [item.question_id for item in practice] == [training.question_id]
     assert [item.question_id for item in exam] == [measurement.question_id]
+
+
+def test_canonical_scope_without_revision_and_citation_is_not_delivered():
+    db = _db()
+    user = User(username="gate-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-GATE", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    candidate = _question(competition.id, "236769")
+    db.add_all([profile, active_opec, candidate])
+    db.flush()
+    db.add(
+        QuestionOpecScope(
+            question_id=candidate.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        )
+    )
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    ) == []
+    assert [item.question_id for item in QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        include_review=True,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    )] == [candidate.question_id]
+
+
+def test_newer_nonapproved_revision_closes_canonical_delivery():
+    db = _db()
+    user = User(username="revision-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-REVISION", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    question = _question(competition.id, "236769")
+    db.add_all([profile, active_opec, question])
+    db.flush()
+    db.add(
+        QuestionOpecScope(
+            question_id=question.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        )
+    )
+    _add_delivery_evidence(db, question, revision_number=1)
+    _add_delivery_evidence(
+        db,
+        question,
+        revision_number=2,
+        revision_status="candidate",
+        add_citation=False,
+    )
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    ) == []
+
+
+def test_canonical_gate_rejects_stale_content_or_noncurrent_source():
+    db = _db()
+    user = User(username="source-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-SOURCE", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    stale_revision = _question(competition.id, "236769")
+    stale_revision.hash_norm = "stale-revision"
+    pending_source = _question(competition.id, "236769")
+    pending_source.hash_norm = "pending-source"
+    db.add_all([profile, active_opec, stale_revision, pending_source])
+    db.flush()
+    db.add_all([
+        QuestionOpecScope(
+            question_id=stale_revision.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        ),
+        QuestionOpecScope(
+            question_id=pending_source.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        ),
+    ])
+    _add_delivery_evidence(
+        db,
+        stale_revision,
+        content_hash="0" * 64,
+    )
+    _add_delivery_evidence(
+        db,
+        pending_source,
+        source_status="pending",
+    )
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    ) == []
+
+
+def test_canonical_gate_rejects_short_citation_excerpt():
+    db = _db()
+    user = User(username="excerpt-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-EXCERPT", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    question = _question(competition.id, "236769")
+    db.add_all([profile, active_opec, question])
+    db.flush()
+    db.add(
+        QuestionOpecScope(
+            question_id=question.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        )
+    )
+    _add_delivery_evidence(db, question, excerpt="Muy corto")
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    ) == []
+
+
+def test_latest_revision_must_match_the_questions_exact_scope_partition():
+    db = _db()
+    user = User(username="partition-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-PARTITION-GATE", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    question = _question(competition.id, "236769")
+    db.add_all([profile, active_opec, question])
+    db.flush()
+    db.add(
+        QuestionOpecScope(
+            question_id=question.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        )
+    )
+    _add_delivery_evidence(db, question, partition="measurement")
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+        bank_partitions=("training", "measurement"),
+    ) == []
+
+
+def test_canonical_evidence_is_loaded_in_batches_not_per_question():
+    db = _db()
+    user = User(username="batch-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-BATCH", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    db.add_all([profile, active_opec])
+    for index in range(6):
+        question = _question(competition.id, "236769")
+        question.hash_norm = f"batch-{index}"
+        db.add(question)
+        db.flush()
+        db.add(
+            QuestionOpecScope(
+                question_id=question.question_id,
+                opec_profile_id=profile.id,
+                bank_partition="training",
+            )
+        )
+        _add_delivery_evidence(db, question)
+    db.commit()
+
+    select_count = 0
+
+    def count_selects(_conn, _cursor, statement, _parameters, _context, _many):
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", count_selects)
+    try:
+        delivered = QuestionService.get_questions_for_user(
+            db,
+            user.id,
+            competition_id=competition.id,
+            user_opec=active_opec,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_selects)
+
+    assert len(delivered) == 6
+    assert select_count <= 8
 
 
 def test_non_training_partition_fails_closed_without_phase1_schema():

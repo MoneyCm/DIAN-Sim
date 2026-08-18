@@ -15,7 +15,9 @@ from db.models import (
     ErrorEpisode,
     OpecLearningEvent,
     OpecLearningSession,
+    OpecProfile,
     Question,
+    QuestionOpecScope,
     Skill,
     UserOPEC,
 )
@@ -23,7 +25,6 @@ from core.adaptive import select_questions_for_simulation
 from core.exam_format import OFFICIAL_LABEL, question_format_status
 from core.opec_question_context import (
     function_number_for_question,
-    matches_manual_function_filter,
 )
 from core.learning.difficulty import difficulty_label
 from core.learning.engine import editorial_question_difficulty
@@ -55,6 +56,37 @@ from core.profiles import PROFILES, get_profile_topics
 
 def get_db():
     return SessionLocal()
+
+
+def _opec_function_map(db, opec: UserOPEC | None) -> dict[str, int]:
+    if opec is None or opec.competition_id is None or not opec.opec_number:
+        return {}
+    profile_id = (
+        db.query(OpecProfile.id)
+        .filter_by(competition_id=opec.competition_id, opec_number=str(opec.opec_number))
+        .scalar()
+    )
+    if profile_id is None:
+        return {}
+    return {
+        str(row.question_id): int(row.function_number)
+        for row in db.query(QuestionOpecScope).filter_by(
+            opec_profile_id=profile_id,
+            bank_partition="training",
+        ).all()
+        if row.function_number
+    }
+
+
+def _resolve_opec_function(
+    question: Question,
+    opec: UserOPEC | None,
+    function_map: dict[str, int],
+) -> int | None:
+    function_number = function_number_for_question(question, opec.opec_number if opec else "")
+    if function_number is not None:
+        return function_number
+    return function_map.get(str(question.question_id))
 
 from core.auth import AuthManager
 from core.competitions import get_active_competition_id
@@ -254,6 +286,7 @@ with st.container():
                 competition_id=active_opec.competition_id,
                 user_opec=active_opec,
                 bank_partitions=("training",),
+                include_review=True,
             )
             if active_opec is not None
             else []
@@ -514,7 +547,18 @@ if run_sim:
         
         # Si venimos de la pestaña OPEC, forzamos el filtrado por OPEC
         # Si venimos de manual, el servicio igual aplica los filtros base de la meta activa del usuario
-        all_candidates = QuestionService.get_questions_for_user(db, user_id)
+        if opec is not None:
+            all_candidates = QuestionService.get_questions_for_user(
+                db,
+                user_id,
+                competition_id=opec.competition_id,
+                user_opec=opec,
+                bank_partitions=("training",),
+                include_review=use_opec_mode_builder or diagnostic_requested,
+            )
+        else:
+            all_candidates = QuestionService.get_questions_for_user(db, user_id)
+        function_map = _opec_function_map(db, opec)
         
         # Apply UI Filters (In-Memory Python Filtering)
         final_candidates = []
@@ -542,12 +586,22 @@ if run_sim:
             final_candidates.append(q)
             
         selected_candidates = final_candidates
+        if use_opec_mode_builder and selected_manual_functions:
+            wanted_functions = {int(item) for item in selected_manual_functions}
+            selected_candidates = [
+                question
+                for question in selected_candidates
+                if _resolve_opec_function(question, opec, function_map)
+                in wanted_functions
+            ]
         if "selected_manual_functions" in locals():
+            wanted_functions = {int(item) for item in selected_manual_functions}
             situational_case_candidates = [
                 question for question in selected_candidates
                 if question_format_status(question) == OFFICIAL_LABEL
-                and matches_manual_function_filter(
-                    question, opec.opec_number, selected_manual_functions
+                and (
+                    _resolve_opec_function(question, opec, function_map)
+                    in wanted_functions
                 )
             ]
             if len(situational_case_candidates) >= 3:
@@ -582,14 +636,17 @@ if run_sim:
             diagnostic_candidates = []
             question_by_revision = {}
             for question in selected_candidates:
-                function_number = function_number_for_question(
-                    question, opec.opec_number
+                function_number = _resolve_opec_function(
+                    question, opec, function_map
                 )
                 if function_number not in range(1, 10) or not question.case_id:
                     continue
-                revision = ensure_question_revision(
-                    db, question, bank_partition="training"
-                )
+                try:
+                    revision = ensure_question_revision(
+                        db, question, bank_partition="training"
+                    )
+                except ValueError:
+                    continue
                 candidate = DiagnosticCandidate(
                     question_id=str(question.question_id),
                     case_id=str(question.case_id),

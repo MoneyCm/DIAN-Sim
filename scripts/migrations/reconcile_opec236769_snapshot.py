@@ -7,6 +7,12 @@ contenido y crea sus alcances canónicos de Fase 1.
 No se usan títulos, temas ni similitud textual para decidir pertenencia. El
 conjunto permitido son los 48 UUID5 derivados de ``CASE_FUNCTIONS`` y las tres
 preguntas que la fuente relaciona con cada uno (144 en total).
+
+Un ``hash_norm`` coincidente no basta para declarar dos preguntas iguales,
+porque ese hash histórico solo representa el enunciado normalizado. Cuando el
+ID de la fuente no existe pero el hash ya tiene otro propietario, el destino se
+reutiliza como alias únicamente si concurso, caso y firma completa coinciden.
+El alias nunca sobrescribe contenido ni estado editorial del destino.
 """
 
 from __future__ import annotations
@@ -95,6 +101,16 @@ class SnapshotCorpus:
 
 
 @dataclass(frozen=True)
+class QuestionIdentityAlias:
+    """Correspondencia demostrada entre un ID de snapshot y uno ya existente."""
+
+    source_question_id: str
+    destination_question_id: str
+    case_id: str
+    hash_norm: str
+
+
+@dataclass(frozen=True)
 class ReconcileReport:
     source_cases: int
     source_questions: int
@@ -103,6 +119,7 @@ class ReconcileReport:
     cases_to_skip: int
     questions_to_skip: int
     conflicts: tuple[str, ...]
+    question_aliases: tuple[QuestionIdentityAlias, ...] = ()
     applied: bool = False
     case_scopes_created: int = 0
     question_scopes_created: int = 0
@@ -112,8 +129,16 @@ class ReconcileReport:
     def safe_to_apply(self) -> bool:
         return not self.conflicts
 
+    @property
+    def questions_to_alias(self) -> int:
+        return len(self.question_aliases)
+
     def public_summary(self) -> dict:
-        return {**asdict(self), "safe_to_apply": self.safe_to_apply}
+        return {
+            **asdict(self),
+            "questions_to_alias": self.questions_to_alias,
+            "safe_to_apply": self.safe_to_apply,
+        }
 
 
 def _decode_json(value, *, field: str, identifier: str) -> dict:
@@ -396,21 +421,22 @@ def inspect_destination(session: Session, corpus: SnapshotCorpus) -> ReconcileRe
 
     case_ids = tuple(item.case_id for item in corpus.cases)
     existing_cases = {
-        item.id: item
+        str(item.id): item
         for item in session.scalars(select(CaseStudy).where(CaseStudy.id.in_(case_ids)))
     }
     question_ids = tuple(item.question_id for item in corpus.questions)
     existing_questions = {
-        item.question_id: item
+        str(item.question_id): item
         for item in session.scalars(
             select(Question).where(Question.question_id.in_(question_ids))
         )
     }
     hashes = tuple(item.hash_norm for item in corpus.questions)
-    hash_owners = {
-        item.hash_norm: item.question_id
-        for item in session.scalars(select(Question).where(Question.hash_norm.in_(hashes)))
-    }
+    hash_owners: dict[str, list[Question]] = {}
+    for owner in session.scalars(
+        select(Question).where(Question.hash_norm.in_(hashes))
+    ):
+        hash_owners.setdefault(str(owner.hash_norm), []).append(owner)
 
     conflicts: list[str] = []
     cases_to_create = cases_to_skip = 0
@@ -429,22 +455,57 @@ def inspect_destination(session: Session, corpus: SnapshotCorpus) -> ReconcileRe
             cases_to_skip += 1
 
     questions_to_create = questions_to_skip = 0
+    aliases: list[QuestionIdentityAlias] = []
     for item in corpus.questions:
         existing = existing_questions.get(item.question_id)
-        hash_owner = hash_owners.get(item.hash_norm)
-        if hash_owner is not None and hash_owner != item.question_id:
-            conflicts.append(
-                f"hash_norm {item.hash_norm} ya pertenece a {hash_owner}"
+        owners = hash_owners.get(item.hash_norm, [])
+        if existing is not None:
+            other_owner_ids = sorted(
+                str(owner.question_id)
+                for owner in owners
+                if str(owner.question_id) != item.question_id
             )
-        if existing is None:
+            if other_owner_ids:
+                conflicts.append(
+                    f"hash_norm {item.hash_norm} tiene propietarios incompatibles: "
+                    + ", ".join(other_owner_ids)
+                )
+            if existing.competition_id != competition.id:
+                conflicts.append(f"question_id en otro concurso: {item.question_id}")
+            elif _question_signature(existing) != _snapshot_question_signature(item):
+                conflicts.append(f"question_id con contenido diferente: {item.question_id}")
+            else:
+                questions_to_skip += 1
+            continue
+
+        if not owners:
             questions_to_create += 1
             continue
-        if existing.competition_id != competition.id:
-            conflicts.append(f"question_id en otro concurso: {item.question_id}")
-        elif _question_signature(existing) != _snapshot_question_signature(item):
-            conflicts.append(f"question_id con contenido diferente: {item.question_id}")
+        if len(owners) != 1:
+            conflicts.append(
+                f"hash_norm {item.hash_norm} tiene múltiples propietarios en destino"
+            )
+            continue
+
+        owner = owners[0]
+        owner_id = str(owner.question_id)
+        if owner.competition_id != competition.id:
+            conflicts.append(
+                f"hash_norm {item.hash_norm} pertenece a otro concurso: {owner_id}"
+            )
+        elif _question_signature(owner) != _snapshot_question_signature(item):
+            conflicts.append(
+                f"hash_norm {item.hash_norm} pertenece a contenido diferente: {owner_id}"
+            )
         else:
-            questions_to_skip += 1
+            aliases.append(
+                QuestionIdentityAlias(
+                    source_question_id=item.question_id,
+                    destination_question_id=owner_id,
+                    case_id=item.case_id,
+                    hash_norm=item.hash_norm,
+                )
+            )
 
     return ReconcileReport(
         source_cases=len(corpus.cases),
@@ -454,6 +515,9 @@ def inspect_destination(session: Session, corpus: SnapshotCorpus) -> ReconcileRe
         cases_to_skip=cases_to_skip,
         questions_to_skip=questions_to_skip,
         conflicts=tuple(sorted(set(conflicts))),
+        question_aliases=tuple(
+            sorted(aliases, key=lambda alias: alias.source_question_id)
+        ),
     )
 
 
@@ -501,17 +565,24 @@ def _insert_planned(
         )
     session.flush()
 
-    existing_question_ids = set(
-        session.scalars(
+    existing_question_ids = {
+        str(question_id)
+        for question_id in session.scalars(
             select(Question.question_id).where(
                 Question.question_id.in_(
                     tuple(item.question_id for item in corpus.questions)
                 )
             )
         )
-    )
+    }
+    aliased_source_ids = {
+        alias.source_question_id for alias in report.question_aliases
+    }
     for item in corpus.questions:
-        if item.question_id in existing_question_ids:
+        if (
+            item.question_id in existing_question_ids
+            or item.question_id in aliased_source_ids
+        ):
             continue
         session.add(
             Question(
@@ -538,6 +609,27 @@ def _insert_planned(
             )
         )
     session.flush()
+
+
+def _resolved_question_ids(
+    corpus: SnapshotCorpus,
+    report: ReconcileReport,
+) -> set[str]:
+    """Return the canonical destination ID for every safe source question."""
+
+    alias_by_source = {
+        alias.source_question_id: alias.destination_question_id
+        for alias in report.question_aliases
+    }
+    resolved = {
+        alias_by_source.get(item.question_id, item.question_id)
+        for item in corpus.questions
+    }
+    if len(resolved) != len(corpus.questions):
+        raise SnapshotValidationError(
+            "La resolución de identidades no es uno a uno; no se aplicó nada."
+        )
+    return resolved
 
 
 def _same_sqlite_file(source_path: Path, engine: Engine) -> bool:
@@ -579,7 +671,29 @@ def reconcile_snapshot(
         _insert_planned(session, corpus, report)
 
         scope_report = scope_preflight(session)
-        scope_result = apply_scope_backfill(session, scope_report)
+        resolved_question_ids = _resolved_question_ids(corpus, report)
+        resolved_scope_questions = tuple(
+            item
+            for item in scope_report.demonstrated_questions
+            if item.question_id in resolved_question_ids
+        )
+        if (
+            len(resolved_scope_questions) != EXPECTED_QUESTION_COUNT
+            or {item.question_id for item in resolved_scope_questions}
+            != resolved_question_ids
+        ):
+            session.rollback()
+            raise SnapshotValidationError(
+                "No se pudo demostrar el alcance de las 144 identidades resueltas."
+            )
+        # Phase 1 derives the function from the stable case ID. Restrict its
+        # write set to the exact IDs resolved above so an unrelated question in
+        # the same case can never inherit scope through this importer.
+        scoped_report = replace(
+            scope_report,
+            demonstrated_questions=resolved_scope_questions,
+        )
+        scope_result = apply_scope_backfill(session, scoped_report)
         session.commit()
         return replace(
             report,

@@ -220,6 +220,11 @@ def render_custom_sidebar():
                 st.rerun()
 
         st.sidebar.caption("Tu avance")
+        st.sidebar.page_link(
+            "pages/Simulacro_Real.py",
+            label="⏱️ Simulacro tipo examen",
+            use_container_width=True,
+        )
         
     except Exception as exc:
         # No capturar RerunException mikey v7.7

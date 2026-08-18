@@ -159,6 +159,67 @@ def _add_exact_record(session: Session, corpus, case_index: int = 0, question_in
     )
 
 
+def _add_alias_record(
+    session: Session,
+    corpus,
+    *,
+    destination_question_id: str,
+    case_index: int = 0,
+    question_index: int = 0,
+    option_override: str | None = None,
+    add_case: bool = True,
+):
+    """Seed an existing destination row with a different identity."""
+
+    competition_id = session.scalar(
+        select(Competition.id).where(Competition.code == "DIAN-2676")
+    )
+    case = corpus.cases[case_index]
+    question = [item for item in corpus.questions if item.case_id == case.case_id][
+        question_index
+    ]
+    options = dict(question.options_json)
+    if option_override is not None:
+        options["B"] = option_override
+    if add_case:
+        session.add(
+            CaseStudy(
+                id=case.case_id,
+                competition_id=competition_id,
+                title=case.title,
+                text=case.text,
+                difficulty=case.difficulty,
+                topic=case.topic,
+            )
+        )
+    session.add(
+        Question(
+            question_id=destination_question_id,
+            competition_id=competition_id,
+            case_id=question.case_id,
+            track=question.track,
+            competency=question.competency,
+            topic=question.topic,
+            macro_dominio=question.macro_dominio,
+            micro_competencia=question.micro_competencia,
+            difficulty=question.difficulty,
+            question_type=question.question_type,
+            stem=question.stem,
+            options_json=options,
+            correct_key=question.correct_key,
+            rationale=question.rationale,
+            source_refs=question.source_refs,
+            hash_norm=question.hash_norm,
+            # Existing editorial state must survive identity reconciliation.
+            is_verified=True,
+            quality_report={"status": "EXISTING_EDITORIAL_STATE"},
+            global_hits=7,
+            global_misses=3,
+        )
+    )
+    return case, question
+
+
 def test_dry_run_is_default_and_does_not_write_source_or_destination(tmp_path):
     source = _build_source(tmp_path / "source.db")
     destination = _build_destination(tmp_path / "destination.db")
@@ -257,6 +318,140 @@ def test_mixed_exact_destination_is_completed_without_overwrite(tmp_path):
     with Session(destination) as session:
         assert session.scalar(select(func.count()).select_from(CaseStudy)) == 48
         assert session.scalar(select(func.count()).select_from(Question)) == 144
+    destination.dispose()
+
+
+def test_equivalent_hash_owner_is_reused_as_identity_alias_without_overwrite(tmp_path):
+    source = _build_source(tmp_path / "source.db")
+    corpus = load_snapshot(source)
+    destination = _build_destination(tmp_path / "destination.db")
+    alias_id = "existing-question-identity"
+    with Session(destination) as session:
+        _, source_question = _add_alias_record(
+            session,
+            corpus,
+            destination_question_id=alias_id,
+        )
+        session.commit()
+
+    dry_run = reconcile_snapshot(source, destination)
+    assert dry_run.safe_to_apply is True
+    assert dry_run.questions_to_alias == 1
+    assert dry_run.questions_to_create == 143
+    assert dry_run.questions_to_skip == 0
+    assert dry_run.conflicts == ()
+    assert dry_run.question_aliases[0].source_question_id == source_question.question_id
+    assert dry_run.question_aliases[0].destination_question_id == alias_id
+
+    first = reconcile_snapshot(source, destination, apply=True)
+    assert first.applied is True
+    assert first.questions_to_alias == 1
+    assert first.question_scopes_created == 144
+    with Session(destination) as session:
+        assert session.get(Question, source_question.question_id) is None
+        existing = session.get(Question, alias_id)
+        assert existing is not None
+        assert existing.is_verified is True
+        assert existing.quality_report == {"status": "EXISTING_EDITORIAL_STATE"}
+        assert existing.global_hits == 7
+        assert existing.global_misses == 3
+        assert session.scalar(select(func.count()).select_from(Question)) == 144
+        assert session.scalar(select(func.count()).select_from(QuestionOpecScope)) == 144
+        assert session.scalar(
+            select(func.count())
+            .select_from(QuestionOpecScope)
+            .where(QuestionOpecScope.question_id == alias_id)
+        ) == 1
+
+    second = reconcile_snapshot(source, destination, apply=True)
+    assert second.safe_to_apply is True
+    assert second.questions_to_alias == 1
+    assert second.questions_to_create == 0
+    assert second.questions_to_skip == 143
+    assert second.question_scopes_created == 0
+    with Session(destination) as session:
+        assert session.scalar(select(func.count()).select_from(Question)) == 144
+        assert session.scalar(select(func.count()).select_from(QuestionOpecScope)) == 144
+    destination.dispose()
+
+
+def test_same_stem_hash_with_divergent_full_signature_remains_a_conflict(tmp_path):
+    source = _build_source(tmp_path / "source.db")
+    corpus = load_snapshot(source)
+    destination = _build_destination(tmp_path / "destination.db")
+    with Session(destination) as session:
+        _add_alias_record(
+            session,
+            corpus,
+            destination_question_id="different-content-owner",
+            option_override="Distractor modificado en el destino",
+        )
+        session.commit()
+
+    dry_run = reconcile_snapshot(source, destination)
+    assert dry_run.safe_to_apply is False
+    assert dry_run.questions_to_alias == 0
+    assert dry_run.questions_to_create == 143
+    assert any("pertenece a contenido diferente" in item for item in dry_run.conflicts)
+    with pytest.raises(ReconcileConflict):
+        reconcile_snapshot(source, destination, apply=True)
+
+    with Session(destination) as session:
+        assert session.scalar(select(func.count()).select_from(Question)) == 1
+        assert "opec_profiles" not in set(inspect(destination).get_table_names())
+    destination.dispose()
+
+
+def test_all_144_equivalent_aliases_match_restored_branch_and_are_idempotent(tmp_path):
+    source = _build_source(tmp_path / "source.db")
+    corpus = load_snapshot(source)
+    destination = _build_destination(tmp_path / "destination.db")
+    alias_ids: set[str] = set()
+    with Session(destination) as session:
+        for case_index, case in enumerate(corpus.cases):
+            case_questions = [
+                item for item in corpus.questions if item.case_id == case.case_id
+            ]
+            for question_index in range(len(case_questions)):
+                alias_id = f"restored-alias-{case_index:02d}-{question_index}"
+                alias_ids.add(alias_id)
+                _add_alias_record(
+                    session,
+                    corpus,
+                    destination_question_id=alias_id,
+                    case_index=case_index,
+                    question_index=question_index,
+                    add_case=question_index == 0,
+                )
+        session.commit()
+
+    dry_run = reconcile_snapshot(source, destination)
+    assert dry_run.cases_to_skip == 48
+    assert dry_run.questions_to_create == 0
+    assert dry_run.questions_to_skip == 0
+    assert dry_run.questions_to_alias == 144
+    assert dry_run.conflicts == ()
+    assert {
+        item.destination_question_id for item in dry_run.question_aliases
+    } == alias_ids
+
+    first = reconcile_snapshot(source, destination, apply=True)
+    assert first.question_scopes_created == 144
+    with Session(destination) as session:
+        assert session.scalar(select(func.count()).select_from(Question)) == 144
+        assert {
+            str(item)
+            for item in session.scalars(select(Question.question_id))
+        } == alias_ids
+        assert session.scalar(select(func.count()).select_from(QuestionOpecScope)) == 144
+
+    second = reconcile_snapshot(source, destination, apply=True)
+    assert second.questions_to_alias == 144
+    assert second.questions_to_create == 0
+    assert second.question_scopes_created == 0
+    with Session(destination) as session:
+        assert session.scalar(select(func.count()).select_from(Question)) == 144
+        assert session.scalar(select(func.count()).select_from(QuestionOpecScope)) == 144
     destination.dispose()
 
 

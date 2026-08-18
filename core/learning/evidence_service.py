@@ -8,8 +8,6 @@ difficulty and error review all consume the same immutable answer events.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-import hashlib
-import json
 from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import func
@@ -25,6 +23,7 @@ from core.learning.review_policy import normalize_confidence, review_interval
 from core.legacy_question_audit import is_safe_for_active_study
 from core.opec_question_context import function_number_for_question
 from core.preparation_matrix import load_preparation_blueprint
+from core.question_revision import question_revision_hash
 from core.readiness_gate import (
     BankEvidence,
     ItemResult,
@@ -54,21 +53,6 @@ MEASUREMENT_MODE = "measurement"
 def utc_now() -> datetime:
     """Return naive UTC for compatibility with the existing DB columns."""
     return datetime.now(UTC).replace(tzinfo=None)
-
-
-def _question_revision_hash(question: Question, difficulty: int) -> str:
-    payload = {
-        "stem": str(question.stem or "").strip(),
-        "options": question.options_json or {},
-        "correct_key": question.correct_key,
-        "rationale": str(question.rationale or "").strip(),
-        "difficulty": int(difficulty),
-        "question_type": str(question.question_type or "SITUATIONAL").upper(),
-    }
-    encoded = json.dumps(
-        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def _source_snapshot(question: Question) -> dict:
@@ -130,7 +114,7 @@ def ensure_question_revision(
     if not is_safe_for_active_study(question):
         raise ValueError("La pregunta no tiene evidencia suficiente para crear una revisión.")
     difficulty = editorial_question_difficulty(question)
-    content_hash = _question_revision_hash(question, difficulty)
+    content_hash = question_revision_hash(question, difficulty)
     existing = (
         db.query(QuestionRevision)
         .filter_by(
