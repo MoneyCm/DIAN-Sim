@@ -117,44 +117,52 @@ def assert_ai_usage_allowed(
         return
 
     from db.models import AICallLog
+    from sqlalchemy.exc import ProgrammingError, OperationalError
 
-    day_start = _utc_day_start(now)
-    global_calls = int(
-        db.query(func.count(AICallLog.id))
-        .filter(AICallLog.created_at >= day_start)
-        .scalar()
-        or 0
-    )
-    if global_calls + planned_calls > policy.max_calls_global_day:
-        raise AIUsageLimitError(
-            "La cuota global diaria de IA está agotada; inténtalo después del próximo reinicio diario."
+    try:
+        day_start = _utc_day_start(now)
+        global_calls = int(
+            db.query(func.count(AICallLog.id))
+            .filter(AICallLog.created_at >= day_start)
+            .scalar()
+            or 0
         )
+        if global_calls + planned_calls > policy.max_calls_global_day:
+            raise AIUsageLimitError(
+                "La cuota global diaria de IA está agotada; inténtalo después del próximo reinicio diario."
+            )
 
-    if user_id is None:
-        return
-    user_query = db.query(AICallLog).filter(
-        AICallLog.user_id == user_id,
-        AICallLog.created_at >= day_start,
-    )
-    user_calls = int(user_query.with_entities(func.count(AICallLog.id)).scalar() or 0)
-    if user_calls + planned_calls > policy.max_calls_per_user_day:
-        raise AIUsageLimitError(
-            "Alcanzaste la cuota diaria de IA. Las funciones determinísticas siguen disponibles."
+        if user_id is None:
+            return
+        user_query = db.query(AICallLog).filter(
+            AICallLog.user_id == user_id,
+            AICallLog.created_at >= day_start,
         )
+        user_calls = int(user_query.with_entities(func.count(AICallLog.id)).scalar() or 0)
+        if user_calls + planned_calls > policy.max_calls_per_user_day:
+            raise AIUsageLimitError(
+                "Alcanzaste la cuota diaria de IA. Las funciones determinísticas siguen disponibles."
+            )
 
-    input_tokens, output_tokens = user_query.with_entities(
-        func.coalesce(func.sum(AICallLog.input_tokens), 0),
-        func.coalesce(func.sum(AICallLog.output_tokens), 0),
-    ).one()
-    projected_input = int(input_tokens or 0) + estimate_tokens(prompt) * planned_calls
-    if projected_input > policy.max_input_tokens_per_user_day:
-        raise AIUsageLimitError(
-            "La solicitud excede el presupuesto diario de texto para IA. Reduce el documento o inténtalo mañana."
-        )
-    if int(output_tokens or 0) >= policy.max_output_tokens_per_user_day:
-        raise AIUsageLimitError(
-            "Alcanzaste el presupuesto diario de respuestas de IA."
-        )
+        input_tokens, output_tokens = user_query.with_entities(
+            func.coalesce(func.sum(AICallLog.input_tokens), 0),
+            func.coalesce(func.sum(AICallLog.output_tokens), 0),
+        ).one()
+        projected_input = int(input_tokens or 0) + estimate_tokens(prompt) * planned_calls
+        if projected_input > policy.max_input_tokens_per_user_day:
+            raise AIUsageLimitError(
+                "La solicitud excede el presupuesto diario de texto para IA. Reduce el documento o inténtalo mañana."
+            )
+        if int(output_tokens or 0) >= policy.max_output_tokens_per_user_day:
+            raise AIUsageLimitError(
+                "Alcanzaste el presupuesto diario de respuestas de IA."
+            )
+    except AIUsageLimitError:
+        raise
+    except (ProgrammingError, OperationalError):
+        db.rollback()
+    except Exception:
+        db.rollback()
 
 
 def _safe_label(value: object, *, fallback: str, max_length: int) -> str:
