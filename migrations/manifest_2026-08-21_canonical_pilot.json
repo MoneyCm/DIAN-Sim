@@ -1,19 +1,23 @@
 [
   {
-    "description": "Canonical pilot verification v2: fix URLs, add source_verification, recompute hashes, create approved revisions for 27 pilot questions",
-    "applied_at": "2026-08-21T14:00:00",
-    "applied_by": "opencode/pilot-verification-v2",
+    "description": "Canonical source review: exact official locators and supporting excerpts for 27 OPEC 236769 pilot questions",
+    "applied_at": "2026-08-21T18:00:00",
+    "applied_by": "codex/canonical-source-review-2026-08-21",
     "source_documents_updated": {
-      "LEY-2586-2026": "https://www.suin-juriscol.gov.co/viewDocument.asp?ruta=Leyes/30074984",
-      "DECRETO-1165-2019": "https://www.suin-juriscol.gov.co/viewDocument.asp?ruta=Decretos/30036618",
+      "LEY-2586-2026": "https://normograma.dian.gov.co/dian/compilacion/docs/ley_2586_2026.htm",
+      "DECRETO-1165-2019": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_1165_2019.htm",
       "DECRETO-LEY-2245-2011": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_2245_2011.htm",
       "ESTATUTO-TRIBUTARIO": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
-      "RESOLUCION-DIAN-000067-2024": "https://www.dian.gov.co/dian/entidad/Paginas/Manual_de_Funciones.aspx",
+      "RESOLUCION-DIAN-000067-2024": "https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0067_2024.htm",
       "CONCEPTO-DIAN-101-2025": "https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_0101_2025.htm",
       "CONCEPTO-DIAN-32143-2019": "https://normograma.dian.gov.co/dian/compilacion/docs/concepto_aduanero_dian_0001465_2019.htm",
-      "MERF-AT-FL-3006": "https://www.dian.gov.co/dian/entidad/Paginas/Manual_de_Funciones.aspx"
+      "MERF-AT-FL-3006": "https://www.dian.gov.co/dian/entidad/ManualFunciones1/FTGH_1824_Gestor_III_AT_FL_3006.PDF",
+      "PR-COA-0501": "https://www.dian.gov.co/atencionciudadano/LMDP/Cumplimiento-Obligaciones-Aduaneras-y-Cambiarias/Fiscalizacion-y-Liquidacion/Procedimientos/PR-COA-0501.pdf",
+      "OD-COA-0106": "https://www.dian.gov.co/atencionciudadano/LMDP/Cumplimiento-Obligaciones-Aduaneras-y-Cambiarias/Fiscalizacion-y-Liquidacion/Otros-documentos/OD-COA-0106.pdf"
     },
     "questions_verified": 27,
+    "question_content_corrections": 1,
+    "verification_basis": "Question stem and correct answer checked against the cited official text; technical delivery gate verified separately.",
     "questions_by_function": {
       "F1": 3, "F2": 3, "F3": 3, "F4": 3, "F5": 3,
       "F6": 3, "F7": 3, "F8": 3, "F9": 3
