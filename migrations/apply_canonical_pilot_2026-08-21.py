@@ -1,14 +1,12 @@
 """Idempotent canonical verification of 27 pilot questions for OPEC 236769.
 
-Fixes all 6 blockers from external audit:
-  1. quality_report.source_verification missing
-  2. Revision hashes not matching current content
-  3. SourceDocument URLs using non-official domains
-  4. Citations with locators/excerpts that do not support the answer
-  5. is_verified=False on questions
-  6. QuestionService delivering 0 of 27
-
-Every action is idempotent: re-running produces the same final state.
+IDEMPOTENCY: checks current state before any write. Re-running is a no-op
+when the question already has:
+  - is_verified=True
+  - quality_report.source_verification matching the expected citation
+  - quality_report.review = "source_grounded"
+  - An approved revision whose content_hash matches current content
+  - A QuestionCitation with the expected locator and excerpt
 
 Usage:
     python migrations/apply_canonical_pilot_2026-08-21.py [--dry-run]
@@ -17,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import datetime
+import json
 import sys
 from pathlib import Path
 
@@ -157,71 +156,99 @@ CITATIONS = [
      True),
 ]
 
+
 PILOT_QIDS = [c[0] for c in CITATIONS]
 
 
-def _update_source_documents(db, dry_run):
-    updated = 0
+def _is_already_correct(q, citation_tuple, db):
+    """Return True if the question already passes every gate for this citation."""
+    qid, doc_key, locator, excerpt, supports = citation_tuple
+
+    if not q.is_verified:
+        return False
+
+    report = q.quality_report if isinstance(q.quality_report, dict) else {}
+    sv = report.get("source_verification", {})
+    if (sv.get("status") != "official_current"
+            or sv.get("locator") != locator
+            or sv.get("supporting_excerpt") != excerpt):
+        return False
+    if report.get("review") != "source_grounded":
+        return False
+
+    difficulty = editorial_question_difficulty(q)
+    expected_hash = question_revision_hash(q, difficulty)
+    rev = (
+        db.query(QuestionRevision)
+        .filter_by(question_id=str(q.question_id), status="approved")
+        .order_by(QuestionRevision.revision_number.desc())
+        .first()
+    )
+    if not rev or rev.content_hash != expected_hash:
+        return False
+
+    source_doc = db.query(SourceDocument).filter_by(document_key=doc_key).first()
+    if not source_doc:
+        return False
+    cite = (
+        db.query(QuestionCitation)
+        .filter_by(question_id=str(q.question_id), source_document_id=source_doc.id)
+        .first()
+    )
+    if (not cite or cite.locator != locator or cite.excerpt != excerpt
+            or not cite.supports_key):
+        return False
+
+    return True
+
+
+def main():
+    dry_run = "--dry-run" in sys.argv
+    db = SessionLocal()
+
+    print("=== Canonical Pilot Verification v2 (Idempotent) ===")
+
+    # 1. SourceDocument URLs — only update if different
+    url_changes = 0
     for doc_key, url in SOURCE_DOCS.items():
         doc = db.query(SourceDocument).filter_by(document_key=doc_key).first()
         if doc and doc.official_url != url:
             if dry_run:
-                print(f"  [dry-run] Would update {doc_key}")
+                print(f"  [dry-run] Would update URL for {doc_key}")
             else:
                 doc.official_url = url
                 doc.last_verified_at = NOW
-            updated += 1
-    return updated
+            url_changes += 1
+    print(f"1. SourceDocument URL updates: {url_changes}")
 
-
-def _revert_revisions(db, dry_run):
-    from sqlalchemy import and_
-
-    approved = db.query(QuestionRevision).filter(
-        QuestionRevision.question_id.in_(PILOT_QIDS),
-        QuestionRevision.status == "approved",
-    )
-    count = approved.count()
-    if dry_run:
-        print(f"  [dry-run] Would revert {count} revisions")
-    else:
-        approved.update(
-            {"status": "candidate", "change_reason": "Reverted for canonical re-verification v2"},
-            synchronize_session=False,
-        )
-    return count
-
-
-def _delete_old_citations(db, dry_run):
-    deleted = db.query(QuestionCitation).filter(
-        QuestionCitation.question_id.in_(PILOT_QIDS),
-    ).delete(synchronize_session=False)
-    if dry_run:
-        print(f"  [dry-run] Would delete {deleted} old citations")
-    return deleted
-
-
-def _apply_citations_and_revisions(db, dry_run):
-    created_cites = 0
-    created_revs = 0
+    # 2. Per-question: check, skip if already correct
     skipped = 0
-
-    for qid, doc_key, locator, excerpt, supports in CITATIONS:
+    applied = 0
+    for citation_tuple in CITATIONS:
+        qid, doc_key, locator, excerpt, supports = citation_tuple
         q = db.query(Question).filter_by(question_id=qid).first()
         if not q:
+            print(f"  SKIP {qid[:12]}: not found")
             skipped += 1
             continue
 
-        source_doc = db.query(SourceDocument).filter_by(document_key=doc_key).first()
-        if not source_doc:
+        if _is_already_correct(q, citation_tuple, db):
             skipped += 1
             continue
 
         if dry_run:
-            created_cites += 1
-            created_revs += 1
+            print(f"  [dry-run] Would apply {qid[:12]}")
+            applied += 1
             continue
 
+        source_doc = db.query(SourceDocument).filter_by(document_key=doc_key).first()
+        if not source_doc:
+            print(f"  SKIP {qid[:12]}: source doc {doc_key} not found")
+            skipped += 1
+            continue
+
+        # Upsert citation: delete stale, insert fresh
+        db.query(QuestionCitation).filter_by(question_id=qid).delete()
         db.add(QuestionCitation(
             question_id=qid,
             source_document_id=source_doc.id,
@@ -231,8 +258,8 @@ def _apply_citations_and_revisions(db, dry_run):
             verified_at=NOW,
             verified_by=ACTOR,
         ))
-        created_cites += 1
 
+        # Set quality_report
         report = dict(q.quality_report) if isinstance(q.quality_report, dict) else {}
         report["source_verification"] = {
             "status": "official_current",
@@ -246,10 +273,10 @@ def _apply_citations_and_revisions(db, dry_run):
         q.quality_report = report
         q.is_verified = True
 
+        # Create approved revision with correct hash
         difficulty = editorial_question_difficulty(q)
         content_hash = question_revision_hash(q, difficulty)
         max_rev = db.query(QuestionRevision).filter_by(question_id=qid).count()
-
         db.add(QuestionRevision(
             question_id=qid,
             revision_number=max_rev + 1,
@@ -269,37 +296,14 @@ def _apply_citations_and_revisions(db, dry_run):
             actor=ACTOR,
             actor_type="system",
         ))
-        created_revs += 1
+        applied += 1
 
-    return created_cites, created_revs, skipped
-
-
-def main():
-    dry_run = "--dry-run" in sys.argv
-    db = SessionLocal()
-
-    print("=== Canonical Pilot Verification v2 ===")
-
-    print("1. Updating SourceDocument URLs...")
-    n = _update_source_documents(db, dry_run)
-    print(f"   Updated {n} documents")
-
-    print("2. Reverting approved revisions...")
-    n = _revert_revisions(db, dry_run)
-    print(f"   Reverted {n} revisions")
-
-    print("3. Deleting old citations...")
-    n = _delete_old_citations(db, dry_run)
-    print(f"   Deleted {n} citations")
-
-    print("4. Creating citations, fixing quality_report, creating revisions...")
-    cites, revs, skip = _apply_citations_and_revisions(db, dry_run)
-    print(f"   Created {cites} citations, {revs} revisions, skipped {skip}")
+    print(f"2. Questions: {applied} applied, {skipped} already correct / skipped")
 
     if not dry_run:
         db.commit()
 
-    print("5. Verifying delivery...")
+    # 3. Verify delivery
     if not dry_run:
         from db.models import OpecProfile, QuestionOpecScope
         from services.question_service import _canonical_deliverable_question_ids
@@ -311,9 +315,9 @@ def main():
         sp = {str(s.question_id): s.bank_partition for s in scopes}
         deliverable = _canonical_deliverable_question_ids(db, questions, scope_partitions=sp)
         pilot_delivered = [qid for qid in PILOT_QIDS if qid in deliverable]
-        print(f"   Deliverable: {len(pilot_delivered)}/27")
+        print(f"3. Deliverable: {len(pilot_delivered)}/27")
     else:
-        print("   [dry-run] Skipping delivery check")
+        print("3. [dry-run] Skipping delivery check")
 
     db.close()
     print("Done.")
