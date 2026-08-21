@@ -4,7 +4,10 @@ from pathlib import Path
 def test_menu_prioritizes_daily_actions_and_hides_execution_page():
     source = Path("app/app.py").read_text(encoding="utf-8")
     assert "learner_pages = [p_dashboard]" in source
-    assert "learner_pages.extend([p_simulacro, p_resultados, p_perfil, p_logout])" in source
+    assert (
+        "learner_pages.extend([p_simulacro, p_sim_real, p_resultados, p_perfil, p_logout])"
+        in source
+    )
     assert "secondary_learner_pages" in source
     assert '"Estudiar": admin_study_pages' in source
     assert '"Herramientas de administración"' in source

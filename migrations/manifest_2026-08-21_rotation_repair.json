@@ -1,0 +1,102 @@
+[
+  {
+    "action": "repair_options",
+    "question_id": "574e11d3-de28-461c-ab3f-55544f784ee4",
+    "function": 7,
+    "expected_current_key": "A",
+    "target_key": "A",
+    "target_options": {
+      "A": "Conservar su confidencialidad y usar los mecanismos institucionales de control, sin difundirla por canales personales.",
+      "B": "Compartirla libremente porque todavía no se ha iniciado la auditoría.",
+      "C": "Publicarla para que los usuarios seleccionados preparen sus descargos anticipadamente."
+    },
+    "recovery_source": "core/curated_gap_cases_phase14.py"
+  },
+  {
+    "action": "repair_options",
+    "question_id": "0dd90134-8132-4ac5-a2ea-b98d5edb162a",
+    "function": 6,
+    "expected_current_key": "C",
+    "target_key": "C",
+    "target_options": {
+      "A": "Serán aceptados con una penalización del diez por ciento (10%) del valor total de la transacción.",
+      "B": "Darán lugar a la suspensión inmediata del RUT del adquirente pero serán fiscalmente procedentes.",
+      "C": "No constituirán costo, deducción ni impuesto descontable en el impuesto sobre la renta e IVA."
+    },
+    "recovery_source": "scripts/data/generate_more_dian_cases.py"
+  },
+  {
+    "action": "repair_options",
+    "question_id": "a43a3b62-2c76-4638-af8b-8b20a74f4c47",
+    "function": 8,
+    "expected_current_key": "C",
+    "target_key": "C",
+    "target_options": {
+      "A": "Únicamente la alerta interna.",
+      "B": "Solo el registro mercantil de la sociedad.",
+      "C": "La factura, el contrato y el comprobante de pago."
+    },
+    "recovery_source": "core/curated_gap_cases_phase4.py"
+  },
+  {
+    "action": "repair_options",
+    "question_id": "78da018c-4f0f-477e-8f79-98c210b178e3",
+    "function": 3,
+    "expected_current_key": "C",
+    "target_key": "C",
+    "target_options": {
+      "A": "Presentar tardíamente una declaración real.",
+      "B": "Canalizar una diferencia documental justificada.",
+      "C": "Canalizar como importación un monto que no deriva de esa operación."
+    },
+    "recovery_source": "core/curated_gap_cases_phase5.py"
+  },
+  {
+    "action": "quarantine",
+    "question_id": "ef1ce92e-159b-44e5-b581-f6a9b4c082ce",
+    "function": 7,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "f301c795-e7d7-4eee-b018-ac5792fb22f6",
+    "function": 7,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "854b1c47-a4c5-4a40-9294-f73a22e7f8f0",
+    "function": 7,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "338f586f-84ac-4912-8682-3053c721f1fc",
+    "function": 1,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "315d6d40-8ebb-4b33-a67a-b68172b9f4aa",
+    "function": 1,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "9313a38f-0b4f-4288-a493-ccd66fbc3025",
+    "function": 8,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "f1f92a97-f9e0-4382-bc4c-47460cddb122",
+    "function": 9,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  },
+  {
+    "action": "quarantine",
+    "question_id": "7731f57e-193d-4442-a76a-109c5a59c30a",
+    "function": 9,
+    "reason": "La rotación defectuosa eliminó un distractor y no existe una fuente versionada para recuperarlo."
+  }
+]

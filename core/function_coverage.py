@@ -12,14 +12,18 @@ _MATRIX_CACHE: dict[str, dict[int, str]] = {}
 
 
 def _load_short_names(opec_number: str) -> dict[int, str]:
-    if opec_number in _MATRIX_CACHE:
-        return _MATRIX_CACHE[opec_number]
+    clean_opec_number = str(opec_number or "").strip()
+    if clean_opec_number in _MATRIX_CACHE:
+        return _MATRIX_CACHE[clean_opec_number]
     mapping: dict[int, str] = {}
     base = Path(__file__).resolve().parents[1] / "data"
     # Try dedicated matrix file first (e.g. opec_236769_matrix.json)
-    matrix_path = base / f"opec_{opec_number}_matrix.json"
-    if not matrix_path.exists():
-        matrix_path = base / "opec_236769_matrix.json"
+    matrix_path = base / f"opec_{clean_opec_number}_matrix.json"
+    # A different OPEC must never inherit the function names of 236769.  If
+    # there is no dedicated matrix, the caller falls back to its own MERF text.
+    if not clean_opec_number or not matrix_path.is_file():
+        _MATRIX_CACHE[clean_opec_number] = mapping
+        return mapping
     try:
         with open(matrix_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -28,7 +32,7 @@ def _load_short_names(opec_number: str) -> dict[int, str]:
                 mapping[int(fn["number"])] = fn["short_name"]
     except Exception:
         pass
-    _MATRIX_CACHE[opec_number] = mapping
+    _MATRIX_CACHE[clean_opec_number] = mapping
     return mapping
 
 

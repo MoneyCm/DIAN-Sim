@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from core.function_coverage import build_function_coverage, build_function_study_map
+from core.function_coverage import (
+    _MATRIX_CACHE,
+    build_function_coverage,
+    build_function_study_map,
+    function_display_label,
+)
 
 
 def question(qid, text, trusted=True):
@@ -42,3 +47,24 @@ def test_study_map_shows_verified_source_and_next_action():
     assert unmatched == 0
     assert rows[0]["sources"] == ["Estatuto Tributario"]
     assert "Falta banco" in rows[0]["recommendation"]
+
+
+def test_function_display_uses_dedicated_opec_matrix():
+    _MATRIX_CACHE.clear()
+
+    assert function_display_label("236769", 6, "Texto MERF") == (
+        "F6 · Ejecución de acciones de fiscalización"
+    )
+
+
+def test_function_display_does_not_leak_236769_names_to_another_opec():
+    _MATRIX_CACHE.clear()
+
+    label = function_display_label(
+        "999999",
+        6,
+        "Administrar los recursos físicos y documentales del empleo.",
+    )
+
+    assert label == "F6 · Administrar los recursos físicos y documentales del empleo."
+    assert "Ejecución de acciones de fiscalización" not in label

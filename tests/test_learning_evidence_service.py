@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from core.learning.evidence_service import (
+    ensure_question_revision,
     evaluate_opec_readiness,
     finalize_opec_session,
     record_opec_event,
@@ -22,8 +23,10 @@ from db.models import (
     OpecProfile,
     OpecTopicState,
     Question,
+    QuestionCitation,
     QuestionOpecScope,
     QuestionRevision,
+    SourceDocument,
     User,
     UserOPEC,
 )
@@ -137,10 +140,37 @@ def _question(db, competition, profile, index, *, partition="training", likert=F
             ),
         ])
         db.flush()
+        source = db.query(SourceDocument).filter_by(document_key="test-et-684").first()
+        if source is None:
+            source = SourceDocument(
+                document_key="test-et-684",
+                title="Estatuto Tributario — fixture",
+                entity="DIAN",
+                document_type="estatuto",
+                official_url=(
+                    "https://normograma.dian.gov.co/dian/compilacion/"
+                    "docs/estatuto_tributario.htm"
+                ),
+                validity_status="current",
+                last_verified_at=NOW,
+            )
+            db.add(source)
+            db.flush()
+        db.add(QuestionCitation(
+            question_id=question.question_id,
+            source_document_id=source.id,
+            locator="Artículo 684",
+            excerpt="La administración tiene amplias facultades de fiscalización.",
+            supports_key=True,
+            verified_at=NOW,
+            verified_by="prueba editorial",
+        ))
+        ensure_question_revision(db, question, bank_partition=partition)
+        db.flush()
     return case, question
 
 
-def test_training_event_creates_immutable_revision_topic_state_and_error():
+def test_training_event_uses_immutable_revision_topic_state_and_error():
     db = _db()
     user, competition, opec, profile = _context(db)
     _, question = _question(db, competition, profile, 0)
