@@ -1,0 +1,40 @@
+[
+  {
+    "description": "Segundo lote de verificacion canonica conservadora para OPEC 236769",
+    "applied_at": "2026-08-21T21:00:00",
+    "applied_by": "codex/canonical-source-review-batch2-2026-08-21",
+    "questions_verified": 29,
+    "question_content_corrections": 2,
+    "questions_by_function": {
+      "F4": 12,
+      "F5": 1,
+      "F6": 12,
+      "F8": 4
+    },
+    "source_documents": {
+      "ESTATUTO-TRIBUTARIO": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+      "DECRETO-1165-2019": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_1165_2019.htm",
+      "LEY-1437-2011": "https://normograma.dian.gov.co/dian/compilacion/docs/ley_1437_2011.htm",
+      "CONCEPTO-DIAN-18477-2025": "https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_18477_2025.htm",
+      "PR-COT-0432": "https://www.dian.gov.co/atencionciudadano/LMDP/Cumplimiento-Obligaciones-Tributarias/Fiscalizacion-y-Liquidacion/Procedimientos/PR-COT-0432.pdf"
+    },
+    "corrected_references": [
+      {
+        "question_id": "74ab6e63-2575-4d8e-9d5f-3cfa1080eaa4",
+        "from": "Estatuto Tributario, articulo 260-5, paragrafo",
+        "to": "Estatuto Tributario, articulo 260-4, paragrafo"
+      },
+      {
+        "question_id": "b49aba7d-f513-4295-8385-d9686bbb75d7",
+        "from": "Estatuto Tributario, articulo 260-5, paragrafo",
+        "to": "Estatuto Tributario, articulo 260-4, paragrafo"
+      }
+    ],
+    "excluded_redundant_candidates": [
+      "5678fed2-1f03-43fe-b332-5cc2cd8d27f4",
+      "99865a70-efe6-4c69-a5df-d98c80e0ae71",
+      "06fc026c-f560-4dca-9768-1f04bb74cbde"
+    ],
+    "verification_basis": "La clave, la justificacion y el localizador de cada pregunta se contrastaron individualmente con texto oficial vigente. Las candidatas redundantes y el resto del banco no verificado permanecen fuera de esta aprobacion."
+  }
+]
