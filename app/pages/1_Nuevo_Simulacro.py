@@ -23,6 +23,7 @@ from db.models import (
 )
 from core.adaptive import select_questions_for_simulation
 from core.exam_format import OFFICIAL_LABEL, question_format_status
+from core import function_coverage as function_coverage_utils
 from core.opec_question_context import (
     function_number_for_question,
 )
@@ -56,6 +57,25 @@ from core.profiles import PROFILES, get_profile_topics
 
 def get_db():
     return SessionLocal()
+
+
+def _function_display_label(opec_number: str, number: int, full_text: str = "") -> str:
+    """Render a stable label even while Streamlit is hot-reloading modules."""
+    helper = getattr(function_coverage_utils, "function_display_label", None)
+    if callable(helper):
+        return helper(opec_number, number, full_text)
+    compact = " ".join(str(full_text or "").split())
+    short = compact[:80].rstrip() + ("..." if len(compact) > 80 else "")
+    return f"F{number} · {short}"
+
+
+def _function_display_detail(opec_number: str, number: int, full_text: str = "") -> str:
+    """Render full MERF text with a compatibility fallback for stale workers."""
+    helper = getattr(function_coverage_utils, "function_display_detail", None)
+    if callable(helper):
+        return helper(opec_number, number, full_text)
+    label = _function_display_label(opec_number, number, full_text)
+    return f"{label}\n{full_text}" if full_text else label
 
 
 def _opec_function_map(db, opec: UserOPEC | None) -> dict[str, int]:
@@ -321,8 +341,7 @@ with st.container():
             with st.expander("Ver Manual de Funciones", expanded=False):
                 if active_opec.functions:
                     for idx, f in enumerate(active_opec.functions, start=1):
-                        from core.function_coverage import function_display_detail
-                        st.markdown(f"**{function_display_detail(active_opec.opec_number, idx, f)}**")
+                        st.markdown(f"**{_function_display_detail(active_opec.opec_number, idx, f)}**")
             
             st.divider()
             st.markdown("### Diagnóstico inicial")
@@ -363,9 +382,8 @@ with st.container():
                 key="opec_practice_mode_label",
             )
             selected_opec_mode = PRACTICE_MODE_LABELS[selected_mode_label]
-            from core.function_coverage import function_display_label
             function_options = {
-                function_display_label(active_opec.opec_number, index, function): index
+                _function_display_label(active_opec.opec_number, index, function): index
                 for index, function in enumerate(active_opec.functions or [], start=1)
             }
             available_opec_topics = sorted(
