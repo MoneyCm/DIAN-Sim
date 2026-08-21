@@ -425,8 +425,9 @@ with st.container(border=True):
         )
         with st.expander("Revisar propósito, funciones y requisitos"):
             st.write(reusable_profile["purpose"])
+            from core.function_coverage import function_display_label
             for index, function in enumerate(reusable_profile["functions"], start=1):
-                st.write(f"{index}. {function}")
+                st.write(function_display_label(reusable_profile.get("opec_number", ""), index, function))
             st.write(f"**Requisitos:** {reusable_profile['requirements']}")
         if st.button("✅ Usar esta ficha OPEC", type="primary", use_container_width=True):
             from core.opec_lookup import attach_reusable_opec_to_user

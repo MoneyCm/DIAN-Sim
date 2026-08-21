@@ -95,8 +95,9 @@ try:
                 with st.expander("Ver propósito y funciones"):
                     if opec.purpose:
                         st.write(opec.purpose)
+                    from core.function_coverage import function_display_label
                     for index, function in enumerate(opec.functions or [], start=1):
-                        st.write(f"{index}. {function}")
+                        st.write(function_display_label(opec.opec_number, index, function))
 
     st.divider()
     st.subheader("Agregar una OPEC preparada")

@@ -1,9 +1,50 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from pathlib import Path
 
 from core.exam_format import has_source_grounded_review
+
+
+_MATRIX_CACHE: dict[str, dict[int, str]] = {}
+
+
+def _load_short_names(opec_number: str) -> dict[int, str]:
+    if opec_number in _MATRIX_CACHE:
+        return _MATRIX_CACHE[opec_number]
+    try:
+        matrix_path = Path(__file__).resolve().parents[1] / "data" / "opec_236769_matrix.json"
+        with open(matrix_path, encoding="utf-8") as f:
+            data = json.load(f)
+        mapping = {
+            int(fn["number"]): fn["short_name"]
+            for fn in data.get("functions", [])
+            if "number" in fn and "short_name" in fn
+        }
+    except Exception:
+        mapping = {}
+    _MATRIX_CACHE[opec_number] = mapping
+    return mapping
+
+
+def function_display_label(opec_number: str, number: int, full_text: str = "") -> str:
+    """Standardized 'F6 · Short name' label for all UI locations."""
+    short_names = _load_short_names(opec_number)
+    short = short_names.get(number, "")
+    if not short:
+        compact = " ".join(str(full_text or "").split())
+        short = compact[:80].rstrip() + ("..." if len(compact) > 80 else "")
+    return f"F{number} \u00b7 {short}"
+
+
+def function_display_detail(opec_number: str, number: int, full_text: str = "") -> str:
+    """Standardized 'F6 · Short name\\nFull MERF text' for expanders."""
+    label = function_display_label(opec_number, number, full_text)
+    if full_text and full_text != label:
+        return f"{label}\n{full_text}"
+    return label
 
 
 MIN_QUESTIONS_PER_FUNCTION = 5
@@ -45,10 +86,12 @@ def _question_text(question) -> str:
     ))
 
 
-def function_label(function: str, number: int, max_length: int = 90) -> str:
+def function_label(function: str, number: int, max_length: int = 90, opec_number: str = "") -> str:
+    if opec_number:
+        return function_display_label(opec_number, number, function)
     compact = " ".join(str(function or "").split())
     if len(compact) > max_length:
-        compact = compact[:max_length - 1].rstrip() + "…"
+        compact = compact[:max_length - 1].rstrip() + "\u2026"
     return f"F{number}. {compact}"
 
 

@@ -320,8 +320,9 @@ with st.container():
             
             with st.expander("Ver Manual de Funciones", expanded=False):
                 if active_opec.functions:
-                    for f in active_opec.functions:
-                        st.write(f"- {f}")
+                    for idx, f in enumerate(active_opec.functions, start=1):
+                        from core.function_coverage import function_display_detail
+                        st.markdown(f"**{function_display_detail(active_opec.opec_number, idx, f)}**")
             
             st.divider()
             st.markdown("### Diagnóstico inicial")
@@ -362,8 +363,9 @@ with st.container():
                 key="opec_practice_mode_label",
             )
             selected_opec_mode = PRACTICE_MODE_LABELS[selected_mode_label]
+            from core.function_coverage import function_display_label
             function_options = {
-                f"F{index}. {' '.join(str(function).split())[:105]}": index
+                function_display_label(active_opec.opec_number, index, function): index
                 for index, function in enumerate(active_opec.functions or [], start=1)
             }
             available_opec_topics = sorted(

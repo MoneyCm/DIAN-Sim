@@ -6,10 +6,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def test_app_does_not_present_itself_as_an_official_simulator():
     app_source = (PROJECT_ROOT / "app" / "app.py").read_text(encoding="utf-8")
+    ui_source = (PROJECT_ROOT / "app" / "ui_utils.py").read_text(encoding="utf-8")
 
     assert "Simulador Oficial" not in app_source
     assert "DIAN Sim · Preparación para concursos" in app_source
-    assert "Práctica PJS cronometrada" in app_source
+    assert "Práctica PJS cronometrada" in ui_source
 
 
 def test_results_disclose_internal_practice_index():
