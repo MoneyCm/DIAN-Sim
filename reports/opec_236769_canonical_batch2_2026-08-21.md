@@ -1,7 +1,9 @@
 # Auditoría canónica OPEC 236769 — lote 2
 
-Fecha de contraste: 2026-08-21  
-Alcance aprobado: 29 preguntas  
+Fecha de contraste: 2026-08-21
+
+Alcance aprobado: 29 preguntas
+
 Actor de trazabilidad: `codex/canonical-source-review-batch2-2026-08-21`
 
 ## Resultado editorial
