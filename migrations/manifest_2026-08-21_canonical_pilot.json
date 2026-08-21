@@ -1,0 +1,22 @@
+[
+  {
+    "description": "Canonical pilot verification v2: fix URLs, add source_verification, recompute hashes, create approved revisions for 27 pilot questions",
+    "applied_at": "2026-08-21T14:00:00",
+    "applied_by": "opencode/pilot-verification-v2",
+    "source_documents_updated": {
+      "LEY-2586-2026": "https://www.suin-juriscol.gov.co/viewDocument.asp?ruta=Leyes/30074984",
+      "DECRETO-1165-2019": "https://www.suin-juriscol.gov.co/viewDocument.asp?ruta=Decretos/30036618",
+      "DECRETO-LEY-2245-2011": "https://normograma.dian.gov.co/dian/compilacion/docs/decreto_2245_2011.htm",
+      "ESTATUTO-TRIBUTARIO": "https://normograma.dian.gov.co/dian/compilacion/docs/estatuto_tributario.htm",
+      "RESOLUCION-DIAN-000067-2024": "https://www.dian.gov.co/dian/entidad/Paginas/Manual_de_Funciones.aspx",
+      "CONCEPTO-DIAN-101-2025": "https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_0101_2025.htm",
+      "CONCEPTO-DIAN-32143-2019": "https://normograma.dian.gov.co/dian/compilacion/docs/concepto_aduanero_dian_0001465_2019.htm",
+      "MERF-AT-FL-3006": "https://www.dian.gov.co/dian/entidad/Paginas/Manual_de_Funciones.aspx"
+    },
+    "questions_verified": 27,
+    "questions_by_function": {
+      "F1": 3, "F2": 3, "F3": 3, "F4": 3, "F5": 3,
+      "F6": 3, "F7": 3, "F8": 3, "F9": 3
+    }
+  }
+]
