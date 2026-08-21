@@ -26,3 +26,11 @@ def test_entrypoint_is_the_only_sidebar_renderer():
         for page in pages
         if _sidebar_calls(page)
     } == {}
+
+
+def test_sidebar_page_links_render_after_navigation_registration():
+    source = (ROOT / "app" / "app.py").read_text(encoding="utf-8-sig")
+    sidebar_call = source.index("render_custom_sidebar()")
+
+    assert sidebar_call > source.index('st.navigation({"Primeros pasos": onboarding_pages})')
+    assert sidebar_call > source.index("st.navigation(pages)")

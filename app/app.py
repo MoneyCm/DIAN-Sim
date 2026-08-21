@@ -294,12 +294,7 @@ else:
     prepare_runtime_catalog()
     # Inject Global CSS and render visual wrappers before page execution
     load_css()
-    # Restaurar la info de Gamificación en la barra lateral del usuario v9.1
-    try:
-        render_custom_sidebar()
-    except Exception as e:
-        pass
-        
+
     if is_admin():
         pages = {
             "Estudiar": admin_study_pages,
@@ -320,6 +315,13 @@ else:
         pg = st.navigation({"Primeros pasos": onboarding_pages})
     else:
         pg = st.navigation(pages)
+
+    # Page-link targets are valid only after st.navigation has registered them.
+    # Rendering earlier made the otherwise healthy progress card show an error.
+    try:
+        render_custom_sidebar()
+    except Exception as exc:
+        log_ui_exception("sidebar.render", exc)
 
 # Ejecutar la página seleccionada por el router
 pg.run()
