@@ -14,17 +14,20 @@ _MATRIX_CACHE: dict[str, dict[int, str]] = {}
 def _load_short_names(opec_number: str) -> dict[int, str]:
     if opec_number in _MATRIX_CACHE:
         return _MATRIX_CACHE[opec_number]
+    mapping: dict[int, str] = {}
+    base = Path(__file__).resolve().parents[1] / "data"
+    # Try dedicated matrix file first (e.g. opec_236769_matrix.json)
+    matrix_path = base / f"opec_{opec_number}_matrix.json"
+    if not matrix_path.exists():
+        matrix_path = base / "opec_236769_matrix.json"
     try:
-        matrix_path = Path(__file__).resolve().parents[1] / "data" / "opec_236769_matrix.json"
         with open(matrix_path, encoding="utf-8") as f:
             data = json.load(f)
-        mapping = {
-            int(fn["number"]): fn["short_name"]
-            for fn in data.get("functions", [])
-            if "number" in fn and "short_name" in fn
-        }
+        for fn in data.get("functions", []):
+            if "number" in fn and "short_name" in fn:
+                mapping[int(fn["number"])] = fn["short_name"]
     except Exception:
-        mapping = {}
+        pass
     _MATRIX_CACHE[opec_number] = mapping
     return mapping
 

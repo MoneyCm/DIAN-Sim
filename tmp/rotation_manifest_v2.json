@@ -1,0 +1,110 @@
+[
+  {
+    "action": "reorder",
+    "question_id": "ef1ce92e-159b-44e5-b581-f6a9b4c082ce",
+    "function": 7,
+    "old_key": "B",
+    "new_key": "A",
+    "partition": "training",
+    "stem_preview": "Antes de esbozar cualquier solución, ¿cuál es el primer paso esencial que Ana Ma"
+  },
+  {
+    "action": "reorder",
+    "question_id": "574e11d3-de28-461c-ab3f-55544f784ee4",
+    "function": 7,
+    "old_key": "B",
+    "new_key": "A",
+    "partition": "training",
+    "stem_preview": "¿Qué manejo corresponde a la lista de posibles seleccionados mientras se analiza"
+  },
+  {
+    "action": "reorder",
+    "question_id": "f301c795-e7d7-4eee-b018-ac5792fb22f6",
+    "function": 7,
+    "old_key": "B",
+    "new_key": "A",
+    "partition": "training",
+    "stem_preview": "Según la situación descrita, y buscando la mayor eficiencia en la recuperación d"
+  },
+  {
+    "action": "reorder",
+    "question_id": "854b1c47-a4c5-4a40-9294-f73a22e7f8f0",
+    "function": 7,
+    "old_key": "B",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "Respecto al anexo del \"Reporte Seccional Occidente\" sobre presunta evasión en se"
+  },
+  {
+    "action": "reorder",
+    "question_id": "0dd90134-8132-4ac5-a2ea-b98d5edb162a",
+    "function": 6,
+    "old_key": "A",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "SITUACIÓN: Al analizar las facturas de 'Exportaciones Andinas Ltda.', el funcion"
+  },
+  {
+    "action": "reorder",
+    "question_id": "338f586f-84ac-4912-8682-3053c721f1fc",
+    "function": 1,
+    "old_key": "B",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "¿Cuál es la principal inconsistencia numérica detectada por el funcionario Gesto"
+  },
+  {
+    "action": "reorder",
+    "question_id": "315d6d40-8ebb-4b33-a67a-b68172b9f4aa",
+    "function": 1,
+    "old_key": "B",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "Considerando la función de \"Preclítica y Clasificación de Insumos\" del Gestor II"
+  },
+  {
+    "action": "reorder",
+    "question_id": "9313a38f-0b4f-4288-a493-ccd66fbc3025",
+    "function": 8,
+    "old_key": "B",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "Considerando que el saldo promedio mensual de la cuenta bancaria es 'considerabl"
+  },
+  {
+    "action": "reorder",
+    "question_id": "a43a3b62-2c76-4638-af8b-8b20a74f4c47",
+    "function": 8,
+    "old_key": "B",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "¿Qué documentos del caso deben ser valorados por su conexión con la operación?"
+  },
+  {
+    "action": "reorder",
+    "question_id": "f1f92a97-f9e0-4382-bc4c-47460cddb122",
+    "function": 9,
+    "old_key": "B",
+    "new_key": "A",
+    "partition": "training",
+    "stem_preview": "En relación con la observación de que los anexos no están foliados y el poder es"
+  },
+  {
+    "action": "reorder",
+    "question_id": "7731f57e-193d-4442-a76a-109c5a59c30a",
+    "function": 9,
+    "old_key": "B",
+    "new_key": "A",
+    "partition": "training",
+    "stem_preview": "Respecto a la información digital de las \"Conclusiones de Auditoría\" en formatos"
+  },
+  {
+    "action": "reorder",
+    "question_id": "78da018c-4f0f-477e-8f79-98c210b178e3",
+    "function": 3,
+    "old_key": "A",
+    "new_key": "C",
+    "partition": "training",
+    "stem_preview": "¿Qué conducta refleja el conjunto de hallazgos?"
+  }
+]

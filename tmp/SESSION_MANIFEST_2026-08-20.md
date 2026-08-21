@@ -1,55 +1,46 @@
-# Session Manifest — 2026-08-20
+# Session Manifest — 2026-08-20 (v2)
 
 ## Changes Summary
 
-### Code Changes (committed to Git)
+### Code Changes (commit `5599819`)
 | File | Change |
 |------|--------|
-| `tests/test_exam_claims_disclosure.py` | Fix: search for "Práctica PJS cronometrada" in `ui_utils.py` instead of `app.py` |
-| `core/function_coverage.py` | Add `function_display_label()` and `function_display_detail()` helpers for standardized F1-F9 UI format |
-| `app/pages/1_Nuevo_Simulacro.py` | Use standardized `F6 · Short name` format in "Ver Manual de Funciones" expander and practice selectbox |
-| `app/pages/7_Configuracion_OPEC.py` | Use standardized format in "Revisar funciones" expander |
-| `app/pages/14_Mis_OPEC.py` | Use standardized format in "Ver funciones" expander |
+| `tests/test_exam_claims_disclosure.py` | Fix: search "Practica PJS cronometrada" in `ui_utils.py` (was `app.py`) |
+| `core/function_coverage.py` | Add `function_display_label()`, `function_display_detail()`, fix `_load_short_names()` to handle any OPEC number |
+| `app/pages/1_Nuevo_Simulacro.py` | Standardized `F6 · Short name` format in expander + selectbox |
+| `app/pages/7_Configuracion_OPEC.py` | Standardized format in "Revisar funciones" |
+| `app/pages/14_Mis_OPEC.py` | Standardized format in "Ver funciones" |
 
-### Database Changes (Neon — not in Git)
+### Database Changes (Neon — idempotent migration in `migrations/`)
 | Action | Count | Details |
 |--------|-------|---------|
-| F9 → F6 reassignment | 10 | Questions about Decreto 1165 fiscalización aduanera moved from F9 to F6 |
-| F9 → F4 reassignment | 2 | Questions about actos administrativos/notificación moved from F9 to F4 |
-| F6 quarantine | 4 | Short stems/no rationale → moved to `bank_partition=reserved` |
-| F4 reorder (A→B/C) | 12 | Balanced A=22, B=21, C=20 |
-| F6 reorder (A→B/C) | 18 | Balanced A=38, B=34, C=33 |
-| F3 reorder (A→B/C) | 1 | Balanced A=9, B=7, C=7 |
-| F5 reorder (A→B/C) | 2 | Balanced A=9, B=10, C=7 |
+| F9 -> F6 reassignment | 10 | Decreto 1165 fiscalizacion aduanera questions |
+| F9 -> F4 reassignment | 2 | Actos administrativos / notificacion |
+| F6 quarantine | 4 | Short stems / no rationale -> `bank_partition=reserved` |
+| Key rotation (v2, training only) | 12 | Minimal: F7(4), F1(2), F8(2), F9(2), F6(1), F3(1) |
 
-### Key Distribution Before/After
-| Fn | Before (%A) | After (%A) | max_diff Before | max_diff After |
-|----|-------------|------------|-----------------|----------------|
-| F1 | 37% | 37% | 6 | 6 |
-| F2 | 39% | 39% | 3 | 3 |
-| F3 | 43% | 39% | 4 | 2 |
-| F4 | 54% | 35% | 23 | 2 |
-| F5 | 42% | 35% | 6 | 3 |
-| F6 | 53% | 36% | 33 | 5 |
-| F7 | 20% | 20% | 8 | 8 |
-| F8 | 32% | 32% | 5 | 5 |
-| F9 | 29% | 29% | 3 | 4 |
+### Key Distribution (training only, after v2 rotation)
+| Fn | Total | A | B | C | max_diff |
+|----|-------|---|---|---|----------|
+| F1 | 19 | 7 (37%) | 7 (37%) | 5 (26%) | 2 |
+| F2 | 18 | 7 (39%) | 7 (39%) | 4 (22%) | 3 |
+| F3 | 23 | 8 (35%) | 7 (30%) | 8 (35%) | 1 |
+| F4 | 63 | 22 (35%) | 21 (33%) | 20 (32%) | 2 |
+| F5 | 26 | 9 (35%) | 10 (38%) | 7 (27%) | 3 |
+| F6 | 101 | 35 (35%) | 33 (33%) | 33 (33%) | 2 |
+| F7 | 25 | 8 (32%) | 9 (36%) | 8 (32%) | 1 |
+| F8 | 34 | 11 (32%) | 12 (35%) | 11 (32%) | 1 |
+| F9 | 35 | 12 (34%) | 12 (34%) | 11 (31%) | 1 |
 
 ### Test Results
-- 606 passed, 6 failed (pre-existing: `test_learning_evidence_service` × 5, `test_simplified_navigation` × 1)
-- `test_exam_claims_disclosure.py` now passes (was the 7th failure)
+- 606 passed, 6 failed (pre-existing: `test_learning_evidence_service` x5, `test_simplified_navigation` x1)
+- `test_exam_claims_disclosure.py` now passes
 
 ### Artifacts
-- `tmp/rotation_manifest.json` — 37 reorder actions with question IDs and previews
-- `tmp/reorder_manifest_f6f9.json` — Earlier pilot (superseded by rotation_manifest.json)
+- `migrations/manifest_2026-08-20_rotation.json` — 12 reorder actions with question IDs
+- `migrations/apply_rotation_2026-08-20.py` — Idempotent migration script (--dry-run supported)
+- `tmp/rotation_manifest_v2.json` — Working copy (same content as migrations version)
 
-### UI Standardization
-All function displays now use format: `F6 · Ejecución de acciones de fiscalización`
-Full MERF text available in expanders via `function_display_detail()`.
-Short names sourced from `data/opec_236769_matrix.json`.
-
-### Not Done (pending)
-- F7 key distribution (A=20% is low but acceptable — B-heavy is fine for this function)
-- Further F6 rotation (18 of ~56 excess A rotated; remaining 18 could be done in future session)
+### Pending
 - Normative reference verification for all questions
-- Commit DB changes (profile update, scope assignments, question generation) — these live only in Neon
+- Commit DB changes (profile update, scope assignments, question generation) to Git
