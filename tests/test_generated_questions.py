@@ -54,3 +54,39 @@ def test_candidate_flags_topic_that_adds_an_unrelated_procedure():
         row, "El artículo 684 establece facultades de fiscalización e investigación"
     )
     assert "No se observa suficiente sustento en el texto proporcionado" in issues
+
+
+def test_candidate_accepts_one_semantic_match_with_same_article():
+    row = extract_candidates([{
+        "topic": "Candidato generado",
+        "stem": "La autoridad revisa la actuación",
+        "options": {"A": "1", "B": "2", "C": "3"},
+        "correct_key": "A",
+        "rationale": "Aplica la fiscalización",
+        "source_refs": "ET, artículo 684",
+    }])[0]
+
+    issues = candidate_issues(
+        row,
+        "El artículo 684 regula las facultades de fiscalización",
+    )
+
+    assert "No se observa suficiente sustento en el texto proporcionado" not in issues
+
+
+def test_candidate_does_not_match_references_only_by_year():
+    row = extract_candidates([{
+        "topic": "Candidato generado",
+        "stem": "La autoridad realiza una fiscalización",
+        "options": {"A": "1", "B": "2", "C": "3"},
+        "correct_key": "A",
+        "rationale": "Debe aplicar la regla correspondiente",
+        "source_refs": "Ley 999 de 2019, artículo 99",
+    }])[0]
+
+    issues = candidate_issues(
+        row,
+        "El Decreto 1165 de 2019 regula la fiscalización aduanera",
+    )
+
+    assert "No se observa suficiente sustento en el texto proporcionado" in issues

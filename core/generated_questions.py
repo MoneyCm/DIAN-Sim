@@ -58,6 +58,23 @@ def _terms(value: object) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9]+", text) if len(token) >= 4 and token not in stopwords}
 
 
+def _normative_numbers(value: object) -> set[str]:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    ).lower()
+    numbers = set(re.findall(r"\d+(?:-\d+)*", text))
+    return {
+        number
+        for number in numbers
+        if not (
+            len(number) == 4
+            and number.isdigit()
+            and 1900 <= int(number) <= 2100
+        )
+    }
+
+
 def candidate_issues(candidate: dict, source_text: str = "") -> list[str]:
     issues = []
     options = candidate.get("options_json")
@@ -73,12 +90,35 @@ def candidate_issues(candidate: dict, source_text: str = "") -> list[str]:
         issues.append("Falta una fuente normativa identificable")
     if source_text.strip():
         source_terms = _terms(source_text)
-        candidate_text = " ".join(str(candidate.get(key) or "") for key in (
-            "topic", "stem", "rationale", "micro_competencia"
+
+        content_text = " ".join(str(candidate.get(key) or "") for key in (
+            "stem", "rationale", "micro_competencia"
         ))
+        content_terms = _terms(content_text)
+        semantic_overlap = len(source_terms & content_terms)
+
         topic_terms = _terms(candidate.get("topic"))
+        topic_is_generic = (
+            not topic_terms
+            or topic_terms <= {"candidato", "generado", "general", "transversal"}
+        )
         required_topic_overlap = max(1, math.ceil(len(topic_terms) * 0.4))
-        topic_is_grounded = not topic_terms or len(source_terms & topic_terms) >= required_topic_overlap
-        if len(source_terms & _terms(candidate_text)) < 2 or not topic_is_grounded:
-            issues.append("No se observa suficiente sustento en el texto proporcionado")
+        topic_is_grounded = (
+            topic_is_generic
+            or len(source_terms & topic_terms) >= required_topic_overlap
+        )
+
+        source_numbers = _normative_numbers(source_text)
+        reference_numbers = _normative_numbers(candidate.get("source_refs"))
+        reference_matches = bool(source_numbers & reference_numbers)
+
+        content_is_grounded = (
+            semantic_overlap >= 2
+            or (semantic_overlap >= 1 and reference_matches)
+        )
+
+        if not content_is_grounded or not topic_is_grounded:
+            issues.append(
+                "No se observa suficiente sustento en el texto proporcionado"
+            )
     return issues
