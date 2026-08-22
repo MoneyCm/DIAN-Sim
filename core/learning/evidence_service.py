@@ -111,8 +111,6 @@ def ensure_question_revision(
     """Snapshot only a question that already passed the strict study gate."""
     if bank_partition not in {"training", "measurement", "anchor", "reserved"}:
         raise ValueError("Partición de banco no válida.")
-    if not is_safe_for_active_study(question):
-        raise ValueError("La pregunta no tiene evidencia suficiente para crear una revisión.")
     difficulty = editorial_question_difficulty(question)
     content_hash = question_revision_hash(question, difficulty)
     existing = (
@@ -128,6 +126,9 @@ def ensure_question_revision(
     )
     if existing is not None:
         return existing
+    if not is_safe_for_active_study(question):
+        raise ValueError("La pregunta no tiene evidencia suficiente para crear una revisión.")
+
     next_number = int(
         db.query(func.max(QuestionRevision.revision_number))
         .filter(QuestionRevision.question_id == str(question.question_id))

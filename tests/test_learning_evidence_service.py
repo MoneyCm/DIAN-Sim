@@ -170,6 +170,37 @@ def _question(db, competition, profile, index, *, partition="training", likert=F
     return case, question
 
 
+def test_existing_canonical_revision_precedes_the_legacy_quality_gate():
+    db = _db()
+    _, competition, _, profile = _context(db)
+    _, question = _question(db, competition, profile, 0)
+    canonical = db.query(QuestionRevision).one()
+
+    question.quality_report = {"review": "human_source_grounded"}
+    db.flush()
+
+    resolved = ensure_question_revision(db, question, bank_partition="training")
+
+    assert resolved.id == canonical.id
+    assert db.query(QuestionRevision).count() == 1
+
+
+def test_legacy_gate_still_blocks_creation_without_canonical_revision():
+    db = _db()
+    _, competition, _, _ = _context(db, with_profile=False)
+    _, question = _question(db, competition, None, 0)
+    question.quality_report = {"review": "human_source_grounded"}
+    db.flush()
+
+    with pytest.raises(
+        ValueError,
+        match="evidencia suficiente",
+    ):
+        ensure_question_revision(db, question, bank_partition="training")
+
+    assert db.query(QuestionRevision).count() == 0
+
+
 def test_training_event_uses_immutable_revision_topic_state_and_error():
     db = _db()
     user, competition, opec, profile = _context(db)
