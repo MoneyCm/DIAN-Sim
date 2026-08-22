@@ -70,6 +70,11 @@ def seed(apply: bool = False) -> tuple[int, int]:
                 )
                 db.add(case)
                 cases_added += 1
+            else:
+                case.title = data["title"]
+                case.text = data["text"]
+                case.topic = data["topic"]
+                case.difficulty = data["difficulty"]
 
             domain = macro_domain(data)
             for index, item in enumerate(data["questions"]):

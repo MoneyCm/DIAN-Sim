@@ -19,6 +19,8 @@ def test_tutor_distinguishes_verified_source_from_generated_orientation():
     source = PAGE_PATH.read_text(encoding="utf-8-sig")
 
     assert "has_precise_source_verification" in source
+    assert "canonical_source_verification" in source
+    assert "canonical_verification or legacy_source_verification" in source
     assert "Fuente verificada" in source
     assert "Fuente declarada pendiente" in source
     assert "Excepción normativa: no se inventa" in source

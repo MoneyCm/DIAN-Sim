@@ -17,7 +17,10 @@ from core.competitions import get_active_competition
 from core.learning.session_service import LearningSessionService
 from core.learning.tutor import TutorService
 from core.socratic_tutor import local_socratic_hint
-from core.source_evidence import has_precise_source_verification
+from core.source_evidence import (
+    canonical_source_verification,
+    has_precise_source_verification,
+)
 from db.models import Question
 from db.session import SessionLocal
 from ui_utils import load_css, render_header
@@ -166,13 +169,23 @@ else:
                     confidence=confidence,
                     user_id=user_id,
                 )
-                source_verification = (
+                legacy_source_verification = (
                     (question_row.quality_report or {}).get("source_verification")
                     if question_row and isinstance(question_row.quality_report, dict)
                     else {}
                 ) or {}
+                canonical_verification = canonical_source_verification(
+                    db, question.question_id
+                )
+                source_verification = (
+                    canonical_verification or legacy_source_verification
+                )
                 precise_source = bool(
-                    question_row and has_precise_source_verification(question_row)
+                    canonical_verification
+                    or (
+                        question_row
+                        and has_precise_source_verification(question_row)
+                    )
                 )
                 st.session_state["adaptive_feedback"] = {
                     "result": evaluation.result.value,

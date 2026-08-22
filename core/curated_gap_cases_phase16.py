@@ -1,4 +1,4 @@
-"""Common-function GOA cases for OPEC 236769 (function gap F3).
+"""Common-function GOA cases for OPEC 236769 (function F9).
 
 The scenarios are limited to duties expressly listed in article 6 of DIAN
 Resolution 67 of 2024 and the AT-FL-3006 job profile.
@@ -23,7 +23,7 @@ CURATED_GAP_CASES_PHASE16 = [
     {
         "id": "goa-236769-f3-riesgos-indicadores-mejora-01",
         "title": "Seguimiento de un programa y tratamiento de riesgos",
-        "topic": "F3 - Planes, indicadores, riesgos y mejora",
+        "topic": "F9 - Planes, indicadores, riesgos y mejora",
         "difficulty": 3,
         "text": (
             "Durante el seguimiento de un programa de fiscalización, el indicador definido muestra "
@@ -62,7 +62,7 @@ CURATED_GAP_CASES_PHASE16 = [
     {
         "id": "goa-236769-f3-seguridad-datos-sistemas-01",
         "title": "Protección de la información de una investigación",
-        "topic": "F3 - Seguridad de información, datos y sistemas corporativos",
+        "topic": "F9 - Seguridad de información, datos y sistemas corporativos",
         "difficulty": 3,
         "text": (
             "Un expediente de fiscalización contiene identificaciones, datos de contacto, certificados "
@@ -101,7 +101,7 @@ CURATED_GAP_CASES_PHASE16 = [
     {
         "id": "goa-236769-f3-documentos-pqrs-informes-01",
         "title": "Organización documental y atención de asuntos asignados",
-        "topic": "F3 - Gestión documental, peticiones e informes",
+        "topic": "F9 - Gestión documental, peticiones e informes",
         "difficulty": 3,
         "text": (
             "Al recibir una investigación tributaria, el gestor encuentra actos, soportes de prueba y "

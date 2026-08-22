@@ -6,6 +6,7 @@ def test_phase16_contains_three_complete_common_function_cases():
     assert len(CURATED_GAP_CASES_PHASE16) == 3
     assert sum(len(case["questions"]) for case in CURATED_GAP_CASES_PHASE16) == 9
     for case in CURATED_GAP_CASES_PHASE16:
+        assert case["topic"].startswith("F9 - ")
         payload = {
             "text": case["text"],
             "questions": [

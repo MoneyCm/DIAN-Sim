@@ -2,7 +2,7 @@ from core.curated_gap_cases_phase14 import CURATED_GAP_CASES_PHASE14
 from core.exam_format import is_official_functional_payload
 
 
-def test_phase14_contains_four_complete_f4_f9_cases():
+def test_phase14_contains_four_complete_f7_f5_cases():
     assert len(CURATED_GAP_CASES_PHASE14) == 4
     assert sum(len(case["questions"]) for case in CURATED_GAP_CASES_PHASE14) == 12
     for case in CURATED_GAP_CASES_PHASE14:
@@ -38,8 +38,8 @@ def test_phase14_covers_both_functions_and_current_procedures():
         for case in CURATED_GAP_CASES_PHASE14
         for item in case["questions"]
     )
-    assert "F4" in topics
-    assert "F9" in topics
+    assert "F7" in topics
+    assert "F5" in topics
     assert "PR-COA-0501" in sources
     assert "PR-COT-0432" in sources
     assert "versión 3" in sources

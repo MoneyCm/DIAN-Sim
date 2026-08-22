@@ -1,4 +1,4 @@
-"""GOA cases for OPEC 236769 functions F4 and F9.
+"""GOA cases for OPEC 236769 functions F7 and F5.
 
 The cases exercise the preparation of proposals for management-level meetings
 and the technical/legal review of files. Sources were checked in the DIAN public
@@ -16,7 +16,7 @@ def q(stem, a, b, c, rationale, source):
     }
 
 
-F4_SOURCE = (
+F7_SOURCE = (
     "DIAN, ficha de empleo AT-FL-3006 Gestor III, función de organización de información y "
     "propuestas; procedimiento PR-COA-0501 Auditoría Posterior al Despacho, versión 1, y "
     "OD-COA-0106 Guía de Implementación APD (Listado Maestro de Documentos, consulta 2026-08-08)."
@@ -32,7 +32,7 @@ CURATED_GAP_CASES_PHASE14 = [
     {
         "id": "goa-236769-f4-priorizacion-pta-apd-02",
         "title": "Priorización trazable para el Plan de Trabajo Anual APD",
-        "topic": "F4 - Organización de información y propuestas de fiscalización",
+        "topic": "F7 - Organización de información y propuestas de fiscalización",
         "difficulty": 3,
         "text": (
             "Una Dirección Seccional debe consolidar propuestas para una Auditoría Posterior al "
@@ -49,7 +49,7 @@ CURATED_GAP_CASES_PHASE14 = [
                 "Priorizando únicamente el valor importado, sin analizar los demás criterios disponibles.",
                 "Eligiendo libremente los casos que parezcan más sencillos de cerrar.",
                 "La guía APD prevé una selección objetiva a partir de sectores sensibles, análisis de riesgos, tipo de obligado, volumen de operaciones y otros factores. El gestor debe organizar esa información de forma trazable para sustentar la propuesta.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
             q(
                 "¿Qué manejo corresponde a la lista de posibles seleccionados mientras se analiza la propuesta?",
@@ -57,7 +57,7 @@ CURATED_GAP_CASES_PHASE14 = [
                 "Compartirla libremente porque todavía no se ha iniciado la auditoría.",
                 "Publicarla para que los usuarios seleccionados preparen sus descargos anticipadamente.",
                 "PR-COA-0501 dispone que se propende por la confidencialidad de los seleccionados en las etapas de selección, ejecución y evaluación de la Auditoría Posterior al Despacho.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
             q(
                 "Si la reunión rechaza el borrador del Plan de Trabajo Anual por falta de soporte, ¿cuál es el paso procedimental?",
@@ -65,14 +65,14 @@ CURATED_GAP_CASES_PHASE14 = [
                 "Aplicar de inmediato los criterios de selección y abrir auditorías pese al rechazo.",
                 "Archivar definitivamente todos los insumos sin permitir ajustes.",
                 "En el flujo de PR-COA-0501, cuando el Plan de Trabajo Anual es rechazado se retorna a la actividad de preparación; la decisión no autoriza ejecutar una propuesta incompleta.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
         ],
     },
     {
         "id": "goa-236769-f4-propuesta-apd-directivo-01",
         "title": "Preparación de una propuesta de auditoría para decisión directiva",
-        "topic": "F4 - Organización de información y propuestas de fiscalización",
+        "topic": "F7 - Organización de información y propuestas de fiscalización",
         "difficulty": 3,
         "text": (
             "Una Dirección Seccional identifica operaciones aduaneras que podrían justificar una "
@@ -88,7 +88,7 @@ CURATED_GAP_CASES_PHASE14 = [
                 "Declararla aprobada porque una hoja de cálculo reemplaza el análisis y el acta.",
                 "Abrir el expediente y reconstruir los soportes únicamente después de finalizar la auditoría.",
                 "El procedimiento dispone que las propuestas que no contengan la información mínima requerida deben devolverse para complementación o corrección; organizar información no autoriza a suplir soportes inexistentes.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
             q(
                 "¿Qué soporte sustantivo debe acompañar la propuesta local de Auditoría Posterior al Despacho?",
@@ -96,7 +96,7 @@ CURATED_GAP_CASES_PHASE14 = [
                 "Una afirmación del gestor sin fuentes ni constancia de la reunión local.",
                 "La resolución sancionatoria definitiva, aun cuando la auditoría todavía no se ha iniciado.",
                 "La guía exige que la propuesta contenga el análisis de patrones de comportamiento y el acta de la reunión local; esos documentos permiten evaluar la propuesta de forma trazable.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
             q(
                 "Una vez organizada y presentada la información, ¿quién adopta la decisión final sobre aprobar o rechazar esta propuesta local?",
@@ -104,14 +104,14 @@ CURATED_GAP_CASES_PHASE14 = [
                 "El gestor que consolidó la información, sin revisión de otra instancia.",
                 "El usuario aduanero que eventualmente sería auditado.",
                 "La función del gestor es organizar y proponer. En el flujo APD, la Subdirección de Fiscalización Aduanera analiza la propuesta local y decide su aprobación o rechazo, dejando las razones correspondientes.",
-                F4_SOURCE,
+                F7_SOURCE,
             ),
         ],
     },
     {
         "id": "goa-236769-f9-revision-liquidacion-provisional-01",
         "title": "Revisión formal y técnica de una liquidación provisional",
-        "topic": "F9 - Revisión técnica y jurídica de expedientes",
+        "topic": "F5 - Revisión técnica y jurídica de expedientes",
         "difficulty": 3,
         "text": (
             "En un expediente tributario asignado conforme a la competencia funcional, el auditor "
@@ -149,7 +149,7 @@ CURATED_GAP_CASES_PHASE14 = [
     {
         "id": "goa-236769-f9-revision-expediente-decision-01",
         "title": "Control probatorio, correspondencia y término de la decisión",
-        "topic": "F9 - Revisión jurídica, probatoria y de términos",
+        "topic": "F5 - Revisión jurídica, probatoria y de términos",
         "difficulty": 3,
         "text": (
             "Una liquidación provisional que hizo las veces de requerimiento especial fue rechazada "

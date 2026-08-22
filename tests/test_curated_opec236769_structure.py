@@ -1,5 +1,7 @@
 """Structural safeguards for the reviewed OPEC 236769 situational corpus."""
 
+import re
+
 from core.curated_gap_cases import CURATED_GAP_CASES
 from core.curated_gap_cases_phase2 import CURATED_GAP_CASES_PHASE2
 from core.curated_gap_cases_phase3 import CURATED_GAP_CASES_PHASE3
@@ -39,6 +41,9 @@ def test_opec236769_curated_cases_are_complete_and_mapped_to_the_manual():
     assert set(CASE_FUNCTIONS.values()) == set(range(1, 10))
 
     for case in CURATED_CASES:
+        embedded_function = re.match(r"F(\d+)\s*-", case["topic"])
+        if embedded_function:
+            assert int(embedded_function.group(1)) == CASE_FUNCTIONS[case["id"]]
         assert len(case["text"].strip()) >= 80
         assert len(case["questions"]) == 3
         for question in case["questions"]:

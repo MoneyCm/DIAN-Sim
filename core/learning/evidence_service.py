@@ -31,7 +31,10 @@ from core.readiness_gate import (
     ReadinessPolicy,
     evaluate_readiness,
 )
-from core.source_evidence import has_precise_source_verification
+from core.source_evidence import (
+    canonical_source_verification,
+    has_precise_source_verification,
+)
 from db.models import (
     ErrorEpisode,
     OpecLearningEvent,
@@ -55,7 +58,11 @@ def utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _source_snapshot(question: Question) -> dict:
+def _source_snapshot(question: Question, db=None) -> dict:
+    if db is not None:
+        canonical = canonical_source_verification(db, str(question.question_id))
+        if canonical:
+            return canonical
     report = question.quality_report if isinstance(question.quality_report, dict) else {}
     verification = report.get("source_verification")
     return dict(verification) if isinstance(verification, dict) else {}
@@ -145,7 +152,7 @@ def ensure_question_revision(
         rationale=question.rationale,
         difficulty_level=difficulty,
         bank_partition=bank_partition,
-        source_snapshot=_source_snapshot(question),
+        source_snapshot=_source_snapshot(question, db),
         status="approved",
         change_reason="Instantánea del contenido ya habilitado para evidencia pedagógica.",
         actor="phase2_evidence_service",
@@ -363,7 +370,7 @@ def _create_error_episode(
         rule_to_remember=guidance.rule_to_remember,
         source_reference={
             "declared": guidance.source_to_review,
-            "verification": _source_snapshot(question),
+            "verification": _source_snapshot(question, db),
         },
         micro_lesson=guidance.micro_lesson,
         reinforcement_question_ids=[],
@@ -419,8 +426,13 @@ def record_opec_event(
     event_novelty = str(novelty or _novelty_for(db, session, str(question_id))).lower()
     if event_novelty not in {"new", "seen", "repeated", "transfer", "unknown"}:
         raise ValueError("Estado de exposición no válido.")
-    precise_source = has_precise_source_verification(question)
-    verification = _source_snapshot(question)
+    canonical_verification = canonical_source_verification(
+        db, str(question.question_id)
+    )
+    verification = canonical_verification or _source_snapshot(question)
+    precise_source = bool(
+        canonical_verification or has_precise_source_verification(question)
+    )
     source_current = str(verification.get("status", "")).casefold() in {
         "official_current",
         "official_verified",
