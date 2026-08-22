@@ -31,10 +31,8 @@ from core.readiness_gate import (
     ReadinessPolicy,
     evaluate_readiness,
 )
-from core.source_evidence import (
-    canonical_source_verification,
-    has_precise_source_verification,
-)
+from core.canonical_source_evidence import canonical_source_verification
+from core.source_evidence import has_precise_source_verification
 from db.models import (
     ErrorEpisode,
     OpecLearningEvent,

@@ -17,10 +17,8 @@ from core.competitions import get_active_competition
 from core.learning.session_service import LearningSessionService
 from core.learning.tutor import TutorService
 from core.socratic_tutor import local_socratic_hint
-from core.source_evidence import (
-    canonical_source_verification,
-    has_precise_source_verification,
-)
+from core.canonical_source_evidence import canonical_source_verification
+from core.source_evidence import has_precise_source_verification
 from db.models import Question
 from db.session import SessionLocal
 from ui_utils import load_css, render_header

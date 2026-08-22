@@ -20,6 +20,8 @@ def test_tutor_distinguishes_verified_source_from_generated_orientation():
 
     assert "has_precise_source_verification" in source
     assert "canonical_source_verification" in source
+    assert "from core.canonical_source_evidence import" in source
+    assert "from core.source_evidence import (" not in source
     assert "canonical_verification or legacy_source_verification" in source
     assert "Fuente verificada" in source
     assert "Fuente declarada pendiente" in source

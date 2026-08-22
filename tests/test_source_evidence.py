@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from core.canonical_source_evidence import canonical_source_verification
 from core.source_evidence import (
     SOURCE_EVIDENCE_VERSION,
     assess_source_evidence,
-    canonical_source_verification,
     record_source_evidence,
 )
 from db.models import Base, CaseStudy, Competition, Question, QuestionCitation, SourceDocument
