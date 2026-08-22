@@ -167,9 +167,19 @@ with col1:
     if gen_mode == "Preguntas desde Texto/PDF":
         if reinforcement_topic:
             st.success(f"🎯 **Modo Refuerzo Activado:** Se pre-configuró el tema **'{reinforcement_topic}'** basado en tus resultados del simulacro.")
-        # Pre-fill topic from session state if available 
-        default_topic = st.session_state.get("ai_default_topic", "Gestor II")
-        custom_topic = st.text_input("Etiqueta / Tema para estas preguntas (Ej: Gestor II)", value=default_topic)
+        # Use a topic supplied by an explicit reinforcement flow; otherwise
+        # leave it empty so an unrelated job title cannot override the
+        # grounded topic returned by the generator.
+        default_topic = st.session_state.get("ai_default_topic", "")
+        custom_topic = st.text_input(
+            "Tema normativo sustentado por la fuente (opcional)",
+            value=default_topic,
+            placeholder="Ej.: Facultades de fiscalización e investigación",
+            help=(
+                "Si lo completas, debe aparecer o estar claramente respaldado "
+                "por el texto fuente. No uses aquí solamente el nombre del cargo."
+            ),
+        )
         
         num_q = st.select_slider(
             "Cantidad de preguntas",
