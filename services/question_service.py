@@ -214,9 +214,6 @@ class QuestionService:
             query = query.filter(Question.competition_id == competition_id)
 
         all_candidates = query.all()
-        if not include_review:
-            all_candidates = [q for q in all_candidates if is_safe_for_active_study(q)]
-        
         # Sin una OPEC activa no existe un alcance seguro. Devolver todo el
         # concurso podría filtrar material de medición, anclaje o reserva.
         if not user_opec:
@@ -259,9 +256,30 @@ class QuestionService:
             if requested_partitions != ("training",):
                 return []
             return [
-                question for question in all_candidates
+                question for question in (
+                    all_candidates
+                    if include_review
+                    else [
+                        candidate
+                        for candidate in all_candidates
+                        if is_safe_for_active_study(candidate)
+                    ]
+                )
                 if question_matches_opec(question, user_opec.opec_number)
             ]
+
+        # Canonical scopes use approved, hash-coherent revisions and verified
+        # citations as their authoritative delivery gate. Only deployments
+        # without that schema/scoping fall back to the legacy quality report.
+        legacy_candidates = (
+            all_candidates
+            if include_review
+            else [
+                question
+                for question in all_candidates
+                if is_safe_for_active_study(question)
+            ]
+        )
 
         # 1. Extracción de Keywords de la OPEC
         functions = user_opec.functions if isinstance(user_opec.functions, list) else []
@@ -280,7 +298,9 @@ class QuestionService:
         # [0] PRIORIDAD ABSOLUTA V50: Coincidencia Exacta de OPEC
         # Si existen preguntas "hechas a medida" para este código OPEC, ignoramos el resto.
         if user_opec.opec_number:
-            strict_matches = [q for q in all_candidates if user_opec.opec_number in q.topic]
+            strict_matches = [
+                q for q in legacy_candidates if user_opec.opec_number in q.topic
+            ]
             # Si tenemos un banco decente (>10 preguntas) específico, usamos SOLO esto.
             if len(strict_matches) >= 5:
                 # Opcional: Mezclar con comportamentales genéricas si se desea, 
@@ -289,7 +309,7 @@ class QuestionService:
         
         
         # [1] Heurística Keywords (Legacy / Fallback) - SI NO HAY MATCH EXACTO
-        for q in all_candidates:
+        for q in legacy_candidates:
             q_text = (q.topic + " " + q.competency + " " + q.stem).lower()
             
             # A. Filtros Negativos Cruzados (Blindaje Cesar/Cualquier Usuario)

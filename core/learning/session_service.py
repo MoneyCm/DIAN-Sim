@@ -26,7 +26,6 @@ from core.learning.schemas import (
     SubmissionResult,
 )
 from core.spaced_repetition import schedule_review as schedule_legacy_review
-from core.legacy_question_audit import is_safe_for_active_study
 from core.learning.evidence_service import (
     finalize_opec_session,
     record_opec_event,
@@ -39,10 +38,8 @@ from db.models import (
     LearningSession,
     OpecLearningEvent,
     OpecLearningSession,
-    OpecProfile,
     OpecTopicState,
     Question,
-    QuestionOpecScope,
     QuestionPerformance,
     Skill,
     TopicMastery,
@@ -120,59 +117,6 @@ class LearningSessionService:
             return None
         return rows[0] if len(rows) == 1 else None
 
-    def _fallback_scoped_training_questions(
-        self,
-        *,
-        competition_id: Optional[int],
-        user_opec: Optional[UserOPEC],
-    ) -> list[Question]:
-        """Emergency fallback to explicit scoped questions without evidence gate.
-
-        This keeps adaptive sessions operational in OPEC deployments that still
-        need canonical evidence backfill while preserving strict scope.
-        """
-        if competition_id is None or user_opec is None or not user_opec.opec_number:
-            return []
-        try:
-            profile = (
-                self.db.query(OpecProfile)
-                .filter_by(
-                    competition_id=competition_id,
-                    opec_number=str(user_opec.opec_number),
-                )
-                .first()
-            )
-            if profile is None:
-                return []
-
-            scoped_question_ids = [
-                row[0]
-                for row in self.db.query(QuestionOpecScope.question_id)
-                .filter_by(
-                    opec_profile_id=profile.id,
-                    bank_partition="training",
-                )
-                .all()
-            ]
-            if not scoped_question_ids:
-                return []
-
-            questions = (
-                self.db.query(Question)
-                .filter(
-                    Question.competition_id == competition_id,
-                    Question.question_id.in_(scoped_question_ids),
-                )
-                .all()
-            )
-            return sorted(
-                questions,
-                key=lambda question: str(question.question_id),
-            )
-        except (OperationalError, ProgrammingError):
-            self.db.rollback()
-            return []
-
     def _questions(
         self,
         competition_id: Optional[int],
@@ -198,17 +142,13 @@ class LearningSessionService:
             user_opec=active_opec,
             bank_partitions=("training",),
         )
-        # QuestionService owns the OPEC/partition filter.  Keep the explicit
-        # study gate here as defense in depth for older in-memory deployments.
-        reviewed = sorted(
-            (question for question in questions if is_safe_for_active_study(question)),
+        # QuestionService owns the complete delivery decision: canonical
+        # evidence for explicitly scoped banks, or the conservative legacy
+        # quality gate when canonical scoping is unavailable. Reapplying the
+        # legacy gate here would incorrectly reject canonically approved items.
+        return sorted(
+            questions,
             key=lambda question: str(question.question_id),
-        )
-        if reviewed:
-            return reviewed
-        return self._fallback_scoped_training_questions(
-            competition_id=competition_id,
-            user_opec=active_opec,
         )
 
     def _canonical_session(

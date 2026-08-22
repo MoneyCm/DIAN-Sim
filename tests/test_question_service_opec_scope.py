@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from core.learning.engine import editorial_question_difficulty
+from core.learning.session_service import LearningSessionService
 from core.question_revision import question_revision_hash
 from db.models import (
     Base,
@@ -617,4 +618,122 @@ def test_non_training_partition_fails_closed_without_phase1_schema():
         competition_id=competition.id,
         user_opec=active_opec,
         bank_partitions=("measurement",),
+    ) == []
+
+
+def test_canonical_evidence_is_authoritative_for_service_and_tutor():
+    db = _db()
+    user = User(username="canonical-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-CANONICAL", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    deliverable = _question(competition.id, "236769")
+    deliverable.hash_norm = "canonical-deliverable"
+    stale = _question(competition.id, "236769")
+    stale.hash_norm = "canonical-stale"
+    db.add_all([profile, active_opec, deliverable, stale])
+    db.flush()
+    db.add_all([
+        QuestionOpecScope(
+            question_id=deliverable.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        ),
+        QuestionOpecScope(
+            question_id=stale.question_id,
+            opec_profile_id=profile.id,
+            bank_partition="training",
+        ),
+    ])
+    _add_delivery_evidence(db, deliverable)
+    _add_delivery_evidence(db, stale, content_hash="0" * 64)
+
+    # The legacy report is deliberately insufficient. Canonical revision and
+    # citation evidence must be authoritative for explicitly scoped banks.
+    deliverable.quality_report = {"review": "human_source_grounded"}
+    stale.quality_report = {"review": "human_source_grounded"}
+    db.commit()
+
+    delivered = QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
+    )
+    tutor_questions = LearningSessionService(db)._questions(
+        competition.id,
+        user.id,
+        user_opec=active_opec,
+    )
+
+    assert [item.question_id for item in delivered] == [deliverable.question_id]
+    assert [item.question_id for item in tutor_questions] == [deliverable.question_id]
+
+
+def test_canonical_failure_is_not_recovered_by_tutor_scope_fallback():
+    db = _db()
+    user = User(username="closed-gate-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-CLOSED-GATE", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    profile = OpecProfile(competition_id=competition.id, opec_number="236769")
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    stale = _question(competition.id, "236769")
+    db.add_all([profile, active_opec, stale])
+    db.flush()
+    db.add(QuestionOpecScope(
+        question_id=stale.question_id,
+        opec_profile_id=profile.id,
+        bank_partition="training",
+    ))
+    _add_delivery_evidence(db, stale, content_hash="0" * 64)
+    db.commit()
+
+    assert LearningSessionService(db)._questions(
+        competition.id,
+        user.id,
+        user_opec=active_opec,
+    ) == []
+
+
+def test_legacy_scope_still_requires_the_legacy_quality_gate():
+    db = _db()
+    user = User(username="legacy-gate-user", password_hash="x", subscription_tier="free")
+    competition = Competition(code="DIAN-LEGACY-GATE", name="DIAN")
+    db.add_all([user, competition])
+    db.flush()
+    active_opec = UserOPEC(
+        user_id=user.id,
+        competition_id=competition.id,
+        opec_number="236769",
+        job_title="Gestor III",
+        functions=["Función"],
+        is_active=True,
+    )
+    unsafe = _question(competition.id, "236769")
+    unsafe.quality_report = {"review": "human_source_grounded"}
+    db.add_all([active_opec, unsafe])
+    db.commit()
+
+    assert QuestionService.get_questions_for_user(
+        db,
+        user.id,
+        competition_id=competition.id,
+        user_opec=active_opec,
     ) == []
