@@ -543,7 +543,11 @@ with col2:
                 
                 # Check Duplicates
                 exists = check_duplicate(q['hash_norm'])
-                issues = candidate_issues(q, st.session_state.get("ai_source_text", ""))
+                issues = candidate_issues(
+                    q,
+                    st.session_state.get("ai_source_text", ""),
+                    require_source_text=True,
+                )
                 if exists:
                     st.warning("⚠️ Ya existe en el banco.")
                 elif issues:

@@ -75,7 +75,12 @@ def _normative_numbers(value: object) -> set[str]:
     }
 
 
-def candidate_issues(candidate: dict, source_text: str = "") -> list[str]:
+def candidate_issues(
+    candidate: dict,
+    source_text: str = "",
+    *,
+    require_source_text: bool = False,
+) -> list[str]:
     issues = []
     options = candidate.get("options_json")
     if not str(candidate.get("stem") or "").strip():
@@ -88,7 +93,9 @@ def candidate_issues(candidate: dict, source_text: str = "") -> list[str]:
         issues.append("Falta la justificación")
     if not str(candidate.get("source_refs") or "").strip():
         issues.append("Falta una fuente normativa identificable")
-    if source_text.strip():
+    if require_source_text and not source_text.strip():
+        issues.append("Falta el texto fuente para verificar el sustento")
+    elif source_text.strip():
         source_terms = _terms(source_text)
 
         content_text = " ".join(str(candidate.get(key) or "") for key in (

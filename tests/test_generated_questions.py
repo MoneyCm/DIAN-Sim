@@ -90,3 +90,21 @@ def test_candidate_does_not_match_references_only_by_year():
     )
 
     assert "No se observa suficiente sustento en el texto proporcionado" in issues
+
+
+def test_candidate_requires_source_text_when_grounding_is_mandatory():
+    row = extract_candidates([{
+        "topic": "Candidato generado",
+        "stem": "La autoridad ejerce facultades de fiscalización.",
+        "options": {"A": "1", "B": "2", "C": "3"},
+        "correct_key": "A",
+        "rationale": "Aplica la norma correspondiente.",
+        "source_refs": "Estatuto Tributario, artículo 684",
+    }])[0]
+
+    issues = candidate_issues(
+        row,
+        require_source_text=True,
+    )
+
+    assert "Falta el texto fuente para verificar el sustento" in issues
